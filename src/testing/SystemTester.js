@@ -1,0 +1,537 @@
+// ============================================================
+// 🔍 FINANCIAL AUDITOR v5.0 — Auditoría Financiera Determinista
+// ============================================================
+// Opera sobre los datos REALES del negocio (bodega_*_v1).
+// DETERMINISTA: mismos datos → mismo resultado siempre.
+// Sin IA, sin aleatorio, sin efectos secundarios.
+// Adaptado para Pool Los Diaz.
+// ============================================================
+
+import { storageService } from '../utils/storageService';
+import { round2, mulR, subR, sumR } from '../utils/dinero';
+
+// ── Test State ──
+const state = {
+    logs: [],
+    suites: [],
+    isRunning: false,
+    stopped: false,
+    startedAt: null,
+    finishedAt: null,
+    onLog: null,
+    onProgress: null,
+    onComplete: null,
+};
+
+function resetState() {
+    state.logs = []; state.suites = []; state.isRunning = false; state.stopped = false;
+    state.startedAt = null; state.finishedAt = null;
+    state.onLog = null; state.onProgress = null; state.onComplete = null;
+}
+
+function initSuites(activeSuites) {
+    state.suites = activeSuites.map(s => ({
+        id: s.key, name: s.name, status: 'pending',
+        startedAt: null, finishedAt: null, error: null
+    }));
+}
+
+function updateSuiteStatus(id, patch) {
+    const s = state.suites.find(x => x.id === id);
+    if (s) Object.assign(s, patch);
+}
+
+// ── Logging ──
+function log(msg, type = 'info') {
+    const ts = new Date().toLocaleTimeString('es-VE', { hour12: false });
+    const icons = { info: 'ℹ️', success: '✅', error: '❌', warn: '⚠️', section: '━', day: '📅' };
+    const icon = icons[type] || 'ℹ️';
+    const entry = { time: ts, msg: `${icon} ${msg}`, type, raw: msg };
+    state.logs.push(entry);
+    state.onLog?.(entry);
+    if (type === 'error') console.error(`[AUDIT ERROR] ${msg}`);
+}
+
+function section(title) {
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'section');
+    log(title, 'section');
+    log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'section');
+}
+
+// ── Assertions ──
+class AssertionError extends Error {
+    constructor(message) { super(message); this.name = 'AssertionError'; }
+}
+
+function assert(condition, message) {
+    if (!condition) throw new AssertionError(message);
+}
+
+function assertEqual(actual, expected, message) {
+    if (actual !== expected) throw new AssertionError(`${message} (Esperado: ${expected}, Recibido: ${actual})`);
+}
+
+function assertClose(actual, expected, message, tolerance = 0.02) {
+    const diff = Math.abs(actual - expected);
+    if (diff > tolerance) throw new AssertionError(`${message} (Esperado: ~${expected}, Recibido: ${actual}, Diff: ${diff.toFixed(4)})`);
+}
+
+const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ════════════════════════════════════════════
+// 1. CERTIFICACIÓN DE PRECISIÓN (Motor dinero.js)
+// ════════════════════════════════════════════
+async function suitePrecisionFinanciera() {
+    section('🔬 SUITE: Certificación de Precisión (Motor Financiero)');
+
+    // IEEE 754 guardrail
+    assertClose(0.1 + 0.2, 0.30, 'Suma básica de punto flotante debe estar saneada');
+
+    // Pruebas estrictas del wrapper dinero.js
+    assertEqual(sumR(0.1, 0.2), 0.30, 'dinero.js sumR: 0.1+0.2 = 0.30');
+    assertEqual(subR(0.3, 0.2), 0.10, 'dinero.js subR: 0.3-0.2 = 0.10');
+    assertEqual(mulR(1.005, 100), 100.50, 'dinero.js mulR: 1.005×100 = 100.50');
+    assertEqual(round2(1.005), 1.01, 'dinero.js round2: 1.005 → 1.01');
+    assertEqual(round2(2.005), 2.01, 'dinero.js round2: 2.005 → 2.01');
+    assertEqual(sumR(0.1, 0.2, 0.3), 0.60, 'dinero.js sumR triple: 0.1+0.2+0.3 = 0.60');
+
+    // Cadena multiplicación → tasa (simula precio×qty×tasa)
+    const precio = 5.99;
+    const qty = 3;
+    const tasa = 36.50;
+    const esperado = round2(round2(precio * qty) * tasa);
+    const calculado = mulR(mulR(precio, qty), tasa);
+    assertEqual(calculado, esperado, `dinero.js cadena precio×qty×tasa: ${precio}×${qty}×${tasa}`);
+
+    log('Motor financiero (dinero.js) certificado con precisión IEEE 754 corregida.', 'success');
+}
+
+// ════════════════════════════════════════════
+// 2. INTEGRIDAD DE LIBROS HISTÓRICOS
+// ════════════════════════════════════════════
+async function suiteAuditarDataHistorica() {
+    section('🕵️ SUITE: Integridad de Libros Históricos');
+    const sales = await storageService.getItem('bodega_sales_v1', []);
+    if (!sales || sales.length === 0) {
+        log('Libro de ventas vacío: No hay historial para auditar.', 'info');
+        return;
+    }
+
+    let driftCount = 0;
+
+    for (const sale of sales) {
+        if (!sale.items || sale.status === 'ANULADA') continue;
+
+        let calculatedUsd = 0;
+        for (const item of sale.items) {
+            calculatedUsd = sumR(calculatedUsd, mulR(item.priceUsd, item.qty));
+        }
+
+        const discountUsd = sale.discountAmountUsd || sale.discount || 0;
+        if (discountUsd > 0) calculatedUsd = subR(calculatedUsd, discountUsd);
+
+        if (Math.abs(calculatedUsd - sale.totalUsd) > 0.05) {
+            driftCount++;
+            log(`[Ticket ${sale.id?.slice(-6) || '?'}] Calculado $${calculatedUsd} vs Registrado $${sale.totalUsd} (diff $${Math.abs(calculatedUsd - sale.totalUsd).toFixed(2)})`, 'warn');
+        }
+    }
+
+    if (driftCount > 0) {
+        log(`${driftCount} ticket(s) con drift aritmético en sus ítems.`, 'error');
+        throw new AssertionError(`${driftCount} tickets con anomalías de integridad en sumas`);
+    } else {
+        log(`${sales.length} tickets auditados. Integridad 100%.`, 'success');
+    }
+}
+
+// ════════════════════════════════════════════
+// 3. INVENTARIO FANTASMA (Stock Negativo)
+// ════════════════════════════════════════════
+async function suitePatrimonialInventario() {
+    section('🛒 SUITE: Auditoría Patrimonial (Inventario Fantasma)');
+    const products = await storageService.getItem('bodega_products_v1', []);
+    if (!products || !products.length) {
+        log('No hay productos para auditar.', 'info');
+        return;
+    }
+
+    const allowNeg = localStorage.getItem('allow_negative_stock') === 'true';
+    let ghostItems = 0;
+    let totalGhostValueUsd = 0;
+
+    for (const p of products) {
+        if (p.stock < 0) {
+            ghostItems++;
+            totalGhostValueUsd = sumR(totalGhostValueUsd, mulR(Math.abs(p.stock), p.priceUsdt || 0));
+        }
+    }
+
+    if (ghostItems > 0 && !allowNeg) {
+        log(`${ghostItems} producto(s) en stock negativo. Valor irreal proyectado: $${totalGhostValueUsd.toFixed(2)}`, 'error');
+        throw new AssertionError(`${ghostItems} productos con stock negativo (config: stock negativo NO permitido)`);
+    } else if (ghostItems > 0 && allowNeg) {
+        log(`${ghostItems} producto(s) en negativo ($${totalGhostValueUsd.toFixed(2)}). Permitido por configuración.`, 'warn');
+    } else {
+        log(`${products.length} productos auditados. 0 items fantasma.`, 'success');
+    }
+}
+
+// ════════════════════════════════════════════
+// 4. DEUDA CIRCULAR (Cartera)
+// ════════════════════════════════════════════
+async function suiteDeudaCircular() {
+    section('👥 SUITE: Deuda Circular (Cartera de Clientes)');
+    const customers = await storageService.getItem('bodega_customers_v1', []);
+    if (!customers || !customers.length) {
+        log('No hay clientes para auditar.', 'info');
+        return;
+    }
+
+    let circularCount = 0;
+
+    for (const c of customers) {
+        if (c.deuda > 0 && c.favor > 0) {
+            circularCount++;
+            log(`[${c.name || c.id?.slice(-6)}] Deuda $${c.deuda} y Favor $${c.favor} simultáneos — cartera sin normalizar.`, 'warn');
+        }
+    }
+
+    if (circularCount > 0) {
+        log(`${circularCount} cliente(s) con deuda circular (deuda y favor simultáneos).`, 'error');
+        throw new AssertionError(`${circularCount} clientes con cartera no normalizada`);
+    } else {
+        log(`${customers.length} clientes auditados. Libros de cartera limpios.`, 'success');
+    }
+}
+
+// ════════════════════════════════════════════
+// 5. VENTAS HUÉRFANAS DE CIERRE
+// ════════════════════════════════════════════
+async function suiteOverlappingCierre() {
+    section('📦 SUITE: Ventas Huérfanas de Cierre (>24h sin sincronizar)');
+    const sales = await storageService.getItem('bodega_sales_v1', []);
+
+    if (!sales || !sales.length) {
+        log('No hay datos suficientes para cruzar reportes.', 'info');
+        return;
+    }
+
+    let orphanedCount = 0;
+    const now = new Date();
+
+    for (const sale of sales) {
+        if (sale.status === 'COMPLETADA') {
+            const saleDate = new Date(sale.timestamp || sale.createdAt || sale.date);
+            const hoursOld = (now - saleDate) / (1000 * 60 * 60);
+            if (hoursOld > 24 && !sale.syncStatus) {
+                orphanedCount++;
+            }
+        }
+    }
+
+    if (orphanedCount > 0) {
+        log(`${orphanedCount} venta(s) huérfanas (>24h sin cierre de turno registrado).`, 'error');
+        throw new AssertionError(`${orphanedCount} ventas huérfanas sin cierre de turno (>24h)`);
+    } else {
+        log('Conciliación de turnos OK. Todos los tickets tienen menos de 24h o están cerrados.', 'success');
+    }
+}
+
+// ════════════════════════════════════════════
+// 6. RATE SNEAK (Volatilidad de Tasa)
+// ════════════════════════════════════════════
+async function suiteRateSneak() {
+    section('💱 SUITE: Rate Sneak (Tasa Implícita vs Registrada)');
+    const sales = await storageService.getItem('bodega_sales_v1', []);
+    if (!sales || !sales.length) {
+        log('No hay ventas para auditar.', 'info');
+        return;
+    }
+
+    let tamperedCount = 0;
+
+    for (const sale of sales) {
+        if (sale.status === 'ANULADA' || !sale.totalUsd || !sale.totalBs || !sale.rate) continue;
+        const implicitRate = sale.totalBs / sale.totalUsd;
+        const diff = Math.abs(implicitRate - sale.rate);
+
+        if (diff > 0.05) {
+            log(`[Ticket ${sale.id?.slice(-6) || '?'}] Tasa registrada ${sale.rate}, implícita ${implicitRate.toFixed(2)} (diff ${diff.toFixed(2)})`, 'warn');
+            tamperedCount++;
+        }
+    }
+
+    if (tamperedCount > 0) {
+        log(`${tamperedCount} transacción(es) con tasa implícita inconsistente (Rate Sneak).`, 'error');
+        throw new AssertionError(`${tamperedCount} transacciones con volatilidad de tasa`);
+    } else {
+        log('Correlación Bs/USD coherente en todo el historial.', 'success');
+    }
+}
+
+// ════════════════════════════════════════════
+// 7. MARGEN NEGATIVO (Venta a Pérdida)
+// ════════════════════════════════════════════
+async function suiteMargenNegativo() {
+    section('💸 SUITE: Margen Negativo (Productos Vendiendo a Pérdida)');
+    const products = await storageService.getItem('bodega_products_v1', []);
+    if (!products || !products.length) {
+        log('No hay productos para auditar.', 'info');
+        return;
+    }
+
+    // Tasa de referencia
+    const rawRate = parseFloat(localStorage.getItem('bodega_custom_rate') || '0');
+    if (!rawRate || rawRate <= 0) {
+        log('No hay tasa configurada — no se puede calcular margen en Bs. Configura una tasa primero.', 'warn');
+        return;
+    }
+
+    let negativeMarginCount = 0;
+    let totalLossUsd = 0;
+
+    for (const p of products) {
+        const priceUsdt = p.priceUsdt || 0;
+        if (priceUsdt <= 0) continue;
+
+        let costUsd = 0;
+        if (p.costUsd && p.costUsd > 0) {
+            costUsd = p.costUsd;
+        } else if (p.costBs && p.costBs > 0) {
+            costUsd = round2(p.costBs / rawRate);
+        } else {
+            continue;
+        }
+
+        if (costUsd > 0 && priceUsdt < costUsd) {
+            negativeMarginCount++;
+            const lossUsd = round2(costUsd - priceUsdt);
+            totalLossUsd = sumR(totalLossUsd, lossUsd);
+            log(`[${p.name || p.id?.slice(-6)}] Precio $${priceUsdt} < Costo $${costUsd} → Pérdida unitaria $${lossUsd}`, 'warn');
+        }
+    }
+
+    if (negativeMarginCount > 0) {
+        log(`${negativeMarginCount} producto(s) con margen negativo. Pérdida potencial acumulada: $${totalLossUsd.toFixed(2)} por unidad.`, 'error');
+        throw new AssertionError(`${negativeMarginCount} productos vendiendo por debajo de su costo (pérdida potencial: $${totalLossUsd.toFixed(2)})`);
+    } else {
+        log(`${products.filter(p => (p.priceUsdt || 0) > 0).length} productos con precio auditados. Todos con margen positivo.`, 'success');
+    }
+}
+
+// ════════════════════════════════════════════
+// 8. PAGOS INCONSISTENTES (Cuadre de Caja)
+// ════════════════════════════════════════════
+async function suitePagosInconsistentes() {
+    section('🧾 SUITE: Pagos Inconsistentes (Cuadre de Caja)');
+    const sales = await storageService.getItem('bodega_sales_v1', []);
+    if (!sales || !sales.length) {
+        log('No hay ventas para auditar.', 'info');
+        return;
+    }
+
+    let inconsistentCount = 0;
+
+    for (const sale of sales) {
+        if (sale.status === 'ANULADA' || !sale.payments || !sale.payments.length) continue;
+        if (!sale.totalUsd) continue;
+
+        let sumPaidUsd = 0;
+        for (const pmt of sale.payments) {
+            if (pmt.currency === 'USD' || pmt.methodId?.includes('usd')) {
+                sumPaidUsd = sumR(sumPaidUsd, pmt.amountUsd || pmt.amount || 0);
+            } else if (pmt.amountUsd) {
+                sumPaidUsd = sumR(sumPaidUsd, pmt.amountUsd);
+            } else if (pmt.amount && sale.rate) {
+                sumPaidUsd = sumR(sumPaidUsd, round2(pmt.amount / sale.rate));
+            }
+        }
+
+        const changeUsd = sale.changeUsd || 0;
+        const netPaidUsd = subR(sumPaidUsd, changeUsd);
+
+        if (Math.abs(netPaidUsd - sale.totalUsd) > 0.05) {
+            inconsistentCount++;
+            log(`[Ticket ${sale.id?.slice(-6) || '?'}] Cobrado neto $${netPaidUsd} vs Total $${sale.totalUsd} (diff $${Math.abs(netPaidUsd - sale.totalUsd).toFixed(2)})`, 'warn');
+        }
+    }
+
+    if (inconsistentCount > 0) {
+        log(`${inconsistentCount} venta(s) con cuadre de pagos inconsistente.`, 'error');
+        throw new AssertionError(`${inconsistentCount} ventas donde pagos ≠ total (posible descuadre de caja)`);
+    } else {
+        const auditedCount = sales.filter(s => s.status !== 'ANULADA' && s.payments?.length && s.totalUsd).length;
+        log(`${auditedCount} ventas con pagos auditadas. Cuadre de caja perfecto.`, 'success');
+    }
+}
+
+// ════════════════════════════════════════════
+// 9. IDs DUPLICADOS
+// ════════════════════════════════════════════
+async function suiteIdsDuplicados() {
+    section('🪪 SUITE: IDs Duplicados (Integridad de Registros)');
+
+    const [products, sales, customers] = await Promise.all([
+        storageService.getItem('bodega_products_v1', []),
+        storageService.getItem('bodega_sales_v1', []),
+        storageService.getItem('bodega_customers_v1', []),
+    ]);
+
+    let totalDuplicates = 0;
+
+    const checkDuplicates = (items, label, keyFn = i => i.id) => {
+        if (!items?.length) return 0;
+        const seen = new Map();
+        let dups = 0;
+        for (const item of items) {
+            const key = keyFn(item);
+            if (!key) continue;
+            if (seen.has(key)) {
+                dups++;
+                log(`[${label}] ID duplicado: "${key}"`, 'warn');
+            } else {
+                seen.set(key, true);
+            }
+        }
+        return dups;
+    };
+
+    totalDuplicates += checkDuplicates(products, 'Productos');
+    totalDuplicates += checkDuplicates(sales, 'Ventas');
+    totalDuplicates += checkDuplicates(customers, 'Clientes');
+
+    // También detectar nombres duplicados en productos
+    const nameDups = checkDuplicates(products, 'Productos (nombre)', p => p.name?.trim().toLowerCase());
+    if (nameDups > 0) {
+        log(`${nameDups} producto(s) con nombre duplicado — posibles entradas dobles en catálogo.`, 'warn');
+    }
+    totalDuplicates += nameDups;
+
+    if (totalDuplicates > 0) {
+        log(`${totalDuplicates} duplicado(s) encontrados en registros.`, 'error');
+        throw new AssertionError(`${totalDuplicates} registros con IDs o nombres duplicados`);
+    } else {
+        log('Integridad referencial OK. Sin IDs ni nombres duplicados.', 'success');
+    }
+}
+
+// ════════════════════════════════════════════
+// REGISTRO DE SUITES
+// ════════════════════════════════════════════
+const SUITES = [
+    { key: 'precision_financiera',   name: '🔬 Motor: Certificación de Precisión',            fn: suitePrecisionFinanciera,   fast: true },
+    { key: 'auditoria_historica',    name: '🕵️ Histórico: Integridad de Libros',               fn: suiteAuditarDataHistorica,  fast: true },
+    { key: 'auditoria_patrimonial',  name: '🛒 Inventario: Auditoría Patrimonial',             fn: suitePatrimonialInventario, fast: true },
+    { key: 'auditoria_cartera',      name: '👥 Clientes: Deuda Circular',                      fn: suiteDeudaCircular,         fast: true },
+    { key: 'auditoria_cierre',       name: '📦 Finanzas: Ventas Huérfanas de Cierre',          fn: suiteOverlappingCierre,     fast: true },
+    { key: 'auditoria_tasas',        name: '💱 Operaciones: Rate Sneak',                       fn: suiteRateSneak,             fast: true },
+    { key: 'margen_negativo',        name: '💸 Catálogo: Margen Negativo (Venta a Pérdida)',   fn: suiteMargenNegativo,        fast: true },
+    { key: 'pagos_inconsistentes',   name: '🧾 Caja: Pagos Inconsistentes',                    fn: suitePagosInconsistentes,   fast: true },
+    { key: 'ids_duplicados',         name: '🪪 Registros: IDs y Nombres Duplicados',           fn: suiteIdsDuplicados,         fast: true },
+];
+
+// ════════════════════════════════════════════
+// EXPORTS API
+// ════════════════════════════════════════════
+
+export const SystemTester = {
+    getSuites: () => [...SUITES],
+
+    getState: () => ({
+        logs: [...state.logs],
+        suites: [...state.suites],
+        isRunning: state.isRunning,
+        stopped: state.stopped,
+        startedAt: state.startedAt,
+        finishedAt: state.finishedAt,
+    }),
+
+    stop: () => {
+        state.stopped = true;
+        log('⛔ Auditoría detenida por el usuario.', 'warn');
+    },
+
+    async runAll({ onLog, onProgress, onComplete, fastMode = false } = {}) {
+        resetState();
+        const targetSuites = fastMode ? SUITES.filter(s => s.fast) : SUITES;
+        initSuites(targetSuites);
+
+        state.isRunning = true;
+        state.startedAt = Date.now();
+        state.onLog = onLog || null;
+        state.onProgress = onProgress || null;
+
+        log(`🚀 Auditor Financiero v5.0 — ${targetSuites.length} suites`, 'info');
+
+        let passed = 0;
+        let failed = 0;
+
+        for (let i = 0; i < targetSuites.length; i++) {
+            const suiteConfig = targetSuites[i];
+
+            if (state.stopped) {
+                log('⛔ Auditoría abortada por el usuario.', 'warn');
+                updateSuiteStatus(suiteConfig.key, { status: 'skipped' });
+                continue;
+            }
+
+            onProgress?.({ name: suiteConfig.name, current: i + 1, total: targetSuites.length });
+            updateSuiteStatus(suiteConfig.key, { status: 'running', startedAt: Date.now() });
+
+            try {
+                await suiteConfig.fn();
+                updateSuiteStatus(suiteConfig.key, { status: 'passed', finishedAt: Date.now() });
+                passed++;
+            } catch (err) {
+                log(`Suite fallida: ${suiteConfig.name} — ${err.message}`, 'error');
+                updateSuiteStatus(suiteConfig.key, { status: 'failed', finishedAt: Date.now(), error: err.message });
+                failed++;
+            }
+
+            await delay(20);
+        }
+
+        state.finishedAt = Date.now();
+        const elapsedSec = ((state.finishedAt - state.startedAt) / 1000).toFixed(1);
+
+        section('📊 RESULTADO FINAL');
+        log(`✅ ${passed} aprobadas | ❌ ${failed} fallidas | ⏱️ ${elapsedSec}s`, passed > 0 && failed === 0 ? 'success' : failed > 0 ? 'error' : 'info');
+
+        state.isRunning = false;
+
+        const finalSummary = this.getState();
+        onComplete?.(finalSummary);
+        return finalSummary;
+    },
+
+    async runSuite(suiteId, { onLog } = {}) {
+        resetState();
+        const suiteConfig = SUITES.find(s => s.key === suiteId);
+
+        if (!suiteConfig) {
+            log(`Suite "${suiteId}" no encontrada`, 'error');
+            return null;
+        }
+
+        initSuites([suiteConfig]);
+        state.isRunning = true;
+        state.startedAt = Date.now();
+        state.onLog = onLog || null;
+
+        updateSuiteStatus(suiteConfig.key, { status: 'running', startedAt: Date.now() });
+
+        try {
+            await suiteConfig.fn();
+            updateSuiteStatus(suiteConfig.key, { status: 'passed', finishedAt: Date.now() });
+            log(`${suiteConfig.name} ✓`, 'success');
+        } catch (err) {
+            log(`Error en ${suiteConfig.name}: ${err.message}`, 'error');
+            updateSuiteStatus(suiteConfig.key, { status: 'failed', finishedAt: Date.now(), error: err.message });
+        }
+
+        state.finishedAt = Date.now();
+        state.isRunning = false;
+
+        return this.getState();
+    },
+};
