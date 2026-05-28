@@ -90,7 +90,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
 
     // ── Checkout hook ──
     const { handleCheckoutWithCustomer, handleTableCheckout, handleCreateCustomer, handleAddCustomAmount } = useSalesCheckout({
-        cart, cartTotalUsd, cartTotalBs, cartSubtotalUsd,
+        cart, cartTotalUsd, cartSubtotalUsd,
         effectiveRate, tasaCop, copEnabled, discountData, useAutoRate,
         customers, setCustomers, products,
         setProductsAfterCheckout, setSalesData,

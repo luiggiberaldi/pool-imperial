@@ -83,8 +83,13 @@ CREATE TABLE IF NOT EXISTS public.table_sessions (
 -- ── 4. Órdenes y Consumo en Mesas ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.orders (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    table_id UUID, -- Guardado para retrocompatibilidad
     table_session_id UUID NOT NULL REFERENCES public.table_sessions(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'PAID', 'CANCELLED'
+    exchange_rate_used NUMERIC DEFAULT 1,
+    total_usd NUMERIC DEFAULT 0,
+    total_bs NUMERIC DEFAULT 0,
+    created_by TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
 );
@@ -96,7 +101,9 @@ CREATE TABLE IF NOT EXISTS public.order_items (
     product_name TEXT NOT NULL,
     qty NUMERIC NOT NULL DEFAULT 1,
     unit_price_usd NUMERIC NOT NULL DEFAULT 0, -- NOTA: Almacena pesos COP por compatibilidad de esquema
+    unit_price_bs NUMERIC DEFAULT NULL, -- Guardado para retrocompatibilidad
     seat_id TEXT,
+    added_by TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -197,7 +204,36 @@ CREATE TABLE IF NOT EXISTS public.sale_items (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- ── 8. RLS (Row Level Security) e Índices ────────────────────────────────────
+-- ── 8. Configuración Global de la App y Licencias Legadas ────────────────────
+CREATE TABLE IF NOT EXISTS public.app_settings (
+    key VARCHAR(50) PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.licenses (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    device_id TEXT,
+    product_id TEXT,
+    type TEXT DEFAULT 'permanent',
+    active BOOLEAN DEFAULT true,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    code TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.pool_config (
+    id INTEGER NOT NULL DEFAULT 1,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    price_per_hour NUMERIC DEFAULT 0,
+    price_per_hour_bs NUMERIC DEFAULT 0,
+    price_pina NUMERIC DEFAULT 0,
+    price_pina_bs NUMERIC DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (id, user_id)
+);
+
+-- ── 9. RLS (Row Level Security) e Índices ────────────────────────────────────
 ALTER TABLE public.cloud_licenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cloud_backups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.account_devices ENABLE ROW LEVEL SECURITY;
@@ -213,6 +249,13 @@ ALTER TABLE public.staff_debts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.staff_debt_payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sale_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.licenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pool_config ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de lectura pública
+CREATE POLICY "Public can read app settings" ON public.app_settings FOR SELECT USING (true);
+CREATE POLICY "Public read licenses" ON public.licenses FOR SELECT USING (true);
 
 -- Políticas de Propietario (user_id)
 CREATE POLICY "Users can manage own sync docs" ON public.sync_documents FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
@@ -225,12 +268,13 @@ CREATE POLICY "Users can manage own staff" ON public.staff_users FOR ALL USING (
 CREATE POLICY "Users can manage own debts" ON public.staff_debts FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Users can manage own debt payments" ON public.staff_debt_payments FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Users can manage own sales" ON public.sales FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can manage own pool config" ON public.pool_config FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
--- Políticas para Estación Maestra (JWT email)
-CREATE POLICY "Owner can manage own backups" ON public.cloud_backups FOR ALL USING (email = (auth.jwt()->>'email')) WITH CHECK (email = (auth.jwt()->>'email'));
-CREATE POLICY "Owner can read own license" ON public.cloud_licenses FOR SELECT USING (email = (auth.jwt()->>'email'));
-CREATE POLICY "Owner can update own license" ON public.cloud_licenses FOR UPDATE USING (email = (auth.jwt()->>'email')) WITH CHECK (email = (auth.jwt()->>'email'));
-CREATE POLICY "Owner can manage own devices" ON public.account_devices FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+-- Políticas para Estación Maestra (JWT email - Insensibilidad a Mayúsculas)
+CREATE POLICY "Owner can manage own backups" ON public.cloud_backups FOR ALL USING (LOWER(email) = LOWER(auth.jwt()->>'email')) WITH CHECK (LOWER(email) = LOWER(auth.jwt()->>'email'));
+CREATE POLICY "Owner can read own license" ON public.cloud_licenses FOR SELECT USING (LOWER(email) = LOWER(auth.jwt()->>'email'));
+CREATE POLICY "Owner can update own license" ON public.cloud_licenses FOR UPDATE USING (LOWER(email) = LOWER(auth.jwt()->>'email')) WITH CHECK (LOWER(email) = LOWER(auth.jwt()->>'email'));
+CREATE POLICY "Owner can manage own devices" ON public.account_devices FOR ALL USING (LOWER(email) = LOWER(auth.jwt()->>'email')) WITH CHECK (LOWER(email) = LOWER(auth.jwt()->>'email'));
 
 -- Políticas heredadas de seguridad por tablas asociadas
 CREATE POLICY "Auth users can manage order items" ON public.order_items FOR ALL USING (auth.role() = 'authenticated') WITH CHECK (auth.role() = 'authenticated');
@@ -246,7 +290,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_user ON public.sales(user_id);
 CREATE INDEX IF NOT EXISTS idx_staff_users_user_active ON public.staff_users(user_id, active);
 CREATE INDEX IF NOT EXISTS idx_staff_debts_user ON public.staff_debts(user_id);
 
--- ── 9. Función de Registro de Dispositivo (Check License) ────────────────────
+-- ── 10. Función de Registro de Dispositivo (Check License) ────────────────────
 CREATE OR REPLACE FUNCTION public.register_and_check_device(
     p_email TEXT,
     p_device_id TEXT,
@@ -266,7 +310,7 @@ DECLARE
 BEGIN
     SELECT max_devices, active, license_type, valid_until INTO v_max_devices, v_active, v_license_type, v_valid_until
     FROM public.cloud_licenses
-    WHERE email = p_email;
+    WHERE LOWER(email) = LOWER(p_email);
 
     IF NOT FOUND THEN
         RETURN 'ok';
@@ -282,7 +326,7 @@ BEGIN
 
     SELECT COUNT(*) INTO v_count
     FROM public.account_devices
-    WHERE email = p_email;
+    WHERE LOWER(email) = LOWER(p_email);
 
     IF v_count > v_max_devices THEN
         RETURN 'limit_reached';
@@ -290,13 +334,14 @@ BEGIN
 
     SELECT EXISTS(
         SELECT 1 FROM public.account_devices
-        WHERE email = p_email AND device_id = p_device_id
+        WHERE LOWER(email) = LOWER(p_email) AND device_id = p_device_id
     ) INTO v_already_registered;
 
     IF v_already_registered THEN
         UPDATE public.account_devices
-        SET last_seen = NOW()
-        WHERE email = p_email AND device_id = p_device_id;
+        SET last_seen = NOW(),
+            user_id = auth.uid()
+        WHERE LOWER(email) = LOWER(p_email) AND device_id = p_device_id;
         RETURN 'ok';
     END IF;
 
@@ -304,17 +349,15 @@ BEGIN
         RETURN 'limit_reached';
     END IF;
 
-    INSERT INTO public.account_devices (email, device_id, device_alias, last_seen)
-    VALUES (p_email, p_device_id, p_device_alias, NOW())
-    ON CONFLICT (email, device_id) DO UPDATE SET last_seen = NOW();
+    INSERT INTO public.account_devices (email, device_id, device_alias, last_seen, user_id)
+    VALUES (LOWER(p_email), p_device_id, p_device_alias, NOW(), auth.uid())
+    ON CONFLICT (email, device_id) DO UPDATE SET last_seen = NOW(), user_id = auth.uid();
 
     RETURN 'ok';
 END;
 $$;
 
--- ── 10. Función RPC: process_checkout (Motor Transaccional Seguro) ─────────────
--- Esta RPC realiza la venta, inserta la fila de auditoría de venta y actualiza
--- la deuda/saldos del cliente de manera atómica con integridad transaccional.
+-- ── 11. Función RPC: process_checkout (Motor Transaccional Seguro) ─────────────
 CREATE OR REPLACE FUNCTION public.process_checkout(payload JSONB)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -405,7 +448,7 @@ BEGIN
         ) VALUES (
             v_sale_id,
             v_item.id,
-            (SELECT COALESCE(name, 'Producto') FROM public.sync_documents WHERE collection = 'store' AND doc_id = 'pool_imperial_products_v1' AND user_id = v_user_id AND data->'payload' @> jsonb_build_array(jsonb_build_object('id', v_item.id)) LIMIT 1), -- Intenta recuperar nombre
+            (SELECT COALESCE(name, 'Producto') FROM public.sync_documents WHERE collection = 'store' AND doc_id = 'pool_imperial_products_v1' AND user_id = v_user_id AND data->'payload' @> jsonb_build_array(jsonb_build_object('id', v_item.id)) LIMIT 1),
             v_item.qty,
             v_item.priceUsd,
             0,

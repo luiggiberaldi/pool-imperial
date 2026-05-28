@@ -81,7 +81,7 @@ export default function CheckoutModal({
         changeUsdGiven, setChangeUsdGiven,
         confirmFiar, setConfirmFiar,
         overpayAlertData, setOverpayAlertData, confirmOverpay,
-    } = useCheckoutPayments({ paymentMethods, effectiveRate: 1, tasaCop: 1, cartTotalUsd, cartTotalBs: 0, onConfirmSale, triggerHaptic, splitMeta });
+    } = useCheckoutPayments({ paymentMethods, effectiveRate: 1, tasaCop: 1, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta });
 
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
     const activePaymentMethods = paymentMethods.filter(m => m.isEnabled !== false);

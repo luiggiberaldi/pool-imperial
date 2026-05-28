@@ -11,7 +11,7 @@ import { calculateSessionCostBreakdown, formatHoursPaid, calculateSeatCostBreakd
 const EPSILON = 1; // 1 peso colombiano de tolerancia
 
 export function useSalesCheckout({
-    cart, cartTotalUsd, cartTotalBs, cartSubtotalUsd,
+    cart, cartTotalUsd, cartSubtotalUsd,
     effectiveRate, tasaCop, copEnabled, discountData, useAutoRate,
     customers, setCustomers, products,
     setProductsAfterCheckout, setSalesData,
