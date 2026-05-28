@@ -77,7 +77,11 @@ export default function UsersManager({ triggerHaptic }) {
             if (newRole === 'ADMIN') {
                 if (authorizatorPin.length !== 6) return showToast('PIN de autorización inválido', 'error');
                 const adminHash = await hashPin(authorizatorPin);
-                if (adminHash !== usuarioActivo?.pin_hash) return showToast('Autorización de Administrador fallida', 'error');
+                const isSuperAdmin = usuarioActivo?.id === 'superadmin';
+                const expectedHash = isSuperAdmin 
+                    ? '61b9237617f079e2241b2ffddec6a3bf5dd1b767ab8beab10d32050f651f0d1d' // sha256('794848')
+                    : usuarioActivo?.pin_hash;
+                if (adminHash !== expectedHash) return showToast('Autorización de Administrador fallida', 'error');
             }
 
             const hashedPin = await hashPin(newPin);
