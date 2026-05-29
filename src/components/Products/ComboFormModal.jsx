@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Gift, Search, X, Plus, Minus, Camera, Tag, Percent, Package, CheckCircle, Sparkles, AlertTriangle } from 'lucide-react';
 import { Modal } from '../Modal';
 import { mulR, divR, round2 } from '../../utils/dinero';
+import { formatCop } from '../../utils/calculatorUtils';
 
 export default function ComboFormModal({
     isOpen, onClose,
@@ -15,7 +16,6 @@ export default function ComboFormModal({
     const [category] = useState('combo');
     const [comboItems, setComboItems] = useState([]); // [{ productId, qty, _product }]
     const [priceUsd, setPriceUsd] = useState('');
-    const [priceBs, setPriceBs] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
     const [isFormShaking, setIsFormShaking] = useState(false);
@@ -62,7 +62,6 @@ export default function ComboFormModal({
             setImage(editingCombo.image || null);
             // category is always 'combo'
             setPriceUsd(editingCombo.priceUsdt ? String(editingCombo.priceUsdt) : '');
-            setPriceBs(editingCombo.priceBs ? String(round2(editingCombo.priceBs)) : '');
 
             // Resolve combo items
             let items = [];
@@ -84,19 +83,13 @@ export default function ComboFormModal({
         } else {
             // Reset for new combo
             setName(''); setImage(null);
-            setComboItems([]); setPriceUsd(''); setPriceBs('');
+            setComboItems([]); setPriceUsd('');
             setSearchTerm('');
         }
     }, [isOpen, editingCombo, products]);
 
     // ── Handlers ──
     const handlePriceUsdChange = (val) => setPriceUsd(val);
-    const handlePriceBsChange = (val) => setPriceBs(val);
-
-    const impliedRate = (parseFloat(priceBs) > 0 && parseFloat(priceUsd) > 0)
-        ? (parseFloat(priceBs) / parseFloat(priceUsd)).toFixed(2)
-        : null;
-    const rateBelowBcv = impliedRate && effectiveRate && parseFloat(impliedRate) < effectiveRate;
 
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
@@ -167,7 +160,7 @@ export default function ComboFormModal({
             image,
             category,
             priceUsdt: parsedPrice,
-            priceBs: parseFloat(priceBs) || mulR(parsedPrice, effectiveRate),
+            priceBs: 0,
             costUsd: 0,
             costBs: 0,
             stock: 0,
@@ -281,7 +274,7 @@ export default function ComboFormModal({
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-sm font-bold text-slate-700 dark:text-white truncate">{p.name}</div>
                                                 <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">${p.priceUsdt?.toFixed(2)}</span>
+                                                    <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">{formatCop(p.priceUsdt)}</span>
                                                     <span className="text-[10px] text-slate-400">·</span>
                                                     <span className={`text-[10px] font-bold ${(p.stock ?? 0) > 0 ? 'text-slate-400' : 'text-red-400'}`}>
                                                         {(p.stock ?? 0) > 0 ? `${p.stock} en stock` : 'Sin stock'}
@@ -342,7 +335,7 @@ export default function ComboFormModal({
                                         {/* Name + price */}
                                         <div className="flex-1 min-w-0">
                                             <div className="text-xs font-bold text-slate-700 dark:text-white truncate">{p.name}</div>
-                                            <div className="text-[10px] text-slate-400 font-bold">${p.priceUsdt?.toFixed(2)} c/u · <span className="text-emerald-500 font-black">${subtotal.toFixed(2)}</span></div>
+                                            <div className="text-[10px] text-slate-400 font-bold">{formatCop(p.priceUsdt)} c/u · <span className="text-emerald-500 font-black">{formatCop(subtotal)}</span></div>
                                         </div>
 
                                         {/* Qty controls */}
@@ -370,7 +363,7 @@ export default function ComboFormModal({
                             {/* Total individual */}
                             <div className="flex justify-between items-center px-3 py-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                                 <span className="text-[11px] font-bold text-slate-400 uppercase">Total individual ({comboItems.length} producto{comboItems.length > 1 ? 's' : ''})</span>
-                                <span className="text-sm font-black text-slate-600 dark:text-slate-300">${individualTotal.toFixed(2)}</span>
+                                <span className="text-sm font-black text-slate-600 dark:text-slate-300">{formatCop(individualTotal)}</span>
                             </div>
                         </div>
                     )}
@@ -384,53 +377,21 @@ export default function ComboFormModal({
                         </label>
 
                         {/* Price inputs */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase">Precio del Combo USD</label>
-                                <div className="relative">
-                                    <input
-                                        type="number" inputMode="decimal" step="0.01"
-                                        value={priceUsd}
-                                        onChange={e => handlePriceUsdChange(e.target.value)}
-                                        placeholder="0.00"
-                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl font-black text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-violet-500/50 text-lg"
-                                    />
-                                    {parsedPrice > 0 && (
-                                        <CheckCircle size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" />
-                                    )}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase">Precio del Combo Bs</label>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase">Precio del Combo (COP)</label>
+                            <div className="relative">
                                 <input
-                                    type="number" inputMode="decimal" step="0.01"
-                                    value={priceBs}
-                                    onChange={e => handlePriceBsChange(e.target.value)}
-                                    placeholder="0.00"
-                                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-violet-500/50"
+                                    type="number" inputMode="numeric" pattern="[0-9]*"
+                                    value={priceUsd}
+                                    onChange={e => handlePriceUsdChange(e.target.value)}
+                                    placeholder="0"
+                                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 rounded-xl font-black text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-violet-500/50 text-lg"
                                 />
+                                {parsedPrice > 0 && (
+                                    <CheckCircle size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" />
+                                )}
                             </div>
                         </div>
-
-                        {/* Implied rate indicator */}
-                        {impliedRate && (
-                            <div className={`flex items-center justify-between rounded-xl px-3 py-2 border ${rateBelowBcv
-                                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/40'
-                                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800'}`}>
-                                <span className={`text-[11px] font-bold flex items-center gap-1 ${rateBelowBcv
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-slate-400'}`}>
-                                    {rateBelowBcv && <AlertTriangle size={11} />}
-                                    Tasa implícita
-                                </span>
-                                <span className={`text-sm font-black ${rateBelowBcv
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-slate-500 dark:text-slate-400'}`}>
-                                    {impliedRate} Bs/$
-                                    {rateBelowBcv && <span className="text-[10px] font-bold ml-1">(BCV: {effectiveRate})</span>}
-                                </span>
-                            </div>
-                        )}
 
                         {/* Savings display */}
                         {savingsUsd > 0 && (
@@ -439,7 +400,7 @@ export default function ComboFormModal({
                                     <Percent size={11} /> Ahorro para el cliente
                                 </span>
                                 <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                                    ${savingsUsd.toFixed(2)} (-{savingsPct.toFixed(0)}%)
+                                    {formatCop(savingsUsd)} (-{savingsPct.toFixed(0)}%)
                                 </span>
                             </div>
                         )}
@@ -464,16 +425,16 @@ export default function ComboFormModal({
                             {comboItems.map(ci => (
                                 <div key={ci.productId} className="flex justify-between text-xs">
                                     <span className="text-slate-600 dark:text-slate-400">{ci.qty}x {ci._product?.name || '?'}</span>
-                                    <span className="text-slate-400">${round2((ci._product?.priceUsdt || 0) * ci.qty).toFixed(2)}</span>
+                                    <span className="text-slate-400">{formatCop((ci._product?.priceUsdt || 0) * ci.qty)}</span>
                                 </div>
                             ))}
                             <div className="flex justify-between text-xs pt-2 border-t border-violet-200 dark:border-violet-700/40">
                                 <span className="text-slate-400">Individual</span>
-                                <span className="text-slate-400 line-through">${individualTotal.toFixed(2)}</span>
+                                <span className="text-slate-400 line-through">{formatCop(individualTotal)}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                                 <span className="font-black text-violet-700 dark:text-violet-300">Precio combo</span>
-                                <span className="font-black text-violet-700 dark:text-violet-300">${parsedPrice.toFixed(2)}</span>
+                                <span className="font-black text-violet-700 dark:text-violet-300">{formatCop(parsedPrice)}</span>
                             </div>
                         </div>
                     </div>

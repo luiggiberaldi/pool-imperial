@@ -1,9 +1,9 @@
 import React from 'react';
 import { CheckCircle, Wallet, Send, X, Printer } from 'lucide-react';
-import { formatBs } from '../../utils/calculatorUtils';
+import { formatCop } from '../../utils/calculatorUtils';
 import { printThermalTicket } from '../../utils/ticketGenerator';
 
-export default function ReceiptModal({ receipt, onClose, onShareWhatsApp, currentRate }) {
+export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
     if (!receipt) return null;
 
     return (
@@ -36,14 +36,10 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp, curren
                         {receipt.customerName && <p className="text-sm font-bold text-slate-500 mb-0 uppercase tracking-tight">{receipt.customerName}</p>}
                         {receipt.customerDocument && (
                             <p className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">
-                                C.I/RIF: {receipt.customerDocument}
+                                NIT/C.C.: {receipt.customerDocument}
                             </p>
                         )}
-                        <p className="text-4xl font-black text-slate-900 mb-1 tracking-tighter">${receipt.totalUsd.toFixed(2)}</p>
-                        <p className="text-lg font-bold text-slate-500 mb-2">{formatBs(receipt.totalBs)} Bs</p>
-                        {receipt.copEnabled && receipt.tasaCop > 0 && (
-                            <p className="text-base font-bold text-amber-500 mb-2">{(receipt.totalCop || (receipt.totalUsd * receipt.tasaCop)).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>
-                        )}
+                        <p className="text-4xl font-black text-slate-900 mb-1 tracking-tighter">{formatCop(receipt.totalUsd)}</p>
 
                         <div className="inline-flex items-center flex-wrap justify-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-600 mt-2">
                             {receipt.payments && receipt.payments.map((p, i) => (
@@ -61,9 +57,9 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp, curren
                                 <div key={i} className="flex justify-between items-start text-sm border-b border-slate-200/50 pb-2 last:border-0 last:pb-0">
                                     <div className="flex-1 pr-4">
                                         <span className="font-bold text-slate-700 block leading-tight">{item.name}</span>
-                                        <span className="text-xs text-slate-400">{item.isWeight ? `${item.qty.toFixed(3)} Kg` : `${item.qty} u`} × ${item.priceUsd.toFixed(2)}</span>
+                                        <span className="text-xs text-slate-400">{item.isWeight ? `${item.qty.toFixed(3)} Kg` : `${item.qty} u`} × {formatCop(item.priceUsd)}</span>
                                     </div>
-                                    <span className="font-black text-slate-900">${(item.priceUsd * item.qty).toFixed(2)}</span>
+                                    <span className="font-black text-slate-900">{formatCop(item.priceUsd * item.qty)}</span>
                                 </div>
                             ))}
                         </div>
@@ -74,46 +70,30 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp, curren
                                 {receipt.payments.map(p => (
                                     <div key={p.id} className="flex justify-between text-slate-600 mb-1">
                                         <span>{p.methodLabel}:</span>
-                                        <span className="font-bold">{p.amountInputCurrency === 'USD' ? '$' : p.amountInputCurrency === 'COP' ? 'COP' : 'Bs'} {p.amountInput}</span>
+                                        <span className="font-bold">{formatCop(parseFloat(p.amountInput || 0))}</span>
                                     </div>
                                 ))}
 
-                                {(receipt.changeUsd > 0 || receipt.changeBs > 0) && (
+                                {receipt.changeUsd > 0 && (
                                     <div className="mt-2 pt-2 border-t border-slate-200">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Vuelto Entregado</p>
-                                        {receipt.changeUsd > 0 && (
-                                            <div className="flex justify-between text-emerald-600 font-bold">
-                                                <span>En Dólares:</span>
-                                                <span>${receipt.changeUsd.toFixed(2)}</span>
-                                            </div>
-                                        )}
-                                        {receipt.changeBs > 0 && (
-                                            <div className="flex justify-between text-emerald-600 font-bold">
-                                                <span>En Bolívares:</span>
-                                                <span>{formatBs(receipt.changeBs)} Bs</span>
-                                            </div>
-                                        )}
+                                        <div className="flex justify-between text-emerald-600 font-bold">
+                                            <span>Cambio:</span>
+                                            <span>{formatCop(receipt.changeUsd)}</span>
+                                        </div>
                                     </div>
                                 )}
 
                                 {receipt.fiadoUsd > 0 && (
                                     <div className="flex justify-between text-amber-600 font-bold mt-2 pt-2 border-t border-slate-200">
                                         <span>Pendiente (Fiado):</span>
-                                        <span>${receipt.fiadoUsd.toFixed(2)} / {formatBs(receipt.fiadoUsd * (currentRate || receipt.rate))} Bs</span>
+                                        <span>{formatCop(receipt.fiadoUsd)}</span>
                                     </div>
                                 )}
                             </div>
                         )}
 
                         <div className="mt-6 flex flex-col items-center gap-1">
-                            <p className="text-center text-[10px] text-slate-400 uppercase tracking-wider font-bold">
-                                Tasa BCV Aplicada: {formatBs(receipt.rate)} Bs/$
-                            </p>
-                            {receipt.tasaCop > 0 && (
-                                <p className="text-center text-[10px] text-slate-400 uppercase tracking-wider font-bold">
-                                    Tasa COP Aplicada: {receipt.tasaCop.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP/$
-                                </p>
-                            )}
                             <p className="text-center text-[10px] text-slate-400 uppercase tracking-wider font-bold">
                                 {new Date(receipt.timestamp).toLocaleString()}
                             </p>
@@ -124,7 +104,7 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp, curren
                 {/* Botones de acción — diseño premium */}
                 <div className="p-4 sm:p-5 bg-white flex gap-2.5 relative z-20 shrink-0 border-t border-slate-100">
                     {/* Imprimir */}
-                    <button onClick={() => printThermalTicket(receipt, currentRate || receipt.rate)}
+                    <button onClick={() => printThermalTicket(receipt, receipt.rate)}
                         className="flex-1 py-3.5 bg-gradient-to-b from-slate-700 to-slate-800 text-white font-bold rounded-2xl hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg shadow-slate-800/20 hover:shadow-xl hover:shadow-slate-800/30 text-sm flex items-center justify-center gap-2 focus:outline-none active:scale-[0.97] hover:-translate-y-0.5">
                         <Printer size={17} strokeWidth={2.5} /> Imprimir
                     </button>

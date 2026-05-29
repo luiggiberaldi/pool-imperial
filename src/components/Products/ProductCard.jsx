@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Tag, AlertTriangle, Minus, Plus, Pencil, Trash2, Package, Layers, Clock, Printer, Check, Gift } from 'lucide-react';
 import { CATEGORY_COLORS, CATEGORY_ICONS, UNITS } from '../../config/categories';
-import { formatUsd, formatBs, smartCashRounding } from '../../utils/calculatorUtils';
+import { formatCop, smartCashRounding } from '../../utils/calculatorUtils';
 
 export default function ProductCard({
     product: p,
@@ -29,16 +29,14 @@ export default function ProductCard({
     // número mostrado en el botón de confirmar mientras el usuario está editando.
     const baseStockRef = useRef(null);
 
-    const valBs = p.priceBs > 0 ? p.priceBs : p.priceUsdt * effectiveRate;
-    const valCop = p.priceUsdt * tasaCop;
+    const valCop = p.priceUsdt;
     // Si hay una edición en curso, usar el stock base capturado; si no, el actual del contexto
     const currentBase = baseStockRef.current !== null ? baseStockRef.current : (p.stock ?? 0);
     const stagedStock = currentBase + delta;
     const isLowStock = stagedStock <= (p.lowStockAlert ?? 5);
-    const margin = p.costBs > 0 ? ((valBs - p.costBs) / p.costBs * 100) : null;
+    const margin = p.costUsd > 0 ? (((p.priceUsdt || 0) - p.costUsd) / p.costUsd * 100) : null;
     const catInfo = categories.find(c => c.id === p.category);
     const unitInfo = UNITS.find(u => u.id === p.unit);
-    const _efectivoPrecio = streetRate > 0 ? `$${smartCashRounding(valBs / streetRate)}` : null;
 
     const handleMinus = () => {
         // Capturar base la primera vez que se toca +/-
@@ -150,16 +148,12 @@ export default function ProductCard({
                 <div className="flex justify-between items-end mb-3">
                     <div>
                         <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                            {formatUsd(p.priceUsdt)} <span className="text-[10px] sm:text-xs font-bold text-emerald-600/50 dark:text-emerald-400/50">USD {(p.unit === 'kg' || p.unit === 'litro') ? `/ ${unitInfo?.short || 'ud'}` : ''}</span>
+                            {formatCop(p.priceUsdt)} <span className="text-[10px] sm:text-xs font-bold text-emerald-600/50 dark:text-emerald-400/50">{(p.unit === 'kg' || p.unit === 'litro') ? `/ ${unitInfo?.short || 'ud'}` : ''}</span>
                         </p>
-                        <p className="text-[11px] sm:text-xs font-bold text-slate-400 mt-1">{formatBs(valBs)} Bs</p>
-                        {copEnabled && (
-                            <p className="text-[11px] sm:text-xs font-bold text-amber-500/80 mt-0.5">{valCop.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>
-                        )}
                         {p.unit === 'paquete' && p.sellByUnit && (
                             <p className="text-[10px] sm:text-xs font-bold text-indigo-500 dark:text-indigo-400 mt-0.5 flex items-center gap-0.5">
                                 <Layers size={10} />
-                                ${(p.unitPriceUsd ?? p.priceUsdt / (p.unitsPerPackage || 1)).toFixed(2)} / ud
+                                {formatCop(p.unitPriceUsd ?? p.priceUsdt / (p.unitsPerPackage || 1))} / ud
                             </p>
                         )}
                     </div>

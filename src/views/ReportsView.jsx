@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Recycle, Search, X, LockIcon, ListOrdered } from 'lucide-react';
-import { formatBs } from '../utils/calculatorUtils';
+import { formatCop } from '../utils/calculatorUtils';
 import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
 import { useProductContext } from '../context/ProductContext';
@@ -91,11 +91,11 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
             await generateDailyClosePDF({
                 sales: salesForCashFlow,
                 allSales: salesForStats,
-                bcvRate,
+                bcvRate: 0,
                 paymentBreakdown,
                 topProducts,
                 todayTotalUsd: totalUsd,
-                todayTotalBs: totalBs,
+                todayTotalBs: 0,
                 todayProfit: profit,
                 todayItemsSold: totalItems,
             });
@@ -233,8 +233,8 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <StatCard icon={ShoppingBag} label="Ventas" value={salesForStats.length} color="emerald" />
-                        <StatCard icon={DollarSign} label="Ingresos" value={`$${totalUsd.toFixed(2)}`} sub={`${formatBs(totalBs)} Bs`} color="blue" />
-                        <StatCard icon={TrendingUp} label="Ganancia" value={bcvRate > 0 ? `$${(profit / bcvRate).toFixed(2)}` : '$0.00'} sub={`${formatBs(profit)} Bs`} color="indigo" />
+                        <StatCard icon={DollarSign} label="Ingresos" value={formatCop(totalUsd)} color="blue" />
+                        <StatCard icon={TrendingUp} label="Ganancia" value={formatCop(profit)} color="indigo" />
                         <StatCard icon={Package} label="Artículos" value={totalItems} color="amber" />
                     </div>
 
@@ -247,10 +247,10 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             <div className="flex items-end gap-1 h-24">
                                 {salesByDay.map((day) => {
                                     const pct = (day.total / maxDayTotal) * 100;
-                                    const dayLabel = new Date(day.date + 'T12:00:00').toLocaleDateString('es-VE', { day: 'numeric', month: 'short' });
+                                    const dayLabel = new Date(day.date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
                                     return (
                                         <div key={day.date} className="flex-1 flex flex-col items-center gap-0.5">
-                                            <span className="text-[8px] font-bold text-slate-400">${day.total.toFixed(0)}</span>
+                                            <span className="text-[8px] font-bold text-slate-400">{formatCop(day.total)}</span>
                                             <div className="w-full flex justify-center">
                                                 <div
                                                     className="w-full max-w-[24px] rounded-t-md bg-gradient-to-t from-indigo-500 to-indigo-400 transition-all duration-500"
@@ -288,7 +288,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                             <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{p.name}</p>
                                             <p className="text-[10px] text-slate-400">{p.qty} vendidos</p>
                                         </div>
-                                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">${p.revenue.toFixed(2)}</span>
+                                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">{formatCop(p.revenue)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -351,7 +351,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                     {/* Mini Summary Strip */}
                                     {searchedSales.length > 0 && (
                                         <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-500">
-                                            <span className="flex items-center gap-1"><DollarSign size={12} className="text-emerald-500" /> ${sumUsd.toFixed(2)}</span>
+                                            <span className="flex items-center gap-1"><DollarSign size={12} className="text-emerald-500" /> {formatCop(sumUsd)}</span>
                                             <span className="w-px h-3 bg-slate-300 dark:bg-slate-700" />
                                             <span>{completedInList.length} venta{completedInList.length !== 1 ? 's' : ''}</span>
                                             {voidedInList.length > 0 && (
@@ -419,7 +419,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                         </div>
                         <div className="text-right">
                             <p className="text-sm font-black text-slate-800 dark:text-white">{allProductsSold.reduce((a, p) => a + p.qty, 0).toFixed(0)} uds</p>
-                            <p className="text-[10px] font-bold text-indigo-500">${allProductsSold.reduce((a, p) => a + p.revenue, 0).toFixed(2)}</p>
+                            <p className="text-[10px] font-bold text-indigo-500">{formatCop(allProductsSold.reduce((a, p) => a + p.revenue, 0))}</p>
                         </div>
                     </div>
 
@@ -475,14 +475,14 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                     <p className="text-xs font-black text-slate-700 dark:text-white text-right">
                                         {p.isWeight ? p.qty.toFixed(2) + ' kg' : p.qty}
                                     </p>
-                                    <p className="text-xs font-black text-indigo-600 dark:text-indigo-400 text-right">${p.revenue.toFixed(2)}</p>
+                                    <p className="text-xs font-black text-indigo-600 dark:text-indigo-400 text-right">{formatCop(p.revenue)}</p>
                                 </div>
                             ))}
                             {/* Footer totals */}
                             <div className="grid grid-cols-[1fr_80px_80px] gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 border-t border-indigo-100 dark:border-indigo-800/30">
                                 <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase">Total</span>
                                 <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 text-right">{allProductsSold.reduce((a, p) => a + p.qty, 0).toFixed(0)}</span>
-                                <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 text-right">${allProductsSold.reduce((a, p) => a + p.revenue, 0).toFixed(2)}</span>
+                                <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 text-right">{formatCop(allProductsSold.reduce((a, p) => a + p.revenue, 0))}</span>
                             </div>
                         </div>
                     ) : (

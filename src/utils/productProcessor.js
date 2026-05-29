@@ -20,10 +20,10 @@ export function buildProductPayload(formData, effectiveRate) {
     } = formData;
 
     const formattedName = name.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
-    const finalPriceUsd = priceUsd ? parseFloat(priceUsd) : (priceBs ? divR(parseFloat(priceBs), effectiveRate) : 0);
-    const finalPriceBs = priceBs ? parseFloat(priceBs) : (priceUsd ? mulR(parseFloat(priceUsd), effectiveRate) : 0);
-    const finalCostUsd = costUsd ? parseFloat(costUsd) : (costBs ? divR(parseFloat(costBs), effectiveRate) : 0);
-    const finalCostBs = costBs ? parseFloat(costBs) : (costUsd ? mulR(parseFloat(costUsd), effectiveRate) : 0);
+    const finalPriceUsd = priceUsd ? parseFloat(priceUsd) : 0;
+    const finalPriceBs = 0;
+    const finalCostUsd = costUsd ? parseFloat(costUsd) : 0;
+    const finalCostBs = 0;
 
     // Map packagingType → unit legacy
     let legacyUnit = 'unidad';

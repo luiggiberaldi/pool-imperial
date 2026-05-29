@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Percent, DollarSign, Calculator, ShieldAlert, Delete } from 'lucide-react';
+import { X, Percent, Calculator, ShieldAlert, Delete } from 'lucide-react';
 import { useAuthStore } from '../../hooks/store/authStore';
 import { logEvent } from '../../services/auditService';
+import { formatCop } from '../../utils/calculatorUtils';
 
 export default function DiscountModal({
     currentDiscount,
     onApply,
     onClose,
     cartSubtotalUsd,
-    effectiveRate,
-    tasaCop,
-    copEnabled,
     userRole = 'ADMIN',
     maxDiscountPercent = 100,
 }) {
@@ -39,8 +37,6 @@ export default function DiscountModal({
     if (discountAmountUsd > cartSubtotalUsd) discountAmountUsd = cartSubtotalUsd;
 
     const newTotalUsd = cartSubtotalUsd - discountAmountUsd;
-    const newTotalBs = newTotalUsd * effectiveRate;
-    const formatBs = (n) => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
     // Check if this discount exceeds the limit for cashiers
     const effectivePct = type === 'percentage' ? numValue : (cartSubtotalUsd > 0 ? (numValue / cartSubtotalUsd) * 100 : 0);
@@ -73,7 +69,7 @@ export default function DiscountModal({
         const ok = await verifyAdminPin(pin);
         if (ok) {
             logEvent('VENTA', 'DESCUENTO_APROBADO_ADMIN',
-                `Descuento ${type === 'percentage' ? numValue + '%' : '$' + numValue} aprobado por admin para cajero ${currentUser?.name || ''}`,
+                `Descuento ${type === 'percentage' ? numValue + '%' : 'COP ' + numValue} aprobado por admin para cajero ${currentUser?.name || ''}`,
                 useAuthStore.getState().currentUser,
                 { discountType: type, discountValue: numValue, cashier: currentUser?.name }
             );
@@ -115,7 +111,7 @@ export default function DiscountModal({
                             </button>
                             <button type="button" onClick={() => { setType('fixed'); setValue(''); inputRef.current?.focus(); }}
                                 className={`flex flex-1 items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 ${type === 'fixed' ? 'bg-white dark:bg-slate-900 shadow-sm text-emerald-600 dark:text-emerald-400 scale-100 ring-1 ring-slate-900/5 dark:ring-white/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 scale-95 hover:scale-100'}`}>
-                                <DollarSign size={16} /> Monto ($)
+                                <span className="text-xs font-black">COP</span> Monto (COP)
                             </button>
                         </div>
 
@@ -124,7 +120,7 @@ export default function DiscountModal({
                             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
                                 {type === 'percentage'
                                     ? <Percent size={20} className="text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                                    : <DollarSign size={20} className="text-slate-400 group-focus-within:text-emerald-500 transition-colors" />}
+                                    : <span className="text-slate-400 font-black text-xs">COP</span>}
                             </div>
                             <input
                                 ref={inputRef}
@@ -139,7 +135,7 @@ export default function DiscountModal({
                                     setValue(val);
                                 }}
                                 className="w-full bg-white dark:bg-slate-950 border-2 border-slate-200 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-2xl font-black text-slate-800 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-center"
-                                placeholder={type === 'percentage' ? "0%" : "0.00"}
+                                placeholder={type === 'percentage' ? "0%" : "0"}
                                 autoFocus
                             />
                         </div>
@@ -158,22 +154,16 @@ export default function DiscountModal({
                         <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-2">
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-slate-500 font-medium">Subtotal:</span>
-                                <span className="text-slate-700 dark:text-slate-300 font-bold">${cartSubtotalUsd.toFixed(2)}</span>
+                                <span className="text-slate-700 dark:text-slate-300 font-bold">{formatCop(cartSubtotalUsd)}</span>
                             </div>
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-red-500 font-medium tracking-tight">Descuento aplicado:</span>
-                                <span className="text-red-500 font-black">-${discountAmountUsd.toFixed(2)}</span>
+                                <span className="text-red-500 font-black">-{formatCop(discountAmountUsd)}</span>
                             </div>
                             <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between items-end">
                                 <span className="text-sm font-bold text-slate-600 dark:text-slate-400">Total Final:</span>
                                 <div className="text-right">
-                                    <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none block">${newTotalUsd.toFixed(2)}</span>
-                                    <span className="text-xs font-bold text-slate-400">Bs {formatBs(newTotalBs)}</span>
-                                    {copEnabled && tasaCop > 0 && (
-                                        <span className="text-[10px] font-bold text-slate-400 block">
-                                            {(newTotalUsd * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP
-                                        </span>
-                                    )}
+                                    <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none block">{formatCop(newTotalUsd)}</span>
                                 </div>
                             </div>
                         </div>

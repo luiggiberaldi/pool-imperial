@@ -5,7 +5,7 @@ import { Package, Plus, Trash2, X, Tag, Pencil, Search, ChevronLeft, ChevronRigh
 import { Modal } from '../components/Modal';
 import { ProductShareModal } from '../components/ProductShareModal';
 import ShareInventoryModal from '../components/ShareInventoryModal';
-import { formatBs } from '../utils/calculatorUtils';
+import { formatCop } from '../utils/calculatorUtils';
 import { generarEtiquetas } from '../utils/ticketGenerator';
 import { useWallet } from '../hooks/useWallet';
 import ProductCard from '../components/Products/ProductCard';
@@ -375,9 +375,8 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                                 </div>
                                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
                                     {paginatedProducts.map(p => {
-                                        const valBs = p.priceBs > 0 ? p.priceBs : p.priceUsdt * effectiveRate;
                                         const isLowStock = (p.stock ?? 0) <= (p.lowStockAlert ?? 5);
-                                        const margin = p.costBs > 0 ? ((valBs - p.costBs) / p.costBs * 100) : null;
+                                        const margin = p.costUsd > 0 ? (((p.priceUsdt || 0) - p.costUsd) / p.costUsd * 100) : null;
                                         const catInfo = categories.find(c => c.id === p.category);
                                         return (
                                             <div key={p.id} className={`grid grid-cols-[auto_1fr_auto] sm:grid-cols-[40px_1fr_100px_100px_70px_80px_110px] gap-2 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors ${selectedIds.has(p.id) ? 'bg-brand/5 dark:bg-brand/10' : ''} ${isLowStock ? 'bg-amber-50/50 dark:bg-amber-900/5' : ''}`}>
@@ -393,7 +392,7 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                                                         <div className="flex items-center gap-2 mt-0.5">
                                                             {catInfo && catInfo.id !== 'todos' && <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{catInfo.label}</span>}
                                                             {isLowStock && <span className="text-[9px] font-bold text-amber-500 flex items-center gap-0.5"><AlertTriangle size={9} /> Bajo</span>}
-                                                            <span className="sm:hidden text-[11px] font-black text-emerald-600 dark:text-emerald-400">${(p.priceUsdt || 0).toFixed(2)}</span>
+                                                            <span className="sm:hidden text-[11px] font-black text-emerald-600 dark:text-emerald-400">{formatCop(p.priceUsdt)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -412,11 +411,9 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                                                 </div>
                                                 {/* Desktop columns */}
                                                 <div className="hidden sm:block">
-                                                    <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">${(p.priceUsdt || 0).toFixed(2)}</p>
-                                                    <p className="text-[10px] text-slate-400 font-medium">{formatBs(valBs)} Bs</p>
-                                                    {copEnabled && <p className="text-[10px] font-bold text-amber-500/80 mt-0.5">{(p.priceUsdt * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
+                                                    <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatCop(p.priceUsdt)}</p>
                                                 </div>
-                                                <div className="hidden sm:block">{!isCajero ? <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{p.costUsd ? `$${p.costUsd.toFixed(2)}` : '-'}</p> : <span className="text-[10px] text-slate-300">-</span>}</div>
+                                                <div className="hidden sm:block">{!isCajero ? <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{p.costUsd ? formatCop(p.costUsd) : '-'}</p> : <span className="text-[10px] text-slate-300">-</span>}</div>
                                                 <div className="hidden sm:block">
                                                     {!isCajero ? (margin !== null ? (
                                                         <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg ${margin >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'}`}>{margin >= 0 ? '+' : ''}{margin.toFixed(0)}%</span>
@@ -464,9 +461,7 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                 category={form.category} setCategory={form.setCategory}
                 unit={form.unit} setUnit={form.setUnit}
                 priceUsd={form.priceUsd} handlePriceUsdChange={form.handlePriceUsdChange}
-                priceBs={form.priceBs} handlePriceBsChange={form.handlePriceBsChange}
                 costUsd={form.costUsd} handleCostUsdChange={form.handleCostUsdChange}
-                costBs={form.costBs} handleCostBsChange={form.handleCostBsChange}
                 stock={form.stock} setStock={form.setStock}
                 lowStockAlert={form.lowStockAlert} setLowStockAlert={form.setLowStockAlert}
                 unitsPerPackage={form.unitsPerPackage} setUnitsPerPackage={form.setUnitsPerPackage}

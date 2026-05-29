@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
 import { BarChart3, TrendingUp, Package, AlertTriangle, ArrowUpRight, Users, ChevronDown, ChevronUp, Phone, FileText, Recycle, Key, Settings, LockIcon, Unlock, LogOut, Award, LineChart, ListChecks, RotateCcw, Bell, Clock, Wallet, X, Receipt } from 'lucide-react';
-import { formatBs } from '../utils/calculatorUtils';
+import { formatCop } from '../utils/calculatorUtils';
 import SalesHistory from '../components/Dashboard/SalesHistory';
 import SalesChart from '../components/Dashboard/SalesChart';
 import ConfirmModal from '../components/ConfirmModal';
@@ -159,7 +159,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             await storageService.setItem(SALES_KEY, updatedSales);
             setSales(updatedSales);
             await openCashSession(data.openingUsd, data.openingBs, data.cashierName || usuarioActivo?.name, role);
-            auditLog('VENTA', 'APERTURA_CAJA', `Caja abierta por ${role === 'ADMIN' ? 'Administrador' : 'Cajero'}: ${usuarioActivo?.name || '—'} — Base: $${data.openingUsd} / Bs${data.openingBs}`, { role, openedBy: usuarioActivo?.name });
+            auditLog('VENTA', 'APERTURA_CAJA', `Caja abierta por ${role === 'ADMIN' ? 'Administrador' : 'Cajero'}: ${usuarioActivo?.name || '—'} — Base: ${formatCop(data.openingUsd)}`, { role, openedBy: usuarioActivo?.name });
             setIsAperturaOpen(false);
             showToast('Turno de Caja Abierto', 'success');
             if (triggerHaptic) triggerHaptic();
@@ -518,7 +518,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                             <div className="text-left">
                                 <p className="text-sm font-black text-white">Cerrar Caja</p>
                                 <p className="text-[11px] text-white/70 font-medium">
-                                    {activeCashSession?.opened_by ? `${activeCashSession.opened_by} · ` : ''}{todaySales.length === 0 && todayCashFlow.length === 0 ? 'Sin movimientos' : `$${todayTotalUsd.toFixed(2)} · ${todaySales.length} ${todaySales.length === 1 ? 'venta' : 'ventas'}`}
+                                    {activeCashSession?.opened_by ? `${activeCashSession.opened_by} · ` : ''}{todaySales.length === 0 && todayCashFlow.length === 0 ? 'Sin movimientos' : `${formatCop(todayTotalUsd)} · ${todaySales.length} ${todaySales.length === 1 ? 'venta' : 'ventas'}`}
                                 </p>
                             </div>
                         </div>
@@ -547,7 +547,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                         <div className="w-11 h-11 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center"><FileText size={20} className="text-blue-500" /></div>
                         <div className="text-left">
                             <p className="text-sm font-black text-slate-700 dark:text-slate-200">Reporte de Turno</p>
-                            <p className="text-[11px] text-slate-400">{todaySales.length} {todaySales.length === 1 ? 'venta' : 'ventas'} · ${todayTotalUsd.toFixed(2)}</p>
+                            <p className="text-[11px] text-slate-400">{todaySales.length} {todaySales.length === 1 ? 'venta' : 'ventas'} · {formatCop(todayTotalUsd)}</p>
                         </div>
                     </div>
                     <div className="w-9 h-9 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center group-hover:translate-x-0.5 transition-transform">
@@ -566,13 +566,12 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                             <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center"><Users size={20} className="text-rose-500" /></div>
                             <div>
                                 <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Deudas</p>
-                                <p className="text-xl font-black text-rose-600">${totalDeudas.totalUsd.toFixed(2)}</p>
+                                <p className="text-xl font-black text-rose-600">{formatCop(totalDeudas.totalUsd)}</p>
                             </div>
                         </div>
                         <div className="text-right flex items-center gap-2">
                             <div>
                                 <p className="text-sm font-bold text-slate-500">{totalDeudas.count} {totalDeudas.count === 1 ? 'cliente' : 'clientes'}</p>
-                                {bcvRate > 0 && <p className="text-[10px] text-slate-400">{formatBs(totalDeudas.totalUsd * bcvRate)} Bs</p>}
                             </div>
                             {showTopDeudas ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
                         </div>
@@ -587,8 +586,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                                         <p className="text-xs font-bold truncate">{c.name}</p>
                                     </div>
                                     <div className="text-right shrink-0">
-                                        <p className="text-sm font-black text-rose-600">${(c.deuda || 0).toFixed(2)}</p>
-                                        {bcvRate > 0 && <p className="text-[9px] text-rose-400/60">{formatBs((c.deuda || 0) * bcvRate)} Bs</p>}
+                                        <p className="text-sm font-black text-rose-600">{formatCop(c.deuda || 0)}</p>
                                     </div>
                                 </div>
                             ))}

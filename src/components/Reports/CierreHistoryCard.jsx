@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, LockIcon, Printer, DollarSign, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { formatBs } from '../../utils/calculatorUtils';
+import { ChevronDown, ChevronUp, LockIcon, Printer, DollarSign, CheckCircle2 } from 'lucide-react';
+import { formatCop } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentIcon, toTitleCase, PAYMENT_ICONS } from '../../config/paymentMethods';
 import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
 
-export default function CierreHistoryCard({ cierre, bcvRate, products: _products }) {
+export default function CierreHistoryCard({ cierre, products: _products }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const dateLabel = new Date(cierre.cierreId).toLocaleString('es-VE', { 
+    const dateLabel = new Date(cierre.cierreId).toLocaleString('es-CO', { 
         weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit' 
     });
@@ -30,11 +30,11 @@ export default function CierreHistoryCard({ cierre, bcvRate, products: _products
         generateDailyClosePDF({
             sales: cierre.salesForCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
             allSales: cierre.salesForStats,
-            bcvRate,
+            bcvRate: 0,
             paymentBreakdown: cierre.paymentBreakdown,
             topProducts: todayTopProducts,
             todayTotalUsd: cierre.totalUsd,
-            todayTotalBs: cierre.totalBs,
+            todayTotalBs: 0,
             todayProfit: 0,
             todayItemsSold: cierre.totalItems,
             reconData: null,
@@ -45,7 +45,6 @@ export default function CierreHistoryCard({ cierre, bcvRate, products: _products
 
     const hasApertura = !!cierre.apertura;
     const fondoInicial = hasApertura ? (cierre.apertura.totalUsd || 0) : 0;
-    const fondoInicialBs = hasApertura ? (cierre.apertura.totalBs || 0) : 0;
 
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden mb-3 transition-all active:scale-[0.99] cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
@@ -64,8 +63,7 @@ export default function CierreHistoryCard({ cierre, bcvRate, products: _products
                 </div>
                 <div className="text-right flex items-center gap-3">
                     <div>
-                        <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">${cierre.totalUsd.toFixed(2)}</p>
-                        <p className="text-[10px] text-slate-400 font-medium">{formatBs(cierre.totalBs)} Bs</p>
+                        <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatCop(cierre.totalUsd)}</p>
                     </div>
                     {isExpanded ? <ChevronUp size={18} className="text-slate-400" /> : <ChevronDown size={18} className="text-slate-400" />}
                 </div>
@@ -77,7 +75,7 @@ export default function CierreHistoryCard({ cierre, bcvRate, products: _products
                     {hasApertura && (
                         <div className="flex justify-between items-center py-3 border-b border-slate-100 dark:border-slate-800/50">
                             <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><DollarSign size={14}/> Fondo de Apertura</span>
-                            <span className="text-sm font-black text-slate-700 dark:text-slate-300">${fondoInicial.toFixed(2)} <span className="text-[10px] text-slate-400 ml-1">({formatBs(fondoInicialBs)} Bs)</span></span>
+                            <span className="text-sm font-black text-slate-700 dark:text-slate-300">{formatCop(fondoInicial)}</span>
                         </div>
                     )}
 
@@ -89,18 +87,12 @@ export default function CierreHistoryCard({ cierre, bcvRate, products: _products
                         {Object.entries(cierre.paymentBreakdown).map(([method, data]) => {
                             const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method] || CheckCircle2;
                             const label = toTitleCase(getPaymentLabel(method, data.label));
-                            let displayAmount = `${formatBs(data.total)} Bs`;
-                            if (data.currency === 'FIADO' || data.currency === 'USD') {
-                                displayAmount = `$ ${data.total.toFixed(2)}`;
-                            } else if (data.currency === 'COP') {
-                                displayAmount = `${data.total.toLocaleString('es-CO')} COP`;
-                            }
                             return (
                                 <div key={method} className="flex justify-between items-center text-xs">
                                     <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                                         <PayIcon size={12} className="text-slate-400" /> {label}
                                     </span>
-                                    <span className="font-bold text-slate-700 dark:text-slate-200">{displayAmount}</span>
+                                    <span className="font-bold text-slate-700 dark:text-slate-200">{formatCop(data.total)}</span>
                                 </div>
                             );
                         })}

@@ -2,8 +2,9 @@
 // La tasa de efectivo ahora depende exclusivamente de la calibración manual del usuario
 
 // Formateadores
-export const formatBs = (val) => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
-export const formatUsd = (val) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+export const formatCop = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(val || 0));
+export const formatBs = (val) => formatCop(val);
+export const formatUsd = (val) => formatCop(val);
 
 /** Capitaliza la primera letra de cada palabra en un nombre */
 export const capitalizeName = (str) => {
@@ -27,15 +28,14 @@ export const generatePaymentMessage = (params) => {
     return MessageService.buildPaymentMessage(params);
 };
 
-// Normaliza número venezolano al formato internacional para wa.me
-// Acepta: 04121234567 → 584121234567
-//         4121234567  → 584121234567
-//         584121234567 → 584121234567
+// Normaliza número colombiano al formato internacional para wa.me
+// Acepta: 3001234567 → 573001234567
 export const formatVzlaPhone = (raw) => {
     if (!raw) return null;
     const digits = raw.replace(/\D/g, '');
-    if (digits.startsWith('58') && digits.length >= 12) return digits;
-    if (digits.startsWith('0')) return '58' + digits.slice(1);
-    if (digits.length >= 10) return '58' + digits;
-    return null;
+    if (digits.startsWith('57') && digits.length >= 12) return digits;
+    if (digits.startsWith('0')) return '57' + digits.slice(1);
+    if (digits.length === 10) return '57' + digits;
+    if (digits.startsWith('58')) return '57' + digits.slice(2);
+    return '57' + digits;
 };

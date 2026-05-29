@@ -1,18 +1,18 @@
 import { useMemo } from 'react';
-import { formatBs } from '../../utils/calculatorUtils';
+import { formatCop } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, toTitleCase, getPaymentIcon } from '../../config/paymentMethods';
 import { generateTicketPDF } from '../../utils/ticketGenerator';
-import { ChevronDown, ChevronUp, Send, Ban, Shuffle, Clock, Recycle, LockIcon, Printer, User, UserCheck } from 'lucide-react';
+import { ChevronDown, ChevronUp, Send, Ban, Shuffle, Clock, Recycle, LockIcon, User, UserCheck } from 'lucide-react';
 
 export default function TransactionRow({
-    sale: s, bcvRate, isExpanded, onToggle, onVoidSale, onRecycleSale,
+    sale: s, isExpanded, onToggle, onVoidSale, onRecycleSale,
     onShareWhatsApp, onDownloadPDF, onRequestClientForTicket, onPrintTicket, isAdmin
 }) {
     const d = new Date(s.timestamp);
 
     const { methodLabel, PayMethodIcon } = useMemo(() => {
         let label = 'Efectivo';
-        let icon = PAYMENT_ICONS['efectivo_bs'];
+        let icon = PAYMENT_ICONS['efectivo_bs'] || PAYMENT_ICONS['efectivo_cop'];
 
         if (s.tipo === 'VENTA_FIADA') {
             label = 'Por Cobrar';
@@ -36,8 +36,7 @@ export default function TransactionRow({
     }, [s.tipo, s.payments, s.paymentMethod]);
 
     const isCanceled = s.status === 'ANULADA';
-    const dateLabel = d.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
-    const saleRate = s.rate || bcvRate;
+    const dateLabel = d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
 
     const handleShare = (e) => {
         e.stopPropagation();
@@ -48,25 +47,24 @@ export default function TransactionRow({
             onShareWhatsApp(s);
             return;
         }
-        let text = `*COMPROBANTE | PRECIOS AL DIA*\n`;
+        let text = `*COMPROBANTE | IMPERIAL POOL*\n`;
         text += `Orden: #${s.id.substring(0, 6).toUpperCase()}\n`;
-        text += `Fecha: ${d.toLocaleString('es-VE')}\n`;
+        text += `Fecha: ${d.toLocaleString('es-CO')}\n`;
         text += `================================\n`;
         if (s.items && s.items.length > 0) {
             s.items.forEach(item => {
                 const qty = item.isWeight ? `${item.qty.toFixed(3)}Kg` : `${item.qty} Und`;
-                text += `- ${item.name} ${qty} x $${item.priceUsd.toFixed(2)} = *$${(item.priceUsd * item.qty).toFixed(2)}*\n`;
+                text += `- ${item.name} ${qty} x ${formatCop(item.priceUsd)} = *${formatCop(item.priceUsd * item.qty)}*\n`;
             });
         }
-        text += `\n*TOTAL: $${(s.totalUsd || 0).toFixed(2)}*\n`;
-        text += `Ref: ${formatBs(s.totalBs || 0)} Bs\n`;
+        text += `\n*TOTAL: ${formatCop(s.totalUsd || 0)}*\n`;
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
     const handlePDF = (e) => {
         e.stopPropagation();
         if (onDownloadPDF) { onDownloadPDF(s); return; }
-        generateTicketPDF(s, bcvRate);
+        generateTicketPDF(s, 0);
     };
 
     return (
@@ -88,12 +86,11 @@ export default function TransactionRow({
                     <p className="text-[11px] text-slate-500 flex items-center gap-1 flex-wrap">
                         {(() => { const n = Number(s.saleNumber); return (Number.isInteger(n) && n > 0 && n < 90000) ? <><span className="text-[#0EA5E9] font-black">{`#${String(n).padStart(7, '0')}`}</span><span>·</span></> : null; })()}
                         {s.tableName && <><span className="text-[9px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase">{s.tableName}</span><span>·</span></>}
-                        <span>{dateLabel}</span> · <span>{d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}</span> · <span>{methodLabel}</span>
+                        <span>{dateLabel}</span> · <span>{d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span> · <span>{methodLabel}</span>
                     </p>
                 </div>
                 <div className="text-right shrink-0">
-                    <p className={`text-sm font-black ${isCanceled ? 'text-slate-400' : 'text-slate-800 dark:text-white'}`}>${(s.totalUsd || 0).toFixed(2)}</p>
-                    <p className="text-[11px] text-slate-400 font-medium">{formatBs(s.totalBs || 0)} Bs</p>
+                    <p className={`text-sm font-black ${isCanceled ? 'text-slate-400' : 'text-slate-800 dark:text-white'}`}>{formatCop(s.totalUsd || 0)}</p>
                     <div className="flex justify-end mt-0.5">
                         {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                     </div>
@@ -112,7 +109,7 @@ export default function TransactionRow({
                                 {s.items.map((item, i) => (
                                     <div key={i} className={`flex justify-between items-center text-xs ${isCanceled ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
                                         <span className="truncate pr-2">{item.isWeight ? `${item.qty.toFixed(3)}kg` : `${item.qty}u`} {item.name}</span>
-                                        <span className="font-medium shrink-0">${(item.priceUsd * item.qty).toFixed(2)}</span>
+                                        <span className="font-medium shrink-0">{formatCop(item.priceUsd * item.qty)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -125,34 +122,20 @@ export default function TransactionRow({
                     <div className="mb-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-2.5">
                         <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">Resumen de Cobro</p>
                         <div className="space-y-1 text-xs">
-                            <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                                <span>Total en Bs</span>
-                                <span className="font-bold">{formatBs(s.totalBs || 0)} Bs</span>
+                            <div className="flex justify-between text-slate-600 dark:text-slate-300 font-bold">
+                                <span>Total</span>
+                                <span>{formatCop(s.totalUsd || 0)}</span>
                             </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>Tasa BCV aplicada</span>
-                                <span className="font-medium">{formatBs(saleRate)} Bs/$</span>
-                            </div>
-                            {s.tasaCop > 0 && (
-                                <div className="flex justify-between text-slate-400">
-                                    <span>Total en COP</span>
-                                    <span className="font-medium">{(s.totalCop || (s.totalUsd * s.tasaCop)).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</span>
-                                </div>
-                            )}
                             {s.discountAmountUsd > 0 && (
                                 <div className="flex justify-between text-amber-500">
                                     <span>Descuento</span>
-                                    <span className="font-bold">-${s.discountAmountUsd.toFixed(2)}</span>
+                                    <span className="font-bold">-{formatCop(s.discountAmountUsd)}</span>
                                 </div>
                             )}
-                            {(s.changeUsd > 0 || s.changeBs > 0) && (
+                            {s.changeUsd > 0 && (
                                 <div className="flex justify-between text-emerald-500">
                                     <span>Vuelto entregado</span>
-                                    <span className="font-bold">
-                                        {s.changeUsd > 0 && `$${s.changeUsd.toFixed(2)}`}
-                                        {s.changeUsd > 0 && s.changeBs > 0 && ' + '}
-                                        {s.changeBs > 0 && `${formatBs(s.changeBs)} Bs`}
-                                    </span>
+                                    <span className="font-bold">{formatCop(s.changeUsd)}</span>
                                 </div>
                             )}
                         </div>
@@ -165,15 +148,11 @@ export default function TransactionRow({
                             <div className="space-y-1 text-xs">
                                 {s.payments.map((p, i) => {
                                     const label = toTitleCase(p.methodLabel || p.methodId);
-                                    const isBs = p.currency === 'BS';
-                                    const isCop = p.currency === 'COP';
-                                    const amount = p.amountInput || p.amount || (isBs ? p.amountBs : isCop ? (p.amountInput || p.amountUsd * (s.tasaCop || 1)) : p.amountUsd);
-                                    const suffix = isBs ? ' Bs' : isCop ? ' COP' : '';
-                                    const prefix = (!isBs && !isCop) ? '$' : '';
+                                    const amount = p.amountInput || p.amount || p.amountUsd;
                                     return (
                                         <div key={i} className="flex justify-between text-slate-600 dark:text-slate-300">
                                             <span>{label}</span>
-                                            <span className="font-bold">{prefix}{isBs ? formatBs(amount) : isCop ? amount.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (amount || 0).toFixed(2)}{suffix}</span>
+                                            <span className="font-bold">{formatCop(amount)}</span>
                                         </div>
                                     );
                                 })}

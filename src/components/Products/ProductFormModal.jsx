@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { Camera, X, AlertTriangle, Package, Tag, Scale, Droplets, ChevronDown, ChevronUp, Barcode, Banknote, CheckCircle, Clock, ShoppingBag, CreditCard, ArrowUpRight, Plus, Minus, Percent } from 'lucide-react';
+import { Camera, X, AlertTriangle, Package, CheckCircle, Clock, ShoppingBag, CreditCard, ArrowUpRight, Plus, Minus } from 'lucide-react';
 import { Modal } from '../Modal';
 import { useProductContext } from '../../context/ProductContext';
 import SpotlightTour from '../SpotlightTour';
+import { formatCop } from '../../utils/calculatorUtils';
 
 const PRODUCT_FORM_TOUR_KEY = 'pda_product_form_tour_done';
 
@@ -14,8 +15,8 @@ const PRODUCT_FORM_STEPS = [
     },
     {
         target: '[data-tour="pf-cost"]',
-        title: 'Costo ($)',
-        text: 'El precio al que compraste el producto. Úsalo para calcular tu margen de ganancia.'
+        title: 'Costo (COP)',
+        text: 'El precio al que compraste el producto en pesos. Úsalo para calcular tu margen de ganancia.'
     },
     {
         target: '[data-tour="pf-lote"]',
@@ -24,8 +25,8 @@ const PRODUCT_FORM_STEPS = [
     },
     {
         target: '[data-tour="pf-price"]',
-        title: 'Precio de Venta ($)',
-        text: 'El precio al que le vendes al cliente. El equivalente en Bs se calcula solo con la tasa del día.'
+        title: 'Precio de Venta (COP)',
+        text: 'El precio al que le vendes al cliente en pesos colombianos.'
     },
     {
         target: '[data-tour="pf-margin"]',
@@ -39,8 +40,6 @@ const PRODUCT_FORM_STEPS = [
     },
 ];
 
-// PACKAGING_TYPES removed for Pool Bar mode
-
 export default function ProductFormModal({
     isOpen,
     onClose,
@@ -52,9 +51,7 @@ export default function ProductFormModal({
     category, setCategory,
     unit, setUnit,
     priceUsd, handlePriceUsdChange,
-    priceBs, handlePriceBsChange,
     costUsd, handleCostUsdChange,
-    costBs, handleCostBsChange,
     stock, setStock,
     lowStockAlert, setLowStockAlert,
 
@@ -65,9 +62,6 @@ export default function ProductFormModal({
     packagingType, setPackagingType: _setPackagingType,
     stockInLotes, setStockInLotes: _setStockInLotes,
     granelUnit, setGranelUnit: _setGranelUnit,
-    effectiveRate,
-    copEnabled,
-    tasaCop,
     isFormShaking,
 
     handleImageUpload,
@@ -75,24 +69,23 @@ export default function ProductFormModal({
     categories,
     productMovements,
     products,
+    linkedProductId,
+    linkedQty,
     isCombo
 }) {
     const fileInputRef = useRef(null);
     const [showSummary, setShowSummary] = useState(false);
     const [showMovements, setShowMovements] = useState(false);
 
-    // Tour: solo en nuevo producto, solo la primera vez
     const [showFormTour, setShowFormTour] = useState(
         () => !isEditing && localStorage.getItem(PRODUCT_FORM_TOUR_KEY) !== 'true'
     );
     
-    // Calculadora de Lote States
     const [showLoteCalc, setShowLoteCalc] = useState(false);
     const [loteCost, setLoteCost] = useState('');
     const [loteUnits, setLoteUnits] = useState('');
     const [loteQty, setLoteQty] = useState('1');
 
-    // Live preview
     const loteUnitCost = (parseFloat(loteCost) > 0 && parseInt(loteUnits) > 0)
         ? (parseFloat(loteCost) / parseInt(loteUnits)).toFixed(3)
         : null;
@@ -117,7 +110,6 @@ export default function ProductFormModal({
         setLoteQty('1');
     };
     
-    // Categorías en línea
     const { setCategories } = useProductContext();
     const [isAddingCategory, setIsAddingCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState("");
@@ -144,27 +136,15 @@ export default function ProductFormModal({
     const parsedPrice = parseFloat(priceUsd) || 0;
     const parsedCost = parseFloat(costUsd) || 0;
 
-    // Margin for the main product (lote or suelto or granel)
     const mainMarginPct = parsedCost > 0 ? ((parsedPrice - parsedCost) / parsedCost * 100) : null;
     const mainMarginUsd = parsedPrice - parsedCost;
 
-    // Unit margin for lote with sellByUnit
     const effectiveUnitPrice = unitPriceUsd ? parseFloat(unitPriceUsd) : (parsedUnits > 0 ? parsedPrice / parsedUnits : 0);
     const unitCost = parsedUnits > 0 && parsedCost > 0 ? parsedCost / parsedUnits : 0;
     const unitMarginPct = unitCost > 0 ? ((effectiveUnitPrice - unitCost) / unitCost * 100) : null;
     const unitMarginUsd = effectiveUnitPrice - unitCost;
 
-    // Stock equivalence for lote (unused)
-    // const parsedStockLotes = parseInt(stockInLotes) || 0;
-    // const stockUnitsCalc = parsedStockLotes * (parsedUnits || 1);
-
-    // Alert equivalence (unused)
-    // const parsedAlert = parseInt(lowStockAlert) || 0;
-    // const alertLotesCalc = parsedUnits > 0 ? (parsedAlert / parsedUnits) : 0;
-
-    // Unit label for granel
     const granelLabel = granelUnit === 'kg' ? 'Kilo' : 'Litro';
-
     const priceSuffix = isLote ? ' / Lote' : isGranel ? ` / ${granelLabel}` : '';
 
     return (
@@ -190,7 +170,6 @@ export default function ProductFormModal({
             className={isFormShaking ? 'animate-shake border-red-500 shadow-xl shadow-red-500/20' : ''}
         >
             <div className="space-y-4">
-                {/* Upload */}
                 <div onClick={() => fileInputRef.current?.click()} className="h-28 bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-emerald-500 transition-colors relative overflow-hidden">
                     {image ? <img src={image} className="w-full h-full object-cover" alt="Product preview" /> : (
                         <>
@@ -203,7 +182,6 @@ export default function ProductFormModal({
                 </div>
 
                 <div className="space-y-3">
-                    {/* Name */}
                     <div className="relative" data-tour="pf-name">
                         <label className="text-xs font-bold text-slate-400 ml-1 mb-1 block uppercase">Nombre</label>
                         <input value={name} onChange={e => setName(e.target.value)} autoFocus placeholder="Ej: Harina PAN 1kg"
@@ -213,17 +191,12 @@ export default function ProductFormModal({
                         )}
                     </div>
 
-                    {/* Barcode */}
                     <div>
                         <label className="text-xs font-bold text-slate-400 ml-1 mb-1 block uppercase">Cód. de Barras (Opcional)</label>
-                        <div className="relative">
-                            <input value={barcode} onChange={e => setBarcode(e.target.value)} placeholder="Ej: 7591111222233"
-                                className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 pl-10 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50" />
-                            <Barcode size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        </div>
+                        <input value={barcode} onChange={e => setBarcode(e.target.value)} placeholder="Ej: 7591111222233"
+                            className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50" />
                     </div>
 
-                    {/* Category (full width) */}
                     <div>
                         <div className="flex justify-between items-center mb-1">
                             <label className="text-xs font-bold text-slate-400 ml-1 block uppercase">Categoría</label>
@@ -263,42 +236,31 @@ export default function ProductFormModal({
                         )}
                     </div>
 
-                    {/* Removed Packaging Type, Granel, and Lote UI blocks */}
-
-                    {/* ─── COST SECTION (first) ─── */}
                     <div className="grid grid-cols-2 gap-3" data-tour="pf-cost">
-                        <div>
+                        <div className="col-span-2 sm:col-span-1">
                             <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 ml-1 mb-1 block uppercase tracking-wider">
-                                Costo ($){priceSuffix}
+                                Costo (COP){priceSuffix}
                             </label>
-                            <input type="number" inputMode="decimal" value={costUsd} onChange={e => handleCostUsdChange(e.target.value)} onWheel={e => e.target.blur()} placeholder="1.00"
+                            <input type="number" inputMode="numeric" value={costUsd} onChange={e => handleCostUsdChange(e.target.value)} onWheel={e => e.target.blur()} placeholder="0"
                                 className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 sm:p-4 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-slate-500/50 transition-all text-sm sm:text-base" />
                         </div>
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 ml-1 block uppercase tracking-wider">
-                                    Costo (Bs){priceSuffix}
-                                </label>
-                                {!isCombo && (
-                                <button
-                                    data-tour="pf-lote"
-                                    onClick={() => setShowLoteCalc(!showLoteCalc)}
-                                    className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md transition-all active:scale-95 ${
-                                        showLoteCalc
-                                        ? 'bg-brand text-white'
-                                        : 'bg-brand/10 dark:bg-brand/20 text-brand hover:bg-brand/20'
-                                    }`}
-                                >
-                                    <Package size={10}/> Lote/Bulto
-                                </button>
-                                )}
-                            </div>
-                            <input type="number" inputMode="decimal" value={costBs} onChange={e => handleCostBsChange(e.target.value)} onWheel={e => e.target.blur()} placeholder="0.00"
-                                className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 sm:p-4 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-slate-500/50 transition-all text-sm sm:text-base" />
+                        <div className="col-span-2 sm:col-span-1 flex items-end">
+                            {!isCombo && (
+                            <button
+                                data-tour="pf-lote"
+                                onClick={() => setShowLoteCalc(!showLoteCalc)}
+                                className={`w-full flex items-center justify-center gap-1 py-3.5 sm:py-4 text-xs font-black rounded-xl transition-all active:scale-95 ${
+                                    showLoteCalc
+                                    ? 'bg-brand text-white'
+                                    : 'bg-brand/10 dark:bg-brand/20 text-brand hover:bg-brand/20'
+                                }`}
+                            >
+                                <Package size={14}/> Calculadora de Lote
+                            </button>
+                            )}
                         </div>
                     </div>
 
-                    {/* ─── CALCULADORA DE LOTE ─── */}
                     {showLoteCalc && !isCombo && (
                         <div className="bg-brand/5 dark:bg-brand/10 border border-brand/25 p-3.5 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200">
                             <div className="flex items-center justify-between">
@@ -307,20 +269,20 @@ export default function ProductFormModal({
                                 </h4>
                                 {loteUnitCost && (
                                     <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full">
-                                        ${loteUnitCost} / und
+                                        {formatCop(loteUnitCost)} / und
                                     </span>
                                 )}
                             </div>
                             <div className="grid grid-cols-3 gap-2">
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Costo lote ($)</label>
+                                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Costo lote (COP)</label>
                                     <input
                                         autoFocus
                                         type="number"
-                                        inputMode="decimal"
+                                        inputMode="numeric"
                                         value={loteCost}
                                         onChange={e => setLoteCost(e.target.value)}
-                                        placeholder="20.00"
+                                        placeholder="0"
                                         className="w-full bg-white dark:bg-slate-900 px-2.5 py-2 rounded-xl text-sm font-bold outline-none border border-slate-200 dark:border-slate-700 focus:border-brand"
                                     />
                                 </div>
@@ -346,12 +308,11 @@ export default function ProductFormModal({
                                     />
                                 </div>
                             </div>
-                            {/* Live result preview */}
                             {(loteUnitCost || loteTotalUnits) && (
                                 <div className="flex items-center justify-between bg-white dark:bg-slate-900 rounded-xl px-3 py-2 border border-slate-100 dark:border-slate-800">
                                     {loteUnitCost && (
                                         <span className="text-xs text-slate-500">
-                                            Costo unitario: <strong className="text-slate-700 dark:text-white">${loteUnitCost}</strong>
+                                            Costo unitario: <strong className="text-slate-700 dark:text-white">{formatCop(loteUnitCost)}</strong>
                                         </span>
                                     )}
                                     {loteTotalUnits && (
@@ -371,48 +332,19 @@ export default function ProductFormModal({
                         </div>
                     )}
 
-                    {/* LOTE: Auto unit cost removed */}
-                    {/* ─── PRICE SECTION ─── */}
-                    <div className="grid grid-cols-2 gap-3" data-tour="pf-price">
+                    <div className="grid grid-cols-1 gap-3" data-tour="pf-price">
                         <div className="relative">
                             <label className="text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 ml-1 mb-1 block uppercase tracking-wider">
-                                Precio de Venta ($){priceSuffix}
+                                Precio de Venta (COP){priceSuffix}
                             </label>
-                            <input type="number" inputMode="decimal" value={priceUsd} onChange={e => handlePriceUsdChange(e.target.value)} onWheel={e => e.target.blur()} placeholder="1.50"
+                            <input type="number" inputMode="numeric" value={priceUsd} onChange={e => handlePriceUsdChange(e.target.value)} onWheel={e => e.target.blur()} placeholder="0"
                                 className="w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 p-3.5 pr-10 sm:p-4 sm:pr-10 rounded-xl font-black text-emerald-800 dark:text-emerald-400 outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all text-sm sm:text-base" />
                             {parseFloat(priceUsd) > 0 && (
                                 <CheckCircle size={18} className="absolute right-3 top-[38px] sm:top-[42px] text-emerald-500 transition-all duration-300" />
                             )}
                         </div>
-                        <div className="relative">
-                            <label className="text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 ml-1 mb-1 block uppercase tracking-wider">
-                                Precio de Venta (Bs){priceSuffix}
-                            </label>
-                            <input type="number" inputMode="decimal" value={priceBs} onChange={e => handlePriceBsChange(e.target.value)} onWheel={e => e.target.blur()} placeholder="0.00"
-                                className="w-full bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 p-3.5 pr-10 sm:p-4 sm:pr-10 rounded-xl font-black text-indigo-800 dark:text-indigo-400 outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-sm sm:text-base" />
-                            {parseFloat(priceBs) > 0 && (
-                                <CheckCircle size={18} className="absolute right-3 top-[38px] sm:top-[42px] text-indigo-500 transition-all duration-300" />
-                            )}
-                        </div>
                     </div>
                     
-                    {/* ─── COP PREVIEW ─── */}
-                    {copEnabled && parsedPrice > 0 && (
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200/50 dark:border-amber-800/30 p-2.5 rounded-xl flex items-center justify-between text-sm animate-in fade-in slide-in-from-top-1">
-                            <span className="text-amber-800 dark:text-amber-500 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider hidden sm:flex">
-                                <Banknote size={16} /> Equivalente en COP
-                            </span>
-                            <span className="text-amber-800 dark:text-amber-500 font-bold flex items-center gap-1.5 text-xs uppercase tracking-wider sm:hidden">
-                                <Banknote size={16} /> COP
-                            </span>
-                            <span className="font-black text-amber-600 dark:text-amber-400 text-lg">
-                                {(parsedPrice * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                        </div>
-                    )}
-
-                    {/* LOTE: Unit Price removed */}
-                    {/* ─── MARGIN PANEL ─── */}
                     <div data-tour="pf-margin" className={`p-3 rounded-xl border space-y-1.5 min-h-[60px] ${mainMarginPct !== null && mainMarginPct < 0
                         ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/30'
                         : mainMarginPct !== null && mainMarginPct === 0
@@ -422,27 +354,24 @@ export default function ProductFormModal({
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Margen de Ganancia</p>
                         {parsedPrice > 0 && parsedCost > 0 ? (
                             <div className="space-y-1.5">
-                                {/* Main margin */}
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="text-slate-500 font-medium">{isLote ? 'Margen Lote:' : isGranel ? `Margen / ${granelLabel}:` : 'Margen / Unidad:'}</span>
                                     <span className={`font-black ${mainMarginPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                                         {mainMarginPct.toFixed(1)}%
-                                        <span className="text-xs ml-1.5 opacity-80 font-bold">(${mainMarginUsd.toFixed(2)})</span>
+                                        <span className="text-xs ml-1.5 opacity-80 font-bold">({formatCop(mainMarginUsd)})</span>
                                     </span>
                                 </div>
 
-                                {/* Unit margin for lote with sellByUnit */}
                                 {isLote && sellByUnit && parsedUnits > 1 && unitMarginPct !== null && (
                                     <div className="flex justify-between items-center text-sm border-t border-slate-200/50 dark:border-slate-700/50 pt-1.5">
                                         <span className="text-slate-500 font-medium">Margen Unidad:</span>
                                         <span className={`font-black ${unitMarginPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                                             {unitMarginPct.toFixed(1)}%
-                                            <span className="text-xs ml-1.5 opacity-80 font-bold">(${unitMarginUsd.toFixed(2)})</span>
+                                            <span className="text-xs ml-1.5 opacity-80 font-bold">({formatCop(unitMarginUsd)})</span>
                                         </span>
                                     </div>
                                 )}
 
-                                {/* Warnings */}
                                 {mainMarginPct < 0 && (
                                     <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1 mt-1">
                                         <AlertTriangle size={11} /> Estás vendiendo a pérdida
@@ -459,7 +388,6 @@ export default function ProductFormModal({
                         )}
                     </div>
 
-                    {/* ─── STOCK SECTION ─── */}
                     <div data-tour="pf-stock" className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
                             <div className="grid grid-cols-2 gap-3 animate-in fade-in zoom-in-95">
                                 <div>
@@ -477,7 +405,6 @@ export default function ProductFormModal({
                             </div>
                     </div>
 
-                    {/* ─── PRE-SAVE SUMMARY ─── */}
                     {name && parsedPrice > 0 && (
                         <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                             <button onClick={() => setShowSummary(!showSummary)}
@@ -489,14 +416,12 @@ export default function ProductFormModal({
                                 <div className="px-3 py-2.5 space-y-1.5 text-xs bg-white dark:bg-slate-900 animate-in fade-in slide-in-from-top-1 duration-150">
                                     <div className="flex justify-between"><span className="text-slate-400">Nombre:</span><span className="font-bold text-slate-700 dark:text-white">{name}</span></div>
                                     <div className="flex justify-between"><span className="text-slate-400">Categoría:</span><span className="font-bold text-slate-700 dark:text-white">{categories.find(c => c.id === category)?.label || category}</span></div>
-                                    <div className="flex justify-between"><span className="text-slate-400">Precio USD/BS:</span><span className="font-bold text-emerald-600">${parsedPrice.toFixed(2)} / {(parsedPrice * effectiveRate).toFixed(2)} Bs</span></div>
-                                    {copEnabled && <div className="flex justify-between"><span className="text-amber-500/80">Precio COP:</span><span className="font-bold text-amber-600">{(parsedPrice * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</span></div>}
-                                    {parsedCost > 0 && <div className="flex justify-between"><span className="text-slate-400">Costo:</span><span className="font-bold text-slate-600">${parsedCost.toFixed(2)}</span></div>}
+                                    <div className="flex justify-between"><span className="text-slate-400">Precio COP:</span><span className="font-bold text-emerald-600">{formatCop(parsedPrice)}</span></div>
+                                    {parsedCost > 0 && <div className="flex justify-between"><span className="text-slate-400">Costo COP:</span><span className="font-bold text-slate-600">{formatCop(parsedCost)}</span></div>}
                                     {mainMarginPct !== null && <div className="flex justify-between"><span className="text-slate-400">Margen:</span><span className={`font-black ${mainMarginPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{mainMarginPct.toFixed(1)}%</span></div>}
                                     {isCombo ? (
                                         <>
                                             <div className="flex justify-between"><span className="text-violet-500">Tipo:</span><span className="font-bold text-violet-600">Combo / Promo</span></div>
-                                            {linkedProductId && <div className="flex justify-between"><span className="text-violet-500">Contiene:</span><span className="font-bold text-violet-600">{linkedQty}x {products?.find(p => p.id === linkedProductId)?.name || '—'}</span></div>}
                                         </>
                                     ) : (
                                         <div className="flex justify-between"><span className="text-slate-400">Stock:</span><span className="font-bold text-slate-700 dark:text-white">{stock || 0}</span></div>
@@ -507,7 +432,6 @@ export default function ProductFormModal({
                         </div>
                     )}
 
-                    {/* ─── KARDEX LITE: Movimientos Recientes ─── */}
                     {isEditing && productMovements && (
                         <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
                             <button onClick={() => setShowMovements(!showMovements)}
@@ -528,8 +452,8 @@ export default function ProductFormModal({
                                     ) : (
                                         productMovements.map(mov => {
                                             const date = new Date(mov.timestamp);
-                                            const dateStr = date.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit' });
-                                            const timeStr = date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: false });
+                                            const dateStr = date.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' });
+                                            const timeStr = date.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
                                             const isCobro = mov.tipo === 'COBRO_DEUDA';
                                             const isFiada = mov.tipo === 'VENTA_FIADA';
                                             const isEntrada = mov.tipo === 'AJUSTE_ENTRADA';

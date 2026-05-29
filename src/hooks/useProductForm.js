@@ -9,9 +9,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
     const [name, setName] = useState('');
     const [barcode, setBarcode] = useState('');
     const [priceUsd, setPriceUsd] = useState('');
-    const [priceBs, setPriceBs] = useState('');
     const [costUsd, setCostUsd] = useState('');
-    const [costBs, setCostBs] = useState('');
     const [stock, setStock] = useState('');
     const [unit, setUnit] = useState('unidad');
     const [unitsPerPackage, setUnitsPerPackage] = useState('');
@@ -54,30 +52,14 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
 
     const handlePriceUsdChange = (val) => {
         setPriceUsd(val);
-        if (!val || parseFloat(val) <= 0) { setPriceBs(''); return; }
-        setPriceBs(String(mulR(parseFloat(val), effectiveRate)));
-    };
-
-    const handlePriceBsChange = (val) => {
-        setPriceBs(val);
-        if (!val || parseFloat(val) <= 0) { setPriceUsd(''); return; }
-        setPriceUsd(String(divR(parseFloat(val), effectiveRate)));
     };
 
     const handleCostUsdChange = (val) => {
         setCostUsd(val);
-        if (!val || parseFloat(val) <= 0) { setCostBs(''); return; }
-        setCostBs(String(mulR(parseFloat(val), effectiveRate)));
-    };
-
-    const handleCostBsChange = (val) => {
-        setCostBs(val);
-        if (!val || parseFloat(val) <= 0) { setCostUsd(''); return; }
-        setCostUsd(String(divR(parseFloat(val), effectiveRate)));
     };
 
     const handleClose = () => {
-        setName(''); setBarcode(''); setPriceUsd(''); setPriceBs(''); setCostUsd(''); setCostBs('');
+        setName(''); setBarcode(''); setPriceUsd(''); setCostUsd('');
         setStock(''); setUnit('unidad'); setUnitsPerPackage(''); setSellByUnit(false); setUnitPriceUsd('');
         setCategory('otros'); setLowStockAlert('5'); setImage(null); setEditingId(null);
         setPackagingType('suelto'); setStockInLotes(''); setGranelUnit('kg');
@@ -87,17 +69,17 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
 
     const handleSave = () => {
         triggerHaptic && triggerHaptic();
-        if (!name || (!priceUsd && !priceBs)) {
+        if (!name || !priceUsd) {
             setIsFormShaking(true);
             setTimeout(() => setIsFormShaking(false), 500);
             return showToast('Nombre y precio requeridos', 'warning');
         }
-        const hasCost = (parseFloat(costUsd) > 0) || (parseFloat(costBs) > 0);
+        const hasCost = parseFloat(costUsd) > 0;
         if (!hasCost) {
             showToast('Sin costo registrado — la ganancia no se calculará correctamente', 'warning');
         }
         const productData = buildProductPayload({
-            name, barcode, priceUsd, priceBs, costUsd, costBs, stock, stockInLotes,
+            name, barcode, priceUsd, priceBs: '', costUsd, costBs: '', stock, stockInLotes,
             packagingType, unitsPerPackage, granelUnit, sellByUnit, unitPriceUsd,
             category, lowStockAlert
         }, effectiveRate);
@@ -138,19 +120,9 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
 
         const currentPriceUsd = product.priceUsdt || 0;
         setPriceUsd(currentPriceUsd > 0 ? currentPriceUsd.toString() : '');
-        // Prefer stored priceBs to avoid round-trip conversion drift
-        const storedPriceBs = product.priceBs;
-        if (storedPriceBs && storedPriceBs > 0) {
-            setPriceBs(String(round2(storedPriceBs)));
-        } else {
-            setPriceBs(currentPriceUsd > 0 ? String(mulR(currentPriceUsd, effectiveRate)) : '');
-        }
 
-        // Prefer stored costBs/costUsd to avoid round-trip conversion drift
         const storedCostUsd = product.costUsd || 0;
-        const storedCostBs = product.costBs || 0;
-        setCostUsd(storedCostUsd > 0 ? String(round2(storedCostUsd)) : (storedCostBs > 0 ? String(divR(storedCostBs, effectiveRate)) : ''));
-        setCostBs(storedCostBs > 0 ? String(round2(storedCostBs)) : (storedCostUsd > 0 ? String(mulR(storedCostUsd, effectiveRate)) : ''));
+        setCostUsd(storedCostUsd > 0 ? String(round2(storedCostUsd)) : '');
 
         setStock(product.stock ?? '');
         setUnit(product.unit || 'unidad');
@@ -206,7 +178,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
 
     return {
         editingId, name, setName, barcode, setBarcode,
-        priceUsd, priceBs, costUsd, costBs, stock, setStock,
+        priceUsd, costUsd, stock, setStock,
         unit, setUnit, unitsPerPackage, setUnitsPerPackage,
         sellByUnit, setSellByUnit, unitPriceUsd, setUnitPriceUsd,
         category, setCategory, lowStockAlert, setLowStockAlert,
@@ -216,8 +188,8 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
         isCombo, setIsCombo, linkedProductId, setLinkedProductId,
         linkedQty, setLinkedQty,
         fileInputRef,
-        handleImageUpload, handlePriceUsdChange, handlePriceBsChange,
-        handleCostUsdChange, handleCostBsChange,
+        handleImageUpload, handlePriceUsdChange,
+        handleCostUsdChange,
         handleSave, handleEdit, handleClose,
     };
 }

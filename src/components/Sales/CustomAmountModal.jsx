@@ -1,19 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Check } from 'lucide-react';
-import { formatBs } from '../../utils/calculatorUtils';
+import { formatCop } from '../../utils/calculatorUtils';
 
 export default function CustomAmountModal({
     onClose,
     onConfirm,
-    effectiveRate,
     triggerHaptic
 }) {
     const [amount, setAmount] = useState('');
-    const [currency, setCurrency] = useState('BS');
     const inputRef = useRef(null);
-
-    const copEnabled = localStorage.getItem('cop_enabled') === 'true';
-    const tasaCop = parseFloat(localStorage.getItem('tasa_cop')) || 4150;
 
     useEffect(() => {
         // Auto-focus on mount
@@ -21,10 +16,7 @@ export default function CustomAmountModal({
     }, []);
 
     const handleChange = (e) => {
-        let v = e.target.value.replace(',', '.');
-        if (!/^[0-9.]*$/.test(v)) return;
-        const dots = v.match(/\./g);
-        if (dots && dots.length > 1) return;
+        let v = e.target.value.replace(/\D/g, ''); // Solo números enteros para COP
         setAmount(v);
     };
 
@@ -32,7 +24,8 @@ export default function CustomAmountModal({
         const value = parseFloat(amount);
         if (value > 0) {
             triggerHaptic && triggerHaptic();
-            onConfirm(value, currency);
+            // Enviamos 'USD' ya que internamente la base de datos almacena el valor en COP en la columna USD
+            onConfirm(value, 'USD');
         }
     };
 
@@ -44,13 +37,6 @@ export default function CustomAmountModal({
     };
 
     const parsedValue = parseFloat(amount) || 0;
-    
-    let equivUsd = 0;
-    if (currency === 'USD') equivUsd = parsedValue;
-    else if (currency === 'COP') equivUsd = parsedValue / tasaCop;
-    else equivUsd = parsedValue / effectiveRate;
-
-    equivUsd = equivUsd.toFixed(2);
     const isValid = parsedValue > 0;
 
     return (
@@ -72,72 +58,24 @@ export default function CustomAmountModal({
                 <div className="p-5">
                     <div className="mb-4">
                         <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 text-center">
-                            Moneda e Importe
+                            Importe en COP
                         </label>
-
-                        {/* Currency Toggle */}
-                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-4">
-                            <button
-                                onClick={() => { setCurrency('BS'); inputRef.current?.focus(); }}
-                                className={`flex-1 py-2 text-sm font-black rounded-lg transition-all ${
-                                    currency === 'BS' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                                }`}
-                            >
-                                Bs
-                            </button>
-                            <button
-                                onClick={() => { setCurrency('USD'); inputRef.current?.focus(); }}
-                                className={`flex-1 py-2 text-sm font-black rounded-lg transition-all ${
-                                    currency === 'USD' ? 'bg-emerald-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                                }`}
-                            >
-                                USD
-                            </button>
-                            {copEnabled && (
-                                <button
-                                    onClick={() => { setCurrency('COP'); inputRef.current?.focus(); }}
-                                    className={`flex-1 py-2 text-sm font-black rounded-lg transition-all ${
-                                        currency === 'COP' ? 'bg-amber-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                                    }`}
-                                >
-                                    COP
-                                </button>
-                            )}
-                        </div>
 
                         <div className="relative">
                             <input
                                 ref={inputRef}
                                 type="text"
-                                inputMode="decimal"
+                                inputMode="numeric"
                                 value={amount}
                                 onChange={handleChange}
                                 onKeyDown={handleKeyDown}
-                                placeholder="0.00"
+                                placeholder="0"
                                 className="w-full py-4 px-4 pr-16 text-center text-4xl font-black bg-slate-50 dark:bg-slate-950 border-2 border-slate-200 dark:border-slate-800 rounded-2xl text-slate-800 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 transition-all"
                             />
-                            <span className={`absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black px-2 py-1 rounded-lg ${
-                                currency === 'BS' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/40' :
-                                currency === 'USD' ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40' :
-                                'text-amber-600 bg-amber-50 dark:bg-amber-900/40'
-                            }`}>
-                                {currency === 'BS' ? 'Bs' : currency === 'USD' ? '$' : 'COP'}
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black px-2 py-1 rounded-lg text-emerald-600 bg-emerald-50 dark:bg-emerald-900/40">
+                                COP
                             </span>
                         </div>
-                        {parsedValue > 0 && currency !== 'USD' && (
-                            <div className="mt-3 text-center animate-in fade-in slide-in-from-top-1">
-                                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-800">
-                                    ≈ ${equivUsd} USD
-                                </span>
-                            </div>
-                        )}
-                        {parsedValue > 0 && currency === 'USD' && (
-                            <div className="mt-3 text-center animate-in fade-in slide-in-from-top-1">
-                                <span className="text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-xl border border-blue-100 dark:border-blue-800">
-                                    ≈ {formatBs(parsedValue * effectiveRate)} Bs
-                                </span>
-                            </div>
-                        )}
                     </div>
                 </div>
 

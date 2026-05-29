@@ -1,6 +1,6 @@
 import React from 'react';
-import { TrendingUp, ArrowUpRight } from 'lucide-react';
-import { formatBs } from '../../utils/calculatorUtils';
+import { TrendingUp, ShoppingBag } from 'lucide-react';
+import { formatCop } from '../../utils/calculatorUtils';
 import AnimatedCounter from '../AnimatedCounter';
 import OperatorDashboardPanel from './OperatorDashboardPanel';
 
@@ -34,7 +34,7 @@ export function DashboardHeroCard({
                         {dashTab === 'hoy'
                             ? (() => { const d = new Date(); const days = ['DOM','LUN','MAR','MIÉ','JUE','VIE','SÁB']; const months = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']; return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`; })()
                             : hasCashSession
-                                ? `Desde ${new Date(activeCashSession.opened_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                                ? `Desde ${new Date(activeCashSession.opened_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
                                 : 'Sin caja abierta'
                         }
                     </span>
@@ -48,14 +48,12 @@ export function DashboardHeroCard({
                             <span className="text-white/80 text-xl font-black">$</span>
                             <span className="text-[2.6rem] font-black text-white tracking-tight leading-none"><AnimatedCounter value={displayTotalUsd} /></span>
                         </div>
-                        <p className="text-white/60 text-xs font-semibold mt-1.5">{formatBs(displayTotalBs)} Bs</p>
                     </div>
                     <div className="text-right">
                         <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-4 py-2.5 mb-1.5">
                             <p className="text-2xl font-black text-white leading-none"><AnimatedCounter value={displaySalesCount} /></p>
                             <p className="text-white/70 text-[10px] font-bold mt-0.5">{displaySalesCount === 1 ? 'VENTA' : 'VENTAS'}</p>
                         </div>
-                        <p className="text-white/60 text-[10px] font-semibold"><AnimatedCounter value={displayItemsSold} /> artículos</p>
                     </div>
                 </div>
             </div>
@@ -67,18 +65,17 @@ export function DashboardHeroCard({
                 <div className="absolute -right-3 -top-3 w-14 h-14 bg-emerald-50 rounded-full blur-xl" />
                 <div className="relative z-10">
                     <div className="w-9 h-9 bg-emerald-100 rounded-xl flex items-center justify-center mb-2.5"><TrendingUp size={18} className="text-emerald-600" strokeWidth={2.5} /></div>
-                    <p className={`text-xl font-black leading-none ${displayProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{displayProfit >= 0 ? '+' : ''}${bcvRate > 0 ? (displayProfit / bcvRate).toFixed(2) : '0.00'}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{formatBs(displayProfit)} Bs</p>
+                    <p className={`text-xl font-black leading-none ${displayProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{displayProfit >= 0 ? '+' : ''}{formatCop(displayProfit)}</p>
                     <p className="text-[10px] text-slate-400 mt-1.5 font-medium">Ganancia est.</p>
                 </div>
             </div>
             <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm relative overflow-hidden">
                 <div className="absolute -right-3 -top-3 w-14 h-14 bg-sky-50 rounded-full blur-xl" />
                 <div className="relative z-10">
-                    <div className="w-9 h-9 bg-sky-100 rounded-xl flex items-center justify-center mb-2.5"><ArrowUpRight size={18} className="text-sky-600" strokeWidth={2.5} /></div>
-                    <p className="text-xl font-black text-slate-800 leading-none">{formatBs(bcvRate)}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Bs por dólar</p>
-                    <p className={`text-[10px] ${useAutoRate ? 'text-sky-500' : 'text-amber-500'} mt-1.5 font-bold uppercase tracking-wider`}>{useAutoRate ? 'Tasa BCV' : 'Tasa Manual'}</p>
+                    <div className="w-9 h-9 bg-sky-100 rounded-xl flex items-center justify-center mb-2.5"><ShoppingBag size={18} className="text-sky-600" strokeWidth={2.5} /></div>
+                    <p className="text-xl font-black text-slate-800 leading-none"><AnimatedCounter value={displayItemsSold} /></p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Artículos vendidos</p>
+                    <p className="text-[10px] text-sky-500 mt-1.5 font-bold uppercase tracking-wider">Hoy / Caja</p>
                 </div>
             </div>
         </div>

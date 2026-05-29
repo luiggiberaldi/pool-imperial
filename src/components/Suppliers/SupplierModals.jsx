@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { X, Truck, Save, Pencil, FileText, CreditCard, Clock, Phone, Trash2, ArrowUpRight, CheckCircle2 } from 'lucide-react';
-import { formatUsd, formatBs } from '../../utils/calculatorUtils';
-import { round2, divR, mulR } from '../../utils/dinero';
+import React, { useState, useEffect } from 'react';
+import { X, Truck, Save, Pencil, FileText, CreditCard, Clock, Phone, Trash2, ArrowUpRight } from 'lucide-react';
+import { formatCop } from '../../utils/calculatorUtils';
+import { round2 } from '../../utils/dinero';
 
 export function AddSupplierModal({ onClose, onSave, editingSupplier = null }) {
     const [name, setName] = useState(editingSupplier?.name || '');
@@ -43,12 +43,12 @@ export function AddSupplierModal({ onClose, onSave, editingSupplier = null }) {
                         <input type="text" required value={name} onChange={(e) => setName(e.target.value)} className="w-full form-input bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500/50 transition-all" placeholder="Ej: Distribuidora Polar" autoFocus />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">RIF / Documento</label>
-                        <input type="text" value={documentId} onChange={(e) => setDocumentId(e.target.value)} className="w-full form-input bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500/50 transition-all" placeholder="Ej: J-123456789" />
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">NIT / C.C.</label>
+                        <input type="text" value={documentId} onChange={(e) => setDocumentId(e.target.value)} className="w-full form-input bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500/50 transition-all" placeholder="Ej: 900.123.456-7" />
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Teléfono</label>
-                        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full form-input bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500/50 transition-all" placeholder="Ej: 0414-1234567" />
+                        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full form-input bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500/50 transition-all" placeholder="Ej: 300 123 4567" />
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Persona de Contacto (Opcional)</label>
@@ -63,7 +63,7 @@ export function AddSupplierModal({ onClose, onSave, editingSupplier = null }) {
     );
 }
 
-export function AddInvoiceModal({ supplier, bcvRate, onClose, onSave }) {
+export function AddInvoiceModal({ supplier, onClose, onSave }) {
     const [invoiceNumber, setInvoiceNumber] = useState('');
     const [amountUsd, setAmountUsd] = useState('');
     const [dueDate, setDueDate] = useState('');
@@ -79,7 +79,7 @@ export function AddInvoiceModal({ supplier, bcvRate, onClose, onSave }) {
             date: new Date().toISOString(),
             dueDate: dueDate || null,
             amountUsd: parseFloat(amountUsd),
-            amountBs: mulR(parseFloat(amountUsd), bcvRate),
+            amountBs: 0,
             status: 'PENDIENTE',
             amountPaidUsd: 0,
             type: 'INVOICE'
@@ -104,12 +104,11 @@ export function AddInvoiceModal({ supplier, bcvRate, onClose, onSave }) {
                         <input type="text" required value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} className="w-full form-input border rounded-xl px-3 py-2 text-sm font-bold dark:bg-slate-950" autoFocus />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Monto Total a Pagar (USD) *</label>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Monto Total a Pagar (COP) *</label>
                         <div className="relative">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-slate-400">$</span>
-                            <input type="number" required min="0.01" step="0.01" value={amountUsd} onChange={e => setAmountUsd(e.target.value)} className="w-full form-input border rounded-xl px-3 py-2 pl-8 text-lg font-black dark:bg-slate-950" />
+                            <input type="number" required min="1" step="1" value={amountUsd} onChange={e => setAmountUsd(e.target.value)} className="w-full form-input border rounded-xl px-3 py-2 pl-8 text-lg font-black dark:bg-slate-950" />
                         </div>
-                        {amountUsd && bcvRate > 0 && <p className="text-[10px] text-slate-500 mt-1 text-right">Equivale a {formatBs(parseFloat(amountUsd) * bcvRate)} Bs</p>}
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Fecha Vencimiento (Opcional)</label>
@@ -125,24 +124,25 @@ export function AddInvoiceModal({ supplier, bcvRate, onClose, onSave }) {
     );
 }
 
-export function PayInvoiceModal({ supplier, bcvRate, tasaCop, copEnabled, activePaymentMethods = [], onClose, onSave }) {
+export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, onSave }) {
     const [amount, setAmount] = useState('');
-    const [currencyMode, setCurrencyMode] = useState('BS');
-    const [paymentMethod, setPaymentMethod] = useState('efectivo_bs');
+    const filteredMethods = activePaymentMethods.filter(m => m.currency === 'COP');
+    const [paymentMethod, setPaymentMethod] = useState('efectivo_cop');
+
+    useEffect(() => {
+        if (filteredMethods.length > 0 && !filteredMethods.some(m => m.id === paymentMethod)) {
+            setPaymentMethod(filteredMethods[0].id);
+        }
+    }, [filteredMethods, paymentMethod]);
 
     const handleSave = (e) => {
         e.preventDefault();
         const rawAmt = parseFloat(amount);
         if (!rawAmt || rawAmt <= 0) return;
 
-        let amountUsd = round2(rawAmt);
-        if (currencyMode === 'BS' && bcvRate > 0) amountUsd = divR(rawAmt, bcvRate);
-        if (currencyMode === 'COP' && tasaCop > 0) amountUsd = divR(rawAmt, tasaCop);
+        const amountUsd = round2(rawAmt);
         
-        const amountBs = currencyMode === 'BS' ? rawAmt : mulR(amountUsd, bcvRate);
-        const amountCop = currencyMode === 'COP' ? rawAmt : mulR(amountUsd, tasaCop);
-
-        onSave(amountUsd, amountBs, amountCop, paymentMethod, currencyMode);
+        onSave(amountUsd, 0, amountUsd, paymentMethod, 'COP');
     };
 
     return (
@@ -155,56 +155,31 @@ export function PayInvoiceModal({ supplier, bcvRate, tasaCop, copEnabled, active
                     <button onClick={onClose} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full"><X size={18} /></button>
                 </div>
                 <form onSubmit={handleSave} className="p-5 space-y-4">
-                    <p className="text-xs text-slate-500 -mt-2 mb-2">Deuda total: <strong>${formatUsd(supplier.deuda)}</strong></p>
-                    
-                    {/* Moneda */}
-                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                        <button type="button" onClick={() => { setCurrencyMode('BS'); setAmount(''); setPaymentMethod('efectivo_bs'); }} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${currencyMode === 'BS' ? 'bg-white shadow text-blue-500' : 'text-slate-500'}`}>Bs</button>
-                        <button type="button" onClick={() => { setCurrencyMode('USD'); setAmount(''); setPaymentMethod('efectivo_usd'); }} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${currencyMode === 'USD' ? 'bg-white shadow text-emerald-500' : 'text-slate-500'}`}>USD</button>
-                        {copEnabled && (
-                            <button type="button" onClick={() => { setCurrencyMode('COP'); setAmount(''); setPaymentMethod('efectivo_cop'); }} className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${currencyMode === 'COP' ? 'bg-white shadow text-amber-500' : 'text-slate-500'}`}>COP</button>
-                        )}
-                    </div>
+                    <p className="text-xs text-slate-500 -mt-2 mb-2">Deuda total: <strong>{formatCop(supplier.deuda)}</strong></p>
 
                     {/* Input */}
                     <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Monto a Abonar (COP) *</label>
                         <div className="relative">
-                            <span className={`absolute left-3 top-1/2 -translate-y-1/2 font-black text-lg ${currencyMode === 'BS' ? 'text-blue-500' : 'text-emerald-500'}`}>{currencyMode === 'BS' ? 'Bs' : currencyMode === 'COP' ? 'COP' : '$'}</span>
-                            <input type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className={`w-full form-input border rounded-xl px-3 py-3 ${currencyMode === 'BS' ? 'pl-10' : 'pl-12'} text-2xl font-black dark:bg-slate-950`} autoFocus />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-lg text-emerald-500">$</span>
+                            <input type="number" step="1" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full form-input border rounded-xl px-3 py-3 pl-8 text-2xl font-black dark:bg-slate-950" autoFocus />
                         </div>
-                        {amount && bcvRate > 0 && (
-                            <div className="mt-2 text-right">
-                                <p className="text-[10px] text-slate-500">
-                                    Equivale a {currencyMode === 'BS' ? `$${formatUsd(parseFloat(amount)/bcvRate)}` : currencyMode === 'COP' ? `$${formatUsd(parseFloat(amount)/tasaCop)}` : `${formatBs(parseFloat(amount)*bcvRate)} Bs`}
-                                </p>
-                                {currencyMode !== 'COP' && copEnabled && tasaCop > 0 && (
-                                     <p className="text-[10px] text-slate-500">
-                                         • {currencyMode === 'BS' ? ((parseFloat(amount)/bcvRate) * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : (parseFloat(amount)*tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP
-                                     </p>
-                                )}
-                            </div>
-                        )}
                         {supplier.deuda > 0 && (
-                            <button type="button" onClick={() => setAmount(currencyMode === 'BS' ? (supplier.deuda * bcvRate).toFixed(2) : currencyMode === 'COP' ? (supplier.deuda * tasaCop).toFixed(2) : supplier.deuda.toFixed(2))} className="mt-2 w-full text-xs font-bold text-emerald-600 bg-emerald-50 py-1.5 rounded border border-emerald-200">
+                            <button type="button" onClick={() => setAmount(supplier.deuda.toFixed(0))} className="mt-2 w-full text-xs font-bold text-emerald-600 bg-emerald-50 py-1.5 rounded border border-emerald-200">
                                 Pagar Deuda Completa
                             </button>
                         )}
                     </div>
 
                     {/* Método de pago */}
-                    {(() => {
-                        const filteredMethods = activePaymentMethods.filter(m => m.currency === currencyMode);
-                        return (
-                            <div>
-                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Método de Pago (Egreso)</label>
-                                <select value={filteredMethods.some(m => m.id === paymentMethod) ? paymentMethod : (filteredMethods[0]?.id || '')} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full form-select border rounded-xl px-3 py-2 text-sm font-bold dark:bg-slate-950">
-                                    {filteredMethods.map(method => (
-                                        <option key={method.id} value={method.id}>{method.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        );
-                    })()}
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Método de Pago (Egreso)</label>
+                        <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full form-select border rounded-xl px-3 py-2 text-sm font-bold dark:bg-slate-950">
+                            {filteredMethods.map(method => (
+                                <option key={method.id} value={method.id}>{method.label}</option>
+                            ))}
+                        </select>
+                    </div>
 
                     <button type="submit" disabled={!amount || parseFloat(amount) <= 0} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 text-white font-bold rounded-xl active:scale-95 transition-all text-sm flex justify-center items-center gap-2 mt-4">
                         Procesar Pago
@@ -215,7 +190,7 @@ export function PayInvoiceModal({ supplier, bcvRate, tasaCop, copEnabled, active
     );
 }
 
-export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAddInvoice, onPayInvoice, onEdit, onDelete, bcvRate, tasaCop, copEnabled, historyData }) {
+export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAddInvoice, onPayInvoice, onEdit, onDelete, historyData }) {
     if (!isOpen || !supplier) return null;
 
     return (
@@ -239,7 +214,7 @@ export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAdd
                         <div>
                             <h3 className="text-lg font-black text-slate-800 dark:text-white">{supplier.name}</h3>
                             <div className="flex items-center gap-2 mt-0.5">
-                                {supplier.documentId && <p className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{supplier.documentId}</p>}
+                                {supplier.documentId && <p className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">{supplier.documentId}</p>}
                             </div>
                             {supplier.contactName && <p className="text-xs text-slate-500 mt-1">Contacto: {supplier.contactName}</p>}
                         </div>
@@ -248,11 +223,7 @@ export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAdd
                     {/* Deuda / Saldo */}
                     <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl px-4 py-3 text-center">
                         <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Total por Pagar</p>
-                        <p className="text-3xl font-black text-red-600 dark:text-red-400">${formatUsd(supplier.deuda)}</p>
-                        <div className="flex items-center justify-center gap-2 mt-1">
-                            {bcvRate > 0 && <p className="text-xs font-bold text-red-400/80">{formatBs(supplier.deuda * bcvRate)} Bs</p>}
-                            {copEnabled && tasaCop > 0 && <p className="text-xs font-bold text-amber-500/80">• {(supplier.deuda * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
-                        </div>
+                        <p className="text-3xl font-black text-red-600 dark:text-red-400">{formatCop(supplier.deuda)}</p>
                     </div>
 
                     {/* Actions */}
@@ -276,7 +247,7 @@ export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAdd
                             <div className="space-y-2">
                                 {historyData.map(record => {
                                     const isInvoice = record.type === 'INVOICE';
-                                    const dateStr = new Date(record.date || record.timestamp).toLocaleDateString('es-VE');
+                                    const dateStr = new Date(record.date || record.timestamp).toLocaleDateString('es-CO');
                                     return (
                                         <div key={record.id} className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl">
                                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isInvoice ? 'bg-red-100/50 text-red-500' : 'bg-emerald-100/50 text-emerald-500'}`}>
@@ -286,11 +257,11 @@ export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAdd
                                                 <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
                                                     {isInvoice ? `Factura #${record.invoiceNumber}` : `Abono/Pago`}
                                                 </p>
-                                                <p className="text-[10px] text-slate-400">{dateStr} {isInvoice && record.dueDate && `• Venc: ${new Date(record.dueDate).toLocaleDateString('es-VE')}`}</p>
+                                                <p className="text-[10px] text-slate-400">{dateStr} {isInvoice && record.dueDate && `• Venc: ${new Date(record.dueDate).toLocaleDateString('es-CO')}`}</p>
                                             </div>
                                             <div className="text-right">
                                                 <p className={`text-sm font-black ${isInvoice ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                    {isInvoice ? '+' : '-'}${formatUsd(isInvoice ? record.amountUsd : Math.abs(record.totalUsd || 0))}
+                                                    {isInvoice ? '+' : '-'}{formatCop(isInvoice ? record.amountUsd : Math.abs(record.totalUsd || 0))}
                                                 </p>
                                             </div>
                                         </div>

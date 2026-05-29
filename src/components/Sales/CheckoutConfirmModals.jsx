@@ -1,11 +1,11 @@
 import React from 'react';
-import { AlertTriangle, Users } from 'lucide-react';
-import { formatBs } from '../../utils/calculatorUtils';
+import { AlertTriangle } from 'lucide-react';
+import { formatCop } from '../../utils/calculatorUtils';
 import { EPSILON } from '../../hooks/useCheckoutPayments';
 
 export function FiarConfirmModal({
     confirmFiar, setConfirmFiar,
-    remainingUsd, remainingBs,
+    remainingUsd,
     selectedCustomer, totalPaidUsd,
     handleConfirm,
 }) {
@@ -25,27 +25,26 @@ export function FiarConfirmModal({
                 <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4 sm:p-5 mb-5">
                     <div className="text-center mb-3">
                         <p className="text-[11px] sm:text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">Monto a fiar</p>
-                        <p className="text-3xl sm:text-4xl font-black text-amber-600">${remainingUsd.toFixed(2)}</p>
-                        <p className="text-sm sm:text-base font-bold text-amber-500/70 mt-0.5">{formatBs(remainingBs)} Bs</p>
+                        <p className="text-3xl sm:text-4xl font-black text-amber-600">{formatCop(remainingUsd)}</p>
                     </div>
                     <div className="border-t border-amber-200/50 dark:border-amber-800/20 pt-3 space-y-2">
                         <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
-                            Se registrara como deuda a nombre de <span className="font-black text-slate-800 dark:text-white">{selectedCustomer?.name}</span>.
+                            Se registrará como deuda a nombre de <span className="font-black text-slate-800 dark:text-white">{selectedCustomer?.name}</span>.
                         </p>
                         {totalPaidUsd > EPSILON && (
                             <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
-                                El cliente abona <span className="font-bold text-emerald-600">${totalPaidUsd.toFixed(2)}</span> ahora y el restante queda pendiente.
+                                El cliente abona <span className="font-bold text-emerald-600">{formatCop(totalPaidUsd)}</span> ahora y el restante queda pendiente.
                             </p>
                         )}
                         {totalPaidUsd <= EPSILON && (
                             <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
-                                El monto total de la venta quedara como deuda del cliente.
+                                El monto total de la venta quedará como deuda del cliente.
                             </p>
                         )}
                         {selectedCustomer && (selectedCustomer.deuda || 0) > EPSILON && (
                             <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-lg p-2.5 mt-2">
                                 <p className="text-[11px] sm:text-xs font-bold text-red-600 dark:text-red-400">
-                                    Este cliente ya tiene una deuda de ${(selectedCustomer.deuda || 0).toFixed(2)}. La deuda total pasara a ser ${((selectedCustomer.deuda || 0) + remainingUsd).toFixed(2)}.
+                                    Este cliente ya tiene una deuda de {formatCop(selectedCustomer.deuda || 0)}. La deuda total pasará a ser {formatCop((selectedCustomer.deuda || 0) + remainingUsd)}.
                                 </p>
                             </div>
                         )}
@@ -72,15 +71,9 @@ export function OverpayAlertModal({
 }) {
     if (!overpayAlertData) return null;
     const d = overpayAlertData;
-    const isCurrency = d.type === 'currency';
-    const isRound    = d.type === 'round';
 
-    const title    = isCurrency ? '¿Te equivocaste de campo?' : isRound ? '¿Número por error?' : '¿Monto correcto?';
-    const subtitle = isCurrency
-        ? `Parece que ingresaste bolívares en el campo de ${d.methodLabel}`
-        : isRound
-        ? 'El monto parece un número redondeado por error'
-        : `El pago es ${d.ratio}× el total de la compra`;
+    const title    = '¿Monto correcto?';
+    const subtitle = `El pago es ${d.ratio}× el total de la compra`;
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setOverpayAlertData(null)}>
@@ -98,35 +91,18 @@ export function OverpayAlertModal({
                 <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-2xl p-4 sm:p-5 mb-5 space-y-3">
                     <div className="flex justify-between items-center">
                         <span className="text-sm text-slate-500 dark:text-slate-400">Total de la compra</span>
-                        <span className="text-base font-black text-slate-800 dark:text-white">${cartTotalUsd.toFixed(2)}</span>
+                        <span className="text-base font-black text-slate-800 dark:text-white">{formatCop(cartTotalUsd)}</span>
                     </div>
-                    {isCurrency && (
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-slate-500 dark:text-slate-400">Total en Bs</span>
-                            <span className="text-base font-black text-slate-800 dark:text-white">{formatBs(d.expectedBs)}</span>
-                        </div>
-                    )}
                     <div className="flex justify-between items-center">
                         <span className="text-sm text-slate-500 dark:text-slate-400">Monto ingresado</span>
                         <span className="text-base font-black text-red-600">
-                            {isCurrency ? formatBs(d.enteredAmount) : `$${totalPaidUsd.toFixed(2)}`}
+                            {formatCop(totalPaidUsd)}
                         </span>
                     </div>
                     <div className="border-t border-red-200/50 dark:border-red-800/20 pt-3">
-                        {isCurrency ? (
-                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 text-center">
-                                Ingresaste <span className="font-black text-red-600">{formatBs(d.enteredAmount)}</span> en el campo de dólares.
-                                El total en Bs sería <span className="font-black text-slate-800 dark:text-white">{formatBs(d.expectedBs)}</span>.
-                            </p>
-                        ) : isRound ? (
-                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 text-center">
-                                ¿Seguro que el cliente pagó <span className="font-black text-red-600">${totalPaidUsd.toFixed(2)}</span> por una compra de <span className="font-black text-slate-800 dark:text-white">${cartTotalUsd.toFixed(2)}</span>?
-                            </p>
-                        ) : (
-                            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 text-center">
-                                ¿Seguro que el cliente pagó <span className="font-black text-red-600">${totalPaidUsd.toFixed(2)}</span> por una compra de <span className="font-black text-slate-800 dark:text-white">${cartTotalUsd.toFixed(2)}</span>?
-                            </p>
-                        )}
+                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 text-center">
+                            ¿Seguro que el cliente pagó <span className="font-black text-red-600">{formatCop(totalPaidUsd)}</span> por una compra de <span className="font-black text-slate-800 dark:text-white">{formatCop(cartTotalUsd)}</span>?
+                        </p>
                     </div>
                 </div>
 

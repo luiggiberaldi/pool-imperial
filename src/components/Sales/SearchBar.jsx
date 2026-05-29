@@ -1,8 +1,7 @@
 import { forwardRef } from 'react';
 import { Search, Mic, Package, X, Box } from 'lucide-react';
 import { BODEGA_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../../config/categories';
-
-const formatBs = (n) => new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+import { formatCop } from '../../utils/calculatorUtils';
 
 function getEffectiveStock(p, allProducts) {
     if (!p.isCombo) return p.stock ?? 0;
@@ -23,7 +22,6 @@ const SearchBar = forwardRef(function SearchBar({
     searchResults,
     selectedIndex,
     setSelectedIndex,
-    effectiveRate,
     addToCart,
     allProducts,
     isRecording,
@@ -132,10 +130,7 @@ const SearchBar = forwardRef(function SearchBar({
                                 </div>
                                 <div className="text-right shrink-0">
                                     <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                                        ${p.priceUsdt?.toFixed(2)}
-                                    </p>
-                                    <p className="text-[10px] font-medium text-slate-400">
-                                        {formatBs(p.priceBs > 0 ? p.priceBs : p.priceUsdt * effectiveRate)} Bs
+                                        {formatCop(p.priceUsdt)}
                                     </p>
                                 </div>
                             </button>
@@ -166,14 +161,14 @@ const SearchBar = forwardRef(function SearchBar({
                             className="flex flex-col items-center gap-2 p-4 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border-2 border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all active:scale-95">
                             <Package size={24} className="text-indigo-600 dark:text-indigo-400" />
                             <span className="text-xs font-black text-indigo-700 dark:text-indigo-300 uppercase">Caja/Bulto</span>
-                            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">${hierarchyPending.priceUsdt?.toFixed(2)}</span>
+                            <span className="text-sm font-black text-indigo-600 dark:text-indigo-400">{formatCop(hierarchyPending.priceUsdt)}</span>
                             <span className="text-[9px] text-slate-400 font-bold">{hierarchyPending.unitsPerPackage} uds</span>
                         </button>
                         <button onClick={() => addToCart(hierarchyPending, null, 'unit')}
                             className="flex flex-col items-center gap-2 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border-2 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all active:scale-95">
                             <Box size={24} className="text-emerald-600 dark:text-emerald-400" />
                             <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 uppercase">Unidad</span>
-                            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">${hierarchyPending.unitPriceUsd?.toFixed(2)}</span>
+                            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatCop(hierarchyPending.unitPriceUsd)}</span>
                             <span className="text-[9px] text-slate-400 font-bold">1 ud</span>
                         </button>
                     </div>
@@ -189,7 +184,7 @@ const SearchBar = forwardRef(function SearchBar({
                                 <p className="text-xs font-black text-amber-700 dark:text-amber-300 uppercase tracking-wider">
                                     ¿Cuántos {weightPending.unit === 'kg' ? 'kilos' : 'litros'}?
                                 </p>
-                                <p className="text-[11px] text-amber-500/70 dark:text-amber-400/50 font-medium mt-0.5">{weightPending.name} · ${weightPending.priceUsdt?.toFixed(2)}/{weightPending.unit === 'kg' ? 'kg' : 'lt'}</p>
+                                <p className="text-[11px] text-amber-500/70 dark:text-amber-400/50 font-medium mt-0.5">{weightPending.name} · {formatCop(weightPending.priceUsdt)}/{weightPending.unit === 'kg' ? 'kg' : 'lt'}</p>
                             </div>
                             <button onClick={() => setWeightPending(null)} className="p-1 text-amber-400 hover:text-amber-600"><X size={16} /></button>
                         </div>

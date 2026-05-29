@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Users, ChevronDown, UserPlus, Check, Wallet, Search, X, AlertCircle, TrendingUp, Phone, CreditCard } from 'lucide-react';
-import { formatBs } from '../../utils/calculatorUtils';
+import { formatCop } from '../../utils/calculatorUtils';
 
 // Color de avatar consistente por inicial
 const AVATAR_COLORS = [
@@ -202,7 +202,7 @@ function CustomerPickerSheet({ customers, selectedCustomerId, onSelect, onClose,
                                                 : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600'
                                         }`}>
                                             {c.deuda > 0 ? <AlertCircle size={10} /> : <TrendingUp size={10} />}
-                                            ${Math.abs(c.deuda).toFixed(2)}
+                                            {formatCop(Math.abs(c.deuda))}
                                         </div>
                                     )}
                                 </div>
@@ -295,9 +295,9 @@ function NewClientModal({ onClose, onSave, initialName = '' }) {
                     </div>
                     <div>
                         <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
-                            Cédula / RIF <span className="text-slate-400 normal-case font-medium">(opcional)</span>
+                            NIT / C.C. <span className="text-slate-400 normal-case font-medium">(opcional)</span>
                         </label>
-                        <input type="text" placeholder="Ej: V-12345678" value={document}
+                        <input type="text" placeholder="Ej: 12345678-9" value={document}
                             onChange={e => setDocument(e.target.value.toUpperCase())} onKeyDown={handleKey}
                             className="w-full text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-medium text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 transition-all placeholder:text-slate-400 uppercase"
                         />
@@ -307,9 +307,9 @@ function NewClientModal({ onClose, onSave, initialName = '' }) {
                             Teléfono <span className="text-slate-400 normal-case font-medium">(opcional)</span>
                         </label>
                         <div className="flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:border-emerald-400 transition-all">
-                            <span className="px-3 py-3 text-xs font-black text-blue-500 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 select-none shrink-0">+58</span>
-                            <input type="tel" placeholder="0412 123 4567" value={phone}
-                                onChange={e => setPhone(e.target.value.replace(/^\+?58/, ''))} onKeyDown={handleKey}
+                            <span className="px-3 py-3 text-xs font-black text-blue-500 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 select-none shrink-0">+57</span>
+                            <input type="tel" placeholder="300 123 4567" value={phone}
+                                onChange={e => setPhone(e.target.value.replace(/^\+?57/, ''))} onKeyDown={handleKey}
                                 className="flex-1 bg-transparent px-3 py-3 text-sm text-slate-800 dark:text-white outline-none placeholder:text-slate-400 font-medium"
                             />
                         </div>
@@ -400,8 +400,8 @@ export default function CustomerPickerSection({
                             {!!selectedCustomer?.deuda && Math.abs(selectedCustomer.deuda) > (EPSILON || 0.001) && (
                                 <div className={`text-xs font-semibold ${selectedCustomer.deuda > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
                                     {selectedCustomer.deuda > 0
-                                        ? `Debe $${selectedCustomer.deuda.toFixed(2)}`
-                                        : `Favor $${Math.abs(selectedCustomer.deuda).toFixed(2)}`}
+                                        ? `Debe ${formatCop(selectedCustomer.deuda)}`
+                                        : `Favor ${formatCop(Math.abs(selectedCustomer.deuda))}`}
                                 </div>
                             )}
                         </div>
@@ -417,12 +417,7 @@ export default function CustomerPickerSection({
                             className="w-full py-2.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 active:scale-98"
                         >
                             <Wallet size={16} />
-                            Usar Saldo a Favor (${Math.abs(selectedCustomer.deuda).toFixed(2)})
-                            {effectiveRate > 0 && (
-                                <span className="text-xs font-medium opacity-70">
-                                    · {formatBs(Math.abs(selectedCustomer.deuda) * effectiveRate)} Bs
-                                </span>
-                            )}
+                            Usar Saldo a Favor ({formatCop(Math.abs(selectedCustomer.deuda))})
                         </button>
                     </div>
                 )}
