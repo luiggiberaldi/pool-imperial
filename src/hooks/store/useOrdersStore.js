@@ -69,7 +69,7 @@ async function waitForRealSessionId(tempId, timeoutMs = 8000) {
 }
 
 const ordersCache = localforage.createInstance({
-    name: "PoolLosDiaz",
+    name: "PoolImperial",
     storeName: "orders_cache"
 });
 

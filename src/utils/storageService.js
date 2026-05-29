@@ -3,9 +3,9 @@ import { pushCloudSync } from '../hooks/useCloudSync';
 import { scopedKey } from '../hooks/store/accountScope';
 
 localforage.config({
-    name: 'BodegaApp',
-    storeName: 'bodega_app_data',
-    description: 'Almacenamiento local optimizado para PWA de Bodega'
+    name: 'PoolImperialApp',
+    storeName: 'pool_imperial_app_data',
+    description: 'Almacenamiento local optimizado para PWA de Pool Imperial'
 });
 
 /**

@@ -7,7 +7,7 @@ import { createBillingActions } from './tableBillingActions';
 import { createRealtimeActions } from './tableRealtimeActions';
 
 const tablesCache = localforage.createInstance({
-    name: "PoolLosDiaz",
+    name: "PoolImperial",
     storeName: "tables_cache"
 });
 

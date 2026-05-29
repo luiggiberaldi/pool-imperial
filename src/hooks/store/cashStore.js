@@ -15,7 +15,7 @@ const getAuthUserId = async () => {
 
 // Dedicated offline cache for cash session state
 const cashCache = localforage.createInstance({
-    name: "PoolLosDiaz",
+    name: "PoolImperial",
     storeName: "cash_cache"
 });
 
