@@ -273,4 +273,90 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         }
         return allPaid;
     },
+
+    transferSession: async (sourceSessionId, targetTableId, transferType = 'ALL') => {
+        const sourceSession = get().activeSessions.find(s => s.id === sourceSessionId);
+        if (!sourceSession) throw new Error("Sesión origen no encontrada");
+
+        const targetSession = get().activeSessions.find(
+            s => s.table_id === targetTableId && (s.status === 'ACTIVE' || s.status === 'CHECKOUT')
+        );
+
+        if (transferType === 'ALL') {
+            if (targetSession) {
+                throw new Error("La mesa de destino ya está ocupada. Solo puedes transferir el consumo.");
+            }
+
+            // optimistic session update
+            const newSessions = get().activeSessions.map(s =>
+                s.id === sourceSessionId ? { ...s, table_id: targetTableId } : s
+            );
+            set({ activeSessions: newSessions });
+            await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
+
+            try {
+                const { error } = await supabaseCloud.from('table_sessions')
+                    .update({ table_id: targetTableId })
+                    .eq('id', sourceSessionId);
+                if (error) throw error;
+            } catch (e) {
+                console.warn("Error sync transfer DB session, encolado:", e);
+                await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId: sourceSessionId, payload: { table_id: targetTableId } });
+            }
+
+            // order update
+            const { orders } = useOrdersStore.getState();
+            const sourceOrder = orders.find(o => o.table_session_id === sourceSessionId);
+            if (sourceOrder) {
+                try {
+                    const { error } = await supabaseCloud.from('orders')
+                        .update({ table_id: targetTableId })
+                        .eq('id', sourceOrder.id);
+                    if (error) throw error;
+                    await useOrdersStore.getState().syncOrders();
+                } catch (e) {
+                    console.error("Error sync transfer DB order:", e);
+                }
+            }
+
+            const sourceTableName = get().tables.find(t => t.id === sourceSession.table_id)?.name ?? sourceSession.table_id;
+            const targetTableName = get().tables.find(t => t.id === targetTableId)?.name ?? targetTableId;
+            logEvent('MESAS', 'TRANSFERENCIA', `Transferencia total de ${sourceTableName} a ${targetTableName}`, getUser(), { sourceSessionId, targetTableId });
+        } else if (transferType === 'CONSUMPTION') {
+            if (!targetSession) {
+                throw new Error("La mesa de destino debe estar ocupada para poder recibir el consumo.");
+            }
+
+            const { orders, orderItems, addItemToSession, cancelOrderBySessionId } = useOrdersStore.getState();
+            const sourceOrder = orders.find(o => o.table_session_id === sourceSessionId);
+            
+            if (sourceOrder) {
+                const sourceItems = orderItems.filter(i => i.order_id === sourceOrder.id);
+                for (const item of sourceItems) {
+                    const productInfo = {
+                        id: item.product_id,
+                        name: item.product_name,
+                        priceUsd: Number(item.unit_price_usd)
+                    };
+                    for (let q = 0; q < item.qty; q++) {
+                        await addItemToSession(targetTableId, targetSession.id, sourceSession.opened_by, productInfo, sourceOrder.exchange_rate_used, item.seat_id || null);
+                    }
+                }
+
+                // Delete the source order cleanly using existing store logic
+                try {
+                    await cancelOrderBySessionId(sourceSessionId);
+                } catch (e) {
+                    console.error("Error cleaning source order:", e);
+                }
+            }
+
+            // Close source session with $0 cost
+            await get().closeSession(sourceSessionId, getUser()?.id || 'SYSTEM', 0);
+
+            const sourceTableName = get().tables.find(t => t.id === sourceSession.table_id)?.name ?? sourceSession.table_id;
+            const targetTableName = get().tables.find(t => t.id === targetTableId)?.name ?? targetTableId;
+            logEvent('MESAS', 'TRANSFERENCIA', `Consumo de ${sourceTableName} unificado en ${targetTableName}`, getUser(), { sourceSessionId, targetTableId });
+        }
+    },
 });

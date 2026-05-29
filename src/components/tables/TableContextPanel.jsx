@@ -33,7 +33,7 @@ function useStaffName(staffId) {
     return user?.name || user?.nombre || null;
 }
 
-export default function TableContextPanel({ tableId, onClose }) {
+export default function TableContextPanel({ tableId, onClose, onStartTransfer }) {
     const tables = useTablesStore(s => s.tables);
     const activeSessions = useTablesStore(s => s.activeSessions);
     
@@ -707,19 +707,29 @@ export default function TableContextPanel({ tableId, onClose }) {
                         </div>
 
                         {/* Utility buttons row (Fase 2C) */}
-                        <div className="grid grid-cols-2 gap-2 mt-1">
+                        <div className="grid grid-cols-3 gap-1.5 mt-1">
                             <button
+                                disabled={isMutating}
                                 onClick={handlePrintPartial}
-                                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-950/40 rounded-xl py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-950/40 rounded-xl py-2 text-[10.5px] font-black transition-all flex items-center justify-center gap-1 disabled:opacity-50"
                             >
-                                <Printer size={13} />
-                                Pre-cuenta (PDF)
+                                <Printer size={12} />
+                                Pre-cuenta
                             </button>
                             <button
+                                disabled={isMutating}
                                 onClick={() => setShowTotalDetails(true)}
-                                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-950/40 rounded-xl py-2 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                                className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800 hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-slate-950/40 rounded-xl py-2 text-[10.5px] font-black transition-all flex items-center justify-center gap-1 disabled:opacity-50"
                             >
-                                Ver Detalle
+                                Detalle
+                            </button>
+                            <button
+                                disabled={isMutating}
+                                onClick={() => onStartTransfer?.()}
+                                className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl py-2 text-[10.5px] font-black transition-all flex items-center justify-center gap-1 disabled:opacity-50"
+                            >
+                                <ChevronRight size={13} className="rotate-90" />
+                                Mover
                             </button>
                         </div>
                     </div>

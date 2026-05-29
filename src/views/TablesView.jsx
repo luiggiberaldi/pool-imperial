@@ -4,9 +4,10 @@ import { useAuthStore } from '../hooks/store/authStore';
 import TableCard from '../components/tables/TableCard';
 import FloorPlanView from '../components/tables/FloorPlanView';
 import TableContextPanel from '../components/tables/TableContextPanel';
-import { Layers, PauseCircle, PlayCircle, LayoutGrid, Map, X } from 'lucide-react';
+import { Layers, PauseCircle, PlayCircle, LayoutGrid, Map, X, ArrowRight, AlertTriangle } from 'lucide-react';
 import { calculateElapsedTime } from '../utils/tableBillingEngine';
 import { showToast } from '../components/Toast';
+import { Modal } from '../components/Modal';
 
 const TYPE_FILTERS   = ['Todas', 'Pool', 'Bar'];
 const STATUS_FILTERS = ['Todas', 'Libres', 'Ocupadas'];
@@ -59,7 +60,7 @@ function ViewToggle({ mode, onChange }) {
 }
 
 export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) {
-    const { tables, activeSessions, loading, syncTablesAndSessions } = useTablesStore();
+    const { tables, activeSessions, loading, syncTablesAndSessions, transferSession } = useTablesStore();
     const { role, currentUser } = useAuthStore();
     const isAdmin = role === 'ADMIN';
 
@@ -70,6 +71,49 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
 
     // When a table is selected from the floor plan, we open its TableCard via a mini panel
     const [selectedTableId, setSelectedTableId] = useState(null);
+
+    const [transferSourceTableId, setTransferSourceTableId] = useState(null);
+    const [transferTargetTable, setTransferTargetTable] = useState(null);
+    const [isMutating, setIsMutating] = useState(false);
+
+    const handleConfirmTransfer = async () => {
+        if (isMutating || !transferTargetTable) return;
+        const sourceSession = activeSessions.find(s => s.table_id === transferSourceTableId);
+        if (!sourceSession) {
+            showToast("No hay una sesión activa en la mesa de origen", "error");
+            return;
+        }
+
+        setIsMutating(true);
+        try {
+            const targetSession = activeSessions.find(
+                s => s.table_id === transferTargetTable.id && (s.status === 'ACTIVE' || s.status === 'CHECKOUT')
+            );
+            const isTargetOccupied = !!targetSession;
+            const type = isTargetOccupied ? 'CONSUMPTION' : 'ALL';
+            
+            await transferSession(sourceSession.id, transferTargetTable.id, type);
+            
+            showToast(
+                isTargetOccupied 
+                    ? `Fusión exitosa: Consumos unificados en ${transferTargetTable.name}`
+                    : `Transferencia exitosa: Sesión movida a ${transferTargetTable.name}`,
+                'success'
+            );
+            
+            const targetId = transferTargetTable.id;
+            setTransferSourceTableId(null);
+            setTransferTargetTable(null);
+            
+            // Keep focus on the new table
+            setSelectedTableId(targetId);
+        } catch (error) {
+            console.error(error);
+            showToast(error.message || "Error al realizar la transferencia", "error");
+        } finally {
+            setIsMutating(false);
+        }
+    };
 
     const isMesero = role === 'MESERO' || role === 'BARRA';
 
@@ -114,8 +158,16 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
 
     // Handle floor plan table selection
     const handleFloorTableSelect = useCallback((table, session) => {
+        if (transferSourceTableId) {
+            if (table.id === transferSourceTableId) {
+                showToast("No puedes transferir una mesa a sí misma. Selecciona otra mesa diferente.", "warning");
+                return;
+            }
+            setTransferTargetTable(table);
+            return;
+        }
         setSelectedTableId(table.id);
-    }, []);
+    }, [transferSourceTableId]);
 
     const filteredTables = useMemo(() => {
         const filtered = tables.filter(table => {
@@ -242,7 +294,29 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                     /* ── FLOOR PLAN VIEW WITH CONTEXT PANEL ── */
                     <div className="flex-1 flex flex-row overflow-hidden w-full relative">
                         {/* El plano a la izquierda */}
-                        <div className="flex-1 overflow-auto h-full min-w-0">
+                        <div className="flex-1 overflow-auto h-full min-w-0 relative">
+                            {transferSourceTableId && (
+                                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-amber-500 text-white font-black px-4 sm:px-6 py-3 rounded-2xl shadow-lg shadow-amber-500/20 flex items-center gap-4 border border-amber-400/30 animate-in slide-in-from-top-4 duration-300 w-[90%] sm:w-auto max-w-lg justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="animate-pulse bg-white/20 p-1.5 rounded-full shrink-0">
+                                            <Map size={16} />
+                                        </span>
+                                        <span className="text-xs sm:text-sm">
+                                            Moviendo <strong>{tables.find(t => t.id === transferSourceTableId)?.name}</strong>. Elige destino en el plano.
+                                        </span>
+                                    </div>
+                                    <button 
+                                        onClick={() => {
+                                            setTransferSourceTableId(null);
+                                            showToast('Mover cancelado', 'info');
+                                        }}
+                                        className="bg-white hover:bg-white/90 text-amber-600 font-extrabold text-[11px] px-3 py-2 rounded-xl transition-all active:scale-95 shrink-0"
+                                    >
+                                        Cancelar
+                                    </button>
+                                </div>
+                            )}
+
                             <FloorPlanView 
                                 onTableSelect={handleFloorTableSelect} 
                                 selectedTableId={selectedTableId}
@@ -269,7 +343,15 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                             </button>
                                         </div>
                                         <div className="p-4 flex-1">
-                                            <TableContextPanel tableId={selectedTableId} onClose={() => setSelectedTableId(null)} />
+                                            <TableContextPanel 
+                                                tableId={selectedTableId} 
+                                                onClose={() => setSelectedTableId(null)} 
+                                                onStartTransfer={() => {
+                                                    setTransferSourceTableId(selectedTableId);
+                                                    setSelectedTableId(null); // Close panel so operator can clearly see floor plan
+                                                    showToast("Selecciona la mesa de destino en el plano", "info");
+                                                }}
+                                            />
                                         </div>
                                     </div>
 
@@ -300,7 +382,15 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                             </button>
                                         </div>
                                         <div className="p-4 pt-0 overflow-y-auto flex-1">
-                                            <TableContextPanel tableId={selectedTableId} onClose={() => setSelectedTableId(null)} />
+                                            <TableContextPanel 
+                                                tableId={selectedTableId} 
+                                                onClose={() => setSelectedTableId(null)} 
+                                                onStartTransfer={() => {
+                                                    setTransferSourceTableId(selectedTableId);
+                                                    setSelectedTableId(null); // Close panel so operator can clearly see floor plan
+                                                    showToast("Selecciona la mesa de destino en el plano", "info");
+                                                }}
+                                            />
                                         </div>
                                     </div>
                                 </>
@@ -345,6 +435,113 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                     </div>
                 )}
             </div>
+
+            {/* Modal de confirmación de transferencia de mesa (Fase 4) */}
+            {transferTargetTable && (() => {
+                const sourceTable = tables.find(t => t.id === transferSourceTableId);
+                const sourceSession = activeSessions.find(s => s.table_id === transferSourceTableId);
+                if (!sourceTable || !sourceSession) return null;
+
+                const targetSession = activeSessions.find(
+                    s => s.table_id === transferTargetTable.id && (s.status === 'ACTIVE' || s.status === 'CHECKOUT')
+                );
+                const isTargetOccupied = !!targetSession;
+
+                return (
+                    <Modal 
+                        isOpen={!!transferTargetTable} 
+                        onClose={() => setTransferTargetTable(null)} 
+                        title={isTargetOccupied ? "Confirmar Fusión de Cuentas" : "Confirmar Transferencia de Mesa"}
+                        maxWidthClass="max-w-md"
+                    >
+                        <div className="flex flex-col gap-4 py-2">
+                            {/* Visual Flow Diagram */}
+                            <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between text-center relative overflow-hidden">
+                                <div className="flex-1">
+                                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Origen</span>
+                                    <span className="text-base font-black text-slate-800 dark:text-white block mt-0.5">{sourceTable.name}</span>
+                                    <span className="text-[10px] text-amber-500 font-extrabold bg-amber-500/10 px-2 py-0.5 rounded-full inline-block mt-1">Ocupada</span>
+                                </div>
+                                
+                                <div className="flex flex-col items-center justify-center px-2">
+                                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">
+                                        {isTargetOccupied ? "FUSIONAR" : "MOVER"}
+                                    </span>
+                                    <div className="w-8 h-8 bg-sky-500/10 rounded-full flex items-center justify-center text-sky-500 mt-1">
+                                        <ArrowRight size={16} />
+                                    </div>
+                                </div>
+
+                                <div className="flex-1">
+                                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Destino</span>
+                                    <span className="text-base font-black text-slate-800 dark:text-white block mt-0.5">{transferTargetTable.name}</span>
+                                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full inline-block mt-1 ${
+                                        isTargetOccupied 
+                                            ? 'text-amber-500 bg-amber-500/10' 
+                                            : 'text-emerald-500 bg-emerald-500/10'
+                                    }`}>
+                                        {isTargetOccupied ? "Ocupada" : "Libre"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Warning/Info Box */}
+                            {isTargetOccupied ? (
+                                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-3 dark:bg-amber-950/20 dark:border-amber-900/30 dark:text-amber-300">
+                                    <AlertTriangle className="shrink-0 mt-0.5 text-amber-500" size={18} />
+                                    <div>
+                                        <h4 className="font-bold text-sm">Fusión de Cuentas (Destino Ocupada)</h4>
+                                        <p className="text-xs opacity-90 mt-1 leading-relaxed">
+                                            La mesa de destino ya está jugando. Se sumará todo el consumo de bebidas/comida de <strong>{sourceTable.name}</strong> a la comanda activa de <strong>{transferTargetTable.name}</strong>.
+                                        </p>
+                                        <p className="text-xs opacity-90 mt-2 font-bold leading-relaxed">
+                                            ⚠️ La sesión original en {sourceTable.name} se cerrará en $0 y quedará LIBRE.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-sky-50 border border-sky-200 text-sky-800 p-4 rounded-xl flex items-start gap-3 dark:bg-sky-950/20 dark:border-sky-900/30 dark:text-sky-300">
+                                    <ArrowRight className="shrink-0 mt-0.5 text-sky-500" size={18} />
+                                    <div>
+                                        <h4 className="font-bold text-sm">Transferencia Completa (Destino Libre)</h4>
+                                        <p className="text-xs opacity-90 mt-1 leading-relaxed">
+                                            Se moverá la sesión completa de <strong>{sourceTable.name}</strong> a <strong>{transferTargetTable.name}</strong>.
+                                        </p>
+                                        <ul className="text-xs opacity-90 mt-1.5 list-disc pl-4 space-y-0.5">
+                                            <li>El temporizador de juego no se detendrá.</li>
+                                            <li>Se conservará el cliente asignado, notas y comanda.</li>
+                                            <li>La mesa {sourceTable.name} quedará completamente LIBRE.</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Buttons */}
+                            <div className="grid grid-cols-2 gap-3 mt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setTransferTargetTable(null)}
+                                    className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-550 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-950/50 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isMutating}
+                                    onClick={handleConfirmTransfer}
+                                    className={`px-4 py-2.5 rounded-xl text-white font-black transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 ${
+                                        isTargetOccupied 
+                                            ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' 
+                                            : 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/20'
+                                    }`}
+                                >
+                                    {isMutating ? "Procesando..." : isTargetOccupied ? "Fusionar Cuentas" : "Confirmar Mover"}
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+                );
+            })()}
         </div>
     );
 }
