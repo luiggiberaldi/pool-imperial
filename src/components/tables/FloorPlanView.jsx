@@ -42,10 +42,22 @@ function resolveTable(item, tables) {
     return tables.find(t => t.name === item.refName) ?? null;
 }
 
-/** Devuelve el estado semántico de una sesión: 'free' | 'occupied' | 'checkout' */
+/** Devuelve el estado semántico de una sesión: 'free' | 'occupied' | 'checkout' | 'exceeded' */
 function statusOf(session) {
     if (!session) return 'free';
     if (session.status === 'CHECKOUT') return 'checkout';
+    
+    // Validar si es un prepago excedido en tiempo real
+    if (session.game_mode === 'NORMAL' && session.hours_paid > 0) {
+        const started = new Date(session.started_at).getTime();
+        const now = Date.now();
+        const elapsedMinutes = (now - started) / 60000;
+        const limitMinutes = session.hours_paid * 60;
+        if (elapsedMinutes > limitMinutes) {
+            return 'exceeded';
+        }
+    }
+    
     return 'occupied';
 }
 
@@ -69,7 +81,11 @@ function StatusDot({ status }) {
     return (
         <span
             className={`absolute top-[8%] right-[8%] w-2.5 h-2.5 rounded-full z-20 border border-white
-                ${status === 'checkout' ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                ${status === 'checkout' 
+                    ? 'bg-amber-500 animate-pulse' 
+                    : status === 'exceeded'
+                        ? 'bg-rose-500'
+                        : 'bg-emerald-500'}`}
         />
     );
 }
@@ -91,7 +107,9 @@ function PoolTableEl({ item, session, onClick, isSelected }) {
         ? '#2d6a4f' // Verde plano libre
         : st === 'checkout'
             ? '#d97706' // Ámbar/Naranja cobro
-            : '#1a7a4a'; // Verde ocupado plano
+            : st === 'exceeded'
+                ? '#991b1b' // Rojo vino para tiempo excedido
+                : '#1a7a4a'; // Verde ocupado plano
 
     const railColor = '#5c4d43'; // Riel marrón mate
     
@@ -101,7 +119,9 @@ function PoolTableEl({ item, session, onClick, isSelected }) {
         ? '3.5px solid #3b82f6' 
         : st === 'checkout'
             ? '3.5px dashed #f59e0b'
-            : '2.5px solid #4b5563'; // Borde plano gris
+            : st === 'exceeded'
+                ? '3.5px dashed #ef4444'
+                : '2.5px solid #4b5563'; // Borde plano gris
 
     return (
         <button
@@ -117,7 +137,7 @@ function PoolTableEl({ item, session, onClick, isSelected }) {
                 outlineOffset: '2px',
                 zIndex: isSelected ? 30 : undefined,
             }}
-            className="group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center"
+            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''}`}
             title={item.label}
         >
             {/* Superficie interna de fieltro plano */}
@@ -142,13 +162,13 @@ function PoolTableEl({ item, session, onClick, isSelected }) {
                     <span className="font-bold text-white leading-none text-[10px] sm:text-[11px] tracking-wide">
                         {item.label}
                     </span>
-                    {st === 'occupied' && session?.started_at && (
+                    {(st === 'occupied' || st === 'exceeded') && session?.started_at && (
                         <LiveTimer
                             startedAt={session.started_at}
                             className="font-mono font-bold text-white/95 text-[8px] sm:text-[10px]"
                         />
                     )}
-                    {st === 'occupied' && session?.client_name && (
+                    {(st === 'occupied' || st === 'exceeded') && session?.client_name && (
                         <span className="text-white/90 text-[7.5px] truncate max-w-full font-medium">{session.client_name}</span>
                     )}
                     {st === 'checkout' && (
@@ -156,7 +176,13 @@ function PoolTableEl({ item, session, onClick, isSelected }) {
                             COBRAR
                         </span>
                     )}
+                    {st === 'exceeded' && (
+                        <span className="font-extrabold text-white text-[7.5px] sm:text-[8px] uppercase tracking-wider animate-pulse">
+                            EXCEDIDO
+                        </span>
+                    )}
                     {st === 'free' && (
+
                         <span className="text-white/35 text-[7px] uppercase tracking-wider font-semibold">libre</span>
                     )}
                 </div>
@@ -179,6 +205,7 @@ function DiningTableEl({ item, session, onClick, isSelected }) {
         free:     { table: '#e2e8f0', chair: '#cbd5e1', border: '#94a3b8', text: '#475569' },
         occupied: { table: '#dbeafe', chair: '#93c5fd', border: '#3b82f6', text: '#1e40af' },
         checkout: { table: '#fef3c7', chair: '#fde68a', border: '#f59e0b', text: '#78350f' },
+        exceeded: { table: '#fee2e2', chair: '#fca5a5', border: '#ef4444', text: '#991b1b' },
     }[st];
 
     const chairs = [
@@ -199,7 +226,7 @@ function DiningTableEl({ item, session, onClick, isSelected }) {
                 outlineOffset: '2px',
                 zIndex: isSelected ? 30 : undefined,
             }}
-            className="group transition-all duration-150 active:scale-[0.98] cursor-pointer"
+            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''}`}
             title={item.label}
         >
             {/* Sillas */}
@@ -227,13 +254,16 @@ function DiningTableEl({ item, session, onClick, isSelected }) {
                 <span className="font-bold text-[9px] sm:text-[10px] leading-none text-center" style={{ color: colors.text }}>
                     {item.label}
                 </span>
-                {st === 'occupied' && session?.client_name && (
+                {(st === 'occupied' || st === 'exceeded') && session?.client_name && (
                     <span className="text-[7px] truncate max-w-full px-0.5 mt-0.5 font-medium" style={{ color: colors.text }}>
                         {session.client_name}
                     </span>
                 )}
                 {st === 'checkout' && (
                     <span className="text-[7.5px] font-extrabold uppercase mt-0.5" style={{ color: colors.text }}>COBRAR</span>
+                )}
+                {st === 'exceeded' && (
+                    <span className="text-[7px] font-extrabold uppercase mt-0.5 animate-pulse" style={{ color: colors.text }}>EXCEDIDO</span>
                 )}
             </div>
 
@@ -254,6 +284,7 @@ function RoundStoolEl({ item, session, onClick, isSelected }) {
         free:     { bg: '#8b9aaa', border: '#475569', text: '#ffffff' },
         occupied: { bg: '#3b82f6', border: '#1d4ed8', text: '#ffffff' },
         checkout: { bg: '#f59e0b', border: '#b45309', text: '#ffffff' },
+        exceeded: { bg: '#ef4444', border: '#b91c1c', text: '#ffffff' },
     }[st];
 
     return (
@@ -267,7 +298,7 @@ function RoundStoolEl({ item, session, onClick, isSelected }) {
                 outlineOffset: '2px',
                 zIndex: isSelected ? 30 : undefined,
             }}
-            className="group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer"
+            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''}`}
             title={item.label}
         >
             <div
@@ -305,6 +336,7 @@ function BarStoolEl({ item, session, onClick, isSelected }) {
         free:     { bg: '#8b9aaa', border: '#475569', text: '#ffffff' },
         occupied: { bg: '#3b82f6', border: '#1d4ed8', text: '#ffffff' },
         checkout: { bg: '#f59e0b', border: '#b45309', text: '#ffffff' },
+        exceeded: { bg: '#ef4444', border: '#b91c1c', text: '#ffffff' },
     }[st];
 
     return (
@@ -318,7 +350,7 @@ function BarStoolEl({ item, session, onClick, isSelected }) {
                 outlineOffset: '2px',
                 zIndex: isSelected ? 30 : undefined,
             }}
-            className="group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer"
+            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''}`}
             title={item.label}
         >
             <div
@@ -590,6 +622,19 @@ export default function FloorPlanView({ onTableSelect, selectedTableId }) {
                             min-width: 0px;
                             max-height: calc(100vh - 210px);
                         }
+                    }
+                    @keyframes pulseBorder {
+                        0% {
+                            border-color: #f59e0b !important;
+                            box-shadow: 0 0 4px #f59e0b, inset 0 0 4px #f59e0b !important;
+                        }
+                        100% {
+                            border-color: #ef4444 !important;
+                            box-shadow: 0 0 16px #ef4444, inset 0 0 10px #ef4444 !important;
+                        }
+                    }
+                    .checkout-pulsing {
+                        animation: pulseBorder 1.2s infinite alternate !important;
                     }
                 `}} />
                 <div className="floor-plan-canvas">

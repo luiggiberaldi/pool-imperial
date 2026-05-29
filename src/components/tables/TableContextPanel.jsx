@@ -70,6 +70,7 @@ export default function TableContextPanel({ tableId, onClose }) {
     const [elapsed, setElapsed] = useState(() =>
         isPlaying && session?.started_at ? calculateElapsedTime(session.started_at) : 0
     );
+    const [isMutating, setIsMutating] = useState(false);
     const [showOrderPanel, setShowOrderPanel] = useState(false);
 
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -131,6 +132,8 @@ export default function TableContextPanel({ tableId, onClose }) {
 
     // Devuelve el stock si cancela la mesa
     const handleCancelTable = async () => {
+        if (isMutating) return;
+        setIsMutating(true);
         setShowCancelModal(false);
         try {
             currentItems.forEach(item => {
@@ -158,6 +161,8 @@ export default function TableContextPanel({ tableId, onClose }) {
         } catch (error) {
             console.error("Error anulando mesa", error);
             showToast("Ocurrió un error local al preparar la anulación.", "error");
+        } finally {
+            setIsMutating(false);
         }
     };
 
@@ -190,6 +195,18 @@ export default function TableContextPanel({ tableId, onClose }) {
         }
     }, [isPlaying, session?.started_at, isPaused, pauseElapsed]);
 
+    // Sincronización Remota Segura (Resiliencia Multi-dispositivo)
+    useEffect(() => {
+        setShowCancelModal(false);
+        setShowAdjustModal(false);
+        setShowModeModal(false);
+        setShowPinaConfirm(false);
+        setShowReleaseConfirm(false);
+        setShowOrderPanel(false);
+        setShowTotalDetails(false);
+        setShowCashierPaymentModal(false);
+    }, [session?.id, tableId]);
+
     const handlePauseTimer = () => {
         if (!session) return;
         const currentElapsed = calculateElapsedTime(session.started_at);
@@ -203,7 +220,7 @@ export default function TableContextPanel({ tableId, onClose }) {
     };
 
     const handleStartNormal = async (hours = 0, clientName = '', guestCount = 0, clientId = null, includePina = false, seats = []) => {
-        if (!currentUser) return;
+        if (!currentUser || isMutating) return;
         const parts = [];
         if (includePina) parts.push('Piña');
         if (hours === 0) parts.push('Libre');
@@ -218,12 +235,20 @@ export default function TableContextPanel({ tableId, onClose }) {
             variant: 'warning' 
         });
         if (!ok) return;
-        await openSession(table.id, currentUser.id, 'NORMAL', hours, clientName, guestCount, clientId, includePina, seats);
-        setShowModeModal(false);
+        setIsMutating(true);
+        try {
+            await openSession(table.id, currentUser.id, 'NORMAL', hours, clientName, guestCount, clientId, includePina, seats);
+            setShowModeModal(false);
+        } catch (error) {
+            console.error(error);
+            showToast("Error al abrir mesa", "error");
+        } finally {
+            setIsMutating(false);
+        }
     };
 
     const handleStartPina = async (clientName = '', guestCount = 0, clientId = null, seats = []) => {
-        if (!currentUser) return;
+        if (!currentUser || isMutating) return;
         const ok = await confirm({ 
             title: `Abrir ${table.name}`, 
             message: '¿Confirmar apertura en modo La Piña?', 
@@ -232,11 +257,19 @@ export default function TableContextPanel({ tableId, onClose }) {
             variant: 'warning' 
         });
         if (!ok) return;
-        await openSession(table.id, currentUser.id, 'PINA', 0, clientName, guestCount, clientId, false, seats);
+        setIsMutating(true);
+        try {
+            await openSession(table.id, currentUser.id, 'PINA', 0, clientName, guestCount, clientId, false, seats);
+        } catch (error) {
+            console.error(error);
+            showToast("Error al abrir mesa en modo Piña", "error");
+        } finally {
+            setIsMutating(false);
+        }
     };
 
     const handleStartConsumption = async (clientName = '', guestCount = 0, clientId = null, seats = []) => {
-        if (!currentUser) return;
+        if (!currentUser || isMutating) return;
         const ok = await confirm({ 
             title: `Ocupar ${table.name}`, 
             message: '¿Confirmar apertura de mesa?', 
@@ -245,7 +278,15 @@ export default function TableContextPanel({ tableId, onClose }) {
             variant: 'warning' 
         });
         if (!ok) return;
-        await openSession(table.id, currentUser.id, 'NORMAL', 0, clientName, guestCount, clientId, false, seats);
+        setIsMutating(true);
+        try {
+            await openSession(table.id, currentUser.id, 'NORMAL', 0, clientName, guestCount, clientId, false, seats);
+        } catch (error) {
+            console.error(error);
+            showToast("Error al ocupar mesa", "error");
+        } finally {
+            setIsMutating(false);
+        }
     };
 
     const handleRequestOpen = (mode, hours = 0) => {
@@ -281,8 +322,9 @@ export default function TableContextPanel({ tableId, onClose }) {
 
     const handleAttributeCharge = async (seatId, chargeOverride) => {
         const charge = chargeOverride || pendingCharge;
-        if (!charge || isProcessingCharge) return;
+        if (!charge || isProcessingCharge || isMutating) return;
         setIsProcessingCharge(true);
+        setIsMutating(true);
         try {
             if (charge.type === 'hora') {
                 await addHoursToSession(session.id, charge.hoursValue, seatId || null);
@@ -298,24 +340,43 @@ export default function TableContextPanel({ tableId, onClose }) {
             setShowAttributeModal(false);
             setPendingCharge(null);
             setIsProcessingCharge(false);
+            setIsMutating(false);
         }
     };
 
     const handleWizardFinish = async () => {
-        if (!pendingOpen) return;
-        const firstSeat = sessionSeats.length > 0 ? sessionSeats[0] : null;
-        const firstSeatClientId = firstSeat?.customerId || sessionClientId;
-        const name = firstSeat
-            ? (firstSeat.label || allCustomers.find(c => c.id === firstSeat.customerId)?.name || '')
-            : (sessionClientId ? (allCustomers.find(c => c.id === sessionClientId)?.name || sessionClientName.trim()) : sessionClientName.trim());
-        const guests = sessionSeats.length > 0 ? sessionSeats.length : (parseInt(sessionGuestCount) || 0);
-        const seats = sessionSeats.length > 0 ? sessionSeats : [];
-        const isMultiSeat = seats.length > 1;
-        const { mode } = pendingOpen;
+        if (!pendingOpen || isMutating) return;
+        setIsMutating(true);
+        try {
+            const firstSeat = sessionSeats.length > 0 ? sessionSeats[0] : null;
+            const firstSeatClientId = firstSeat?.customerId || sessionClientId;
+            const name = firstSeat
+                ? (firstSeat.label || allCustomers.find(c => c.id === firstSeat.customerId)?.name || '')
+                : (sessionClientId ? (allCustomers.find(c => c.id === sessionClientId)?.name || sessionClientName.trim()) : sessionClientName.trim());
+            const guests = sessionSeats.length > 0 ? sessionSeats.length : (parseInt(sessionGuestCount) || 0);
+            const seats = sessionSeats.length > 0 ? sessionSeats : [];
+            const isMultiSeat = seats.length > 1;
+            const { mode } = pendingOpen;
 
-        if (mode === 'SHOW_MODE') {
-            if (!modePina && !modeHora) return;
-            if (modePina && !modeHora) {
+            if (mode === 'SHOW_MODE') {
+                if (!modePina && !modeHora) return;
+                if (modePina && !modeHora) {
+                    await openSession(table.id, currentUser.id, 'PINA', 0, name, guests, firstSeatClientId, false, seats);
+                    if (isMultiSeat && initialChargeTarget !== undefined) {
+                        setTimeout(async () => {
+                            try {
+                                const { addRoundToSession } = useTablesStore.getState();
+                                const newSession = useTablesStore.getState().activeSessions.find(s => s.table_id === table.id);
+                                if (newSession) await addRoundToSession(newSession.id, initialChargeTarget);
+                            } catch (e) { console.error(e); }
+                        }, 500);
+                    }
+                } else if (!modePina && modeHora) {
+                    await openSession(table.id, currentUser.id, 'NORMAL', selectedHours, name, guests, firstSeatClientId, false, seats);
+                } else {
+                    await openSession(table.id, currentUser.id, 'NORMAL', selectedHours, name, guests, firstSeatClientId, true, seats);
+                }
+            } else if (mode === 'PINA') {
                 await openSession(table.id, currentUser.id, 'PINA', 0, name, guests, firstSeatClientId, false, seats);
                 if (isMultiSeat && initialChargeTarget !== undefined) {
                     setTimeout(async () => {
@@ -326,31 +387,21 @@ export default function TableContextPanel({ tableId, onClose }) {
                         } catch (e) { console.error(e); }
                     }, 500);
                 }
-            } else if (!modePina && modeHora) {
-                await openSession(table.id, currentUser.id, 'NORMAL', selectedHours, name, guests, firstSeatClientId, false, seats);
+            } else if (mode === 'CONSUMPTION') {
+                await openSession(table.id, currentUser.id, 'NORMAL', 0, name, guests, firstSeatClientId, false, seats);
             } else {
-                await openSession(table.id, currentUser.id, 'NORMAL', selectedHours, name, guests, firstSeatClientId, true, seats);
+                await openSession(table.id, currentUser.id, 'NORMAL', pendingOpen.hours, name, guests, firstSeatClientId, false, seats);
             }
-        } else if (mode === 'PINA') {
-            await openSession(table.id, currentUser.id, 'PINA', 0, name, guests, firstSeatClientId, false, seats);
-            if (isMultiSeat && initialChargeTarget !== undefined) {
-                setTimeout(async () => {
-                    try {
-                        const { addRoundToSession } = useTablesStore.getState();
-                        const newSession = useTablesStore.getState().activeSessions.find(s => s.table_id === table.id);
-                        if (newSession) await addRoundToSession(newSession.id, initialChargeTarget);
-                    } catch (e) { console.error(e); }
-                }, 500);
-            }
-        } else if (mode === 'CONSUMPTION') {
-            await openSession(table.id, currentUser.id, 'NORMAL', 0, name, guests, firstSeatClientId, false, seats);
-        } else {
-            await openSession(table.id, currentUser.id, 'NORMAL', pendingOpen.hours, name, guests, firstSeatClientId, false, seats);
-        }
 
-        setShowOpenModal(false);
-        setPendingOpen(null);
-        setWizardStep(1);
+            setShowOpenModal(false);
+            setPendingOpen(null);
+            setWizardStep(1);
+        } catch (error) {
+            console.error(error);
+            showToast("Error al abrir mesa", "error");
+        } finally {
+            setIsMutating(false);
+        }
     };
 
     const handleAdjustTime = () => {
@@ -358,14 +409,23 @@ export default function TableContextPanel({ tableId, onClose }) {
     };
 
     const submitAdjustTime = async () => {
-        const m = parseInt(adjustMins);
-        if (!isNaN(m) && m !== 0) {
-            const d = new Date(session.started_at);
-            d.setMinutes(d.getMinutes() + m); 
-            await updateSessionTime(session.id, d.toISOString());
+        if (isMutating) return;
+        setIsMutating(true);
+        try {
+            const m = parseInt(adjustMins);
+            if (!isNaN(m) && m !== 0) {
+                const d = new Date(session.started_at);
+                d.setMinutes(d.getMinutes() + m); 
+                await updateSessionTime(session.id, d.toISOString());
+            }
+            setShowAdjustModal(false);
+            setAdjustMins('');
+        } catch (error) {
+            console.error(error);
+            showToast("Error al ajustar tiempo", "error");
+        } finally {
+            setIsMutating(false);
         }
-        setShowAdjustModal(false);
-        setAdjustMins('');
     };
 
     const handlePrintPartial = async () => {
@@ -381,17 +441,26 @@ export default function TableContextPanel({ tableId, onClose }) {
         }
     };
 
-    const handleRequestCheckout = () => {
+    const handleRequestCheckout = async () => {
         if (!activeCashSession) {
             showToast('Abre la caja primero para poder cobrar', 'error');
             return;
         }
-        if (currentUser?.role === 'ADMIN' || currentUser?.role === 'CAJERO') {
-            setShowCashierPaymentModal(true);
-        } else {
-            requestCheckout(session.id);
-            notifyMesaCobrar(table.name, grandTotal);
-            showToast('Solicitud de cobro enviada a caja', 'success');
+        if (isMutating) return;
+        setIsMutating(true);
+        try {
+            if (currentUser?.role === 'ADMIN' || currentUser?.role === 'CAJERO') {
+                setShowCashierPaymentModal(true);
+            } else {
+                await requestCheckout(session.id);
+                notifyMesaCobrar(table.name, grandTotal);
+                showToast('Solicitud de cobro enviada a caja', 'success');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast("Error al solicitar cobro", "error");
+        } finally {
+            setIsMutating(false);
         }
     };
 
@@ -750,15 +819,23 @@ export default function TableContextPanel({ tableId, onClose }) {
                                 <div className="grid grid-cols-3 gap-2">
                                     {/* +30 Mins */}
                                     <button
-                                        disabled={isProcessingCharge}
+                                        disabled={isProcessingCharge || isMutating}
                                         onClick={async () => {
+                                            if (isProcessingCharge || isMutating) return;
                                             const seats = session?.seats || [];
                                             const activeSeats = seats.filter(s => !s.paid);
                                             if (activeSeats.length > 0) {
                                                 requestAttribution({ type: 'hora', hoursValue: 0.5 });
                                             } else {
-                                                await addHoursToSession(session.id, 0.5, null);
-                                                showToast('30 minutos agregados a la mesa', 'success');
+                                                setIsMutating(true);
+                                                try {
+                                                    await addHoursToSession(session.id, 0.5, null);
+                                                    showToast('30 minutos agregados a la mesa', 'success');
+                                                } catch (e) {
+                                                    showToast('Error al agregar minutos', 'error');
+                                                } finally {
+                                                    setIsMutating(false);
+                                                }
                                             }
                                         }}
                                         className="bg-emerald-50 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-350 font-black text-[11px] py-2 rounded-xl transition-all active:scale-95 disabled:opacity-50"
@@ -768,15 +845,23 @@ export default function TableContextPanel({ tableId, onClose }) {
 
                                     {/* +1 Hora */}
                                     <button
-                                        disabled={isProcessingCharge}
+                                        disabled={isProcessingCharge || isMutating}
                                         onClick={async () => {
+                                            if (isProcessingCharge || isMutating) return;
                                             const seats = session?.seats || [];
                                             const activeSeats = seats.filter(s => !s.paid);
                                             if (activeSeats.length > 0) {
                                                 requestAttribution({ type: 'hora', hoursValue: 1.0 });
                                             } else {
-                                                await addHoursToSession(session.id, 1.0, null);
-                                                showToast('1 hora agregada a la mesa', 'success');
+                                                setIsMutating(true);
+                                                try {
+                                                    await addHoursToSession(session.id, 1.0, null);
+                                                    showToast('1 hora agregada a la mesa', 'success');
+                                                } catch (e) {
+                                                    showToast('Error al agregar hora', 'error');
+                                                } finally {
+                                                    setIsMutating(false);
+                                                }
                                             }
                                         }}
                                         className="bg-teal-50 dark:bg-teal-950/20 hover:bg-teal-100 dark:hover:bg-teal-900/30 border border-teal-200 dark:border-teal-800/40 text-teal-700 dark:text-teal-350 font-black text-[11px] py-2 rounded-xl transition-all active:scale-95 disabled:opacity-50"
@@ -786,16 +871,24 @@ export default function TableContextPanel({ tableId, onClose }) {
 
                                     {/* +1 Piña */}
                                     <button
-                                        disabled={isProcessingCharge}
+                                        disabled={isProcessingCharge || isMutating}
                                         onClick={async () => {
+                                            if (isProcessingCharge || isMutating) return;
                                             const seats = session?.seats || [];
                                             const activeSeats = seats.filter(s => !s.paid);
                                             if (activeSeats.length > 0) {
                                                 requestAttribution({ type: 'pina' });
                                             } else {
-                                                const { addRoundToSession } = useTablesStore.getState();
-                                                await addRoundToSession(session.id);
-                                                showToast('1 Piña agregada a la mesa', 'success');
+                                                setIsMutating(true);
+                                                try {
+                                                    const { addRoundToSession } = useTablesStore.getState();
+                                                    await addRoundToSession(session.id);
+                                                    showToast('1 Piña agregada a la mesa', 'success');
+                                                } catch (e) {
+                                                    showToast('Error al agregar Piña', 'error');
+                                                } finally {
+                                                    setIsMutating(false);
+                                                }
                                             }
                                         }}
                                         className="bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 border border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-350 font-black text-[11px] py-2 rounded-xl transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-0.5"
@@ -816,15 +909,28 @@ export default function TableContextPanel({ tableId, onClose }) {
                                             ESPERANDO PAGO ($ {grandTotal.toFixed(2)})
                                         </div>
                                         <button
+                                            disabled={isMutating}
                                             onClick={() => setShowCashierPaymentModal(true)}
-                                            className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs py-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                            className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black text-xs py-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                                         >
                                             <CreditCard size={14} />
                                             Procesar Pago y Cierre
                                         </button>
                                         <button
-                                            onClick={() => cancelCheckoutRequest(session.id)}
-                                            className="w-full text-slate-450 hover:text-rose-500 text-[10.5px] font-bold py-1 transition-colors"
+                                            disabled={isMutating}
+                                            onClick={async () => {
+                                                if (isMutating) return;
+                                                setIsMutating(true);
+                                                try {
+                                                    await cancelCheckoutRequest(session.id);
+                                                    showToast('Mesa devuelta a salón', 'success');
+                                                } catch (e) {
+                                                    showToast('Error al devolver mesa', 'error');
+                                                } finally {
+                                                    setIsMutating(false);
+                                                }
+                                            }}
+                                            className="w-full text-slate-450 hover:text-rose-500 text-[10.5px] font-bold py-1 transition-colors disabled:opacity-50"
                                         >
                                             Devolver a salón (Retirar cola)
                                         </button>
@@ -836,8 +942,20 @@ export default function TableContextPanel({ tableId, onClose }) {
                                             MESA EN COLA DE CAJA (ESPERANDO)
                                         </div>
                                         <button
-                                            onClick={() => cancelCheckoutRequest(session.id)}
-                                            className="w-full text-slate-400 hover:text-rose-500 text-xs font-bold py-1 transition-colors"
+                                            disabled={isMutating}
+                                            onClick={async () => {
+                                                if (isMutating) return;
+                                                setIsMutating(true);
+                                                try {
+                                                    await cancelCheckoutRequest(session.id);
+                                                    showToast('Solicitud de cobro cancelada', 'success');
+                                                } catch (e) {
+                                                    showToast('Error al retirar cola', 'error');
+                                                } finally {
+                                                    setIsMutating(false);
+                                                }
+                                            }}
+                                            className="w-full text-slate-400 hover:text-rose-500 text-xs font-bold py-1 transition-colors disabled:opacity-50"
                                         >
                                             Retirar de la cola de caja
                                         </button>
@@ -848,8 +966,9 @@ export default function TableContextPanel({ tableId, onClose }) {
                             <div className="flex flex-col gap-2">
                                 <div className={`grid gap-2 ${grandTotal > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                                     <button
+                                        disabled={isMutating}
                                         onClick={() => setShowOrderPanel(true)}
-                                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                                     >
                                         <ShoppingBag size={14} fill="currentColor" />
                                         Comanda / Consumo
@@ -857,11 +976,12 @@ export default function TableContextPanel({ tableId, onClose }) {
 
                                     {grandTotal > 0 && (
                                         <button
+                                            disabled={isMutating}
                                             onClick={handleRequestCheckout}
-                                            className="bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                            className="bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                                         >
                                             <CreditCard size={14} />
-                                            Cerrar / Cobrar
+                                            {isMutating ? 'Procesando...' : 'Cerrar / Cobrar'}
                                         </button>
                                     )}
                                 </div>
@@ -870,8 +990,9 @@ export default function TableContextPanel({ tableId, onClose }) {
                                 {grandTotal === 0 && isPlaying && (
                                     !showReleaseConfirm ? (
                                         <button
+                                            disabled={isMutating}
                                             onClick={() => setShowReleaseConfirm(true)}
-                                            className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs py-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                            className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs py-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                                         >
                                             <Check size={14} strokeWidth={2.5} />
                                             Liberar y Limpiar Mesa
@@ -883,20 +1004,36 @@ export default function TableContextPanel({ tableId, onClose }) {
                                             </p>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <button
+                                                    disabled={isMutating}
                                                     onClick={() => setShowReleaseConfirm(false)}
-                                                    className="text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg py-2 transition-all"
+                                                    className="text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg py-2 transition-all disabled:opacity-50"
                                                 >
                                                     Cancelar
                                                 </button>
                                                 <button
+                                                    disabled={isMutating}
                                                     onClick={async () => {
+                                                        if (isMutating) return;
+                                                        if (grandTotal > 0.01) {
+                                                            showToast(`La mesa tiene un saldo pendiente de $${grandTotal.toFixed(2)}. Debe cobrarse primero.`, 'warning');
+                                                            setShowReleaseConfirm(false);
+                                                            return;
+                                                        }
+                                                        setIsMutating(true);
                                                         setShowReleaseConfirm(false);
-                                                        await closeSession(session.id, currentUser?.id || 'SYSTEM', 0);
-                                                        showToast(`${table.name} liberada con éxito`, 'success');
+                                                        try {
+                                                            await closeSession(session.id, currentUser?.id || 'SYSTEM', 0);
+                                                            showToast(`${table.name} liberada con éxito`, 'success');
+                                                        } catch (error) {
+                                                            console.error(error);
+                                                            showToast("Error al liberar mesa", "error");
+                                                        } finally {
+                                                            setIsMutating(false);
+                                                        }
                                                     }}
-                                                    className="text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-400 rounded-lg py-2 transition-all"
+                                                    className="text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-400 rounded-lg py-2 transition-all disabled:opacity-50 flex items-center justify-center"
                                                 >
-                                                    Confirmar
+                                                    {isMutating ? 'Procesando...' : 'Confirmar'}
                                                 </button>
                                             </div>
                                         </div>
@@ -906,8 +1043,9 @@ export default function TableContextPanel({ tableId, onClose }) {
                                 {/* Admin / Cajero: Anulación rápida de emergencia */}
                                 {(currentUser?.role === 'ADMIN' || currentUser?.role === 'CAJERO') && (
                                     <button
+                                        disabled={isMutating}
                                         onClick={() => setShowCancelModal(true)}
-                                        className="w-full text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/15 text-[10px] font-black py-1.5 rounded-lg border border-transparent hover:border-rose-200 transition-all flex items-center justify-center gap-1 mt-1"
+                                        className="w-full text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/15 text-[10px] font-black py-1.5 rounded-lg border border-transparent hover:border-rose-200 transition-all flex items-center justify-center gap-1 mt-1 disabled:opacity-50"
                                     >
                                         <Trash2 size={11} />
                                         Anular y cancelar sesión
@@ -938,7 +1076,7 @@ export default function TableContextPanel({ tableId, onClose }) {
                 isMixedMode={isMixedMode}
                 hasHoursActive={hasHoursActive}
                 hasLimit={hasLimit}
-                isProcessingCharge={isProcessingCharge}
+                isProcessingCharge={isProcessingCharge || isMutating}
                 
                 showCancelModal={showCancelModal}
                 setShowCancelModal={setShowCancelModal}
