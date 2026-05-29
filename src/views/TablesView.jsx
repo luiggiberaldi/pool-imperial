@@ -3,7 +3,8 @@ import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useAuthStore } from '../hooks/store/authStore';
 import TableCard from '../components/tables/TableCard';
 import FloorPlanView from '../components/tables/FloorPlanView';
-import { Layers, PauseCircle, PlayCircle, LayoutGrid, Map } from 'lucide-react';
+import TableContextPanel from '../components/tables/TableContextPanel';
+import { Layers, PauseCircle, PlayCircle, LayoutGrid, Map, X } from 'lucide-react';
 import { calculateElapsedTime } from '../utils/tableBillingEngine';
 import { showToast } from '../components/Toast';
 
@@ -111,16 +112,9 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
         }
     }, [isActive, syncTablesAndSessions]);
 
-    // Handle floor plan table selection → scroll to / highlight grid card
+    // Handle floor plan table selection
     const handleFloorTableSelect = useCallback((table, session) => {
         setSelectedTableId(table.id);
-        // Switch to grid view so the user can interact with the TableCard
-        setViewMode('grid');
-        // Small timeout to let the DOM switch, then scroll into view
-        setTimeout(() => {
-            const el = document.getElementById(`table-card-${table.id}`);
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 150);
     }, []);
 
     const filteredTables = useMemo(() => {
@@ -233,27 +227,103 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
             </div>
 
             {/* ── CONTENT ── */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="flex-1 overflow-hidden flex flex-row relative h-full">
+                <style dangerouslySetInnerHTML={{__html: `
+                    @keyframes slideUp {
+                        from {
+                            transform: translateY(100%);
+                        }
+                        to {
+                            transform: translateY(0);
+                        }
+                    }
+                `}} />
                 {viewMode === 'floor' ? (
-                    /* ── FLOOR PLAN VIEW ── */
-                    <FloorPlanView onTableSelect={handleFloorTableSelect} />
+                    /* ── FLOOR PLAN VIEW WITH CONTEXT PANEL ── */
+                    <div className="flex-1 flex flex-row overflow-hidden w-full relative">
+                        {/* El plano a la izquierda */}
+                        <div className="flex-1 overflow-auto h-full min-w-0">
+                            <FloorPlanView 
+                                onTableSelect={handleFloorTableSelect} 
+                                selectedTableId={selectedTableId}
+                            />
+                        </div>
+
+                        {/* Panel lateral en Desktop (fijo / w-96) */}
+                        {selectedTableId && (() => {
+                            const table = tables.find(t => t.id === selectedTableId);
+                            const session = activeSessions.find(s => s.table_id === selectedTableId);
+                            if (!table) return null;
+                            return (
+                                <>
+                                    <div className="hidden lg:flex w-96 border-l border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950 flex-col h-full overflow-y-auto">
+                                        <div className="sticky top-0 z-10 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-md px-4 py-3 border-b border-slate-200 dark:border-white/5 flex items-center justify-between">
+                                            <h3 className="font-bold text-xs text-slate-500 uppercase tracking-wider">
+                                                Control de Mesa
+                                            </h3>
+                                            <button 
+                                                onClick={() => setSelectedTableId(null)}
+                                                className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 transition-colors"
+                                            >
+                                                <X size={18} />
+                                            </button>
+                                        </div>
+                                        <div className="p-4 flex-1">
+                                            <TableContextPanel tableId={selectedTableId} onClose={() => setSelectedTableId(null)} />
+                                        </div>
+                                    </div>
+
+                                    {/* Drawer responsivo para móvil (bottom sheet) */}
+                                    <div 
+                                        className="lg:hidden fixed inset-0 bg-black/40 dark:bg-black/60 z-40 transition-opacity"
+                                        onClick={() => setSelectedTableId(null)}
+                                    />
+                                    <div 
+                                        className="lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl z-50 overflow-y-auto flex flex-col shadow-2xl"
+                                        style={{
+                                            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                                        }}
+                                    >
+                                        {/* Barra de arrastre visual del Drawer */}
+                                        <div className="w-full flex justify-center py-2 shrink-0">
+                                            <div className="w-12 h-1 bg-slate-300 dark:bg-slate-700 rounded-full" />
+                                        </div>
+                                        <div className="px-4 pb-3 flex items-center justify-between shrink-0">
+                                            <h3 className="font-extrabold text-slate-800 dark:text-white text-base">
+                                                Operación de Mesa
+                                            </h3>
+                                            <button 
+                                                onClick={() => setSelectedTableId(null)}
+                                                className="p-1.5 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400"
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                        <div className="p-4 pt-0 overflow-y-auto flex-1">
+                                            <TableContextPanel tableId={selectedTableId} onClose={() => setSelectedTableId(null)} />
+                                        </div>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
                 ) : (
                     /* ── GRID VIEW ── */
-                    <div className="p-4 sm:p-6">
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 h-full w-full">
                         {tables.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+                            <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 w-full">
                                 <Layers size={48} className="text-slate-300 dark:text-slate-700 mb-4" />
                                 <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300">No hay mesas configuradas</h3>
                                 <p className="text-slate-500 mt-2 text-sm max-w-sm">Contacte al administrador para registrar las mesas del negocio en la base de datos.</p>
                             </div>
                         ) : filteredTables.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
+                            <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 w-full">
                                 <Layers size={40} className="text-slate-300 dark:text-slate-700 mb-3" />
                                 <h3 className="text-base font-bold text-slate-600 dark:text-slate-400">Sin resultados</h3>
                                 <p className="text-slate-400 mt-1 text-sm">Prueba cambiando los filtros.</p>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6 w-full">
                                 {filteredTables.map(table => {
                                     const session = activeSessions.find(s => s.table_id === table.id);
                                     return (

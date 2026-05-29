@@ -82,7 +82,7 @@ function StatusDot({ status }) {
  * PoolTableEl — Mesa de billar.
  * Render: fieltro verde plano, riel de madera sólida mate y borde de destaque según estado.
  */
-function PoolTableEl({ item, session, onClick }) {
+function PoolTableEl({ item, session, onClick, isSelected }) {
     const st = statusOf(session);
     const isPortrait = item.h > item.w;
 
@@ -113,6 +113,9 @@ function PoolTableEl({ item, session, onClick }) {
                 background: railColor,
                 border: borderStyle,
                 borderRadius: '6px',
+                outline: isSelected ? '3px solid #f97316' : undefined,
+                outlineOffset: '2px',
+                zIndex: isSelected ? 30 : undefined,
             }}
             className="group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center"
             title={item.label}
@@ -169,7 +172,7 @@ function PoolTableEl({ item, session, onClick }) {
  * DiningTableEl — Mesa comedor/social (M1, M2, M3).
  * Render top-view: 4 sillas simplificadas en los costados + superficie de mesa plana.
  */
-function DiningTableEl({ item, session, onClick }) {
+function DiningTableEl({ item, session, onClick, isSelected }) {
     const st = statusOf(session);
 
     const colors = {
@@ -192,6 +195,9 @@ function DiningTableEl({ item, session, onClick }) {
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
+                outline: isSelected ? '3px solid #f97316' : undefined,
+                outlineOffset: '2px',
+                zIndex: isSelected ? 30 : undefined,
             }}
             className="group transition-all duration-150 active:scale-[0.98] cursor-pointer"
             title={item.label}
@@ -241,7 +247,7 @@ function DiningTableEl({ item, session, onClick }) {
  * RoundStoolEl — Taburete alto redondo (M4-M11).
  * Render: círculo plano sin gradientes con etiqueta. Enforce aspect-ratio to keep it a perfect circle.
  */
-function RoundStoolEl({ item, session, onClick }) {
+function RoundStoolEl({ item, session, onClick, isSelected }) {
     const st = statusOf(session);
 
     const style = {
@@ -257,6 +263,9 @@ function RoundStoolEl({ item, session, onClick }) {
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
+                outline: isSelected ? '3px solid #f97316' : undefined,
+                outlineOffset: '2px',
+                zIndex: isSelected ? 30 : undefined,
             }}
             className="group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer"
             title={item.label}
@@ -289,7 +298,7 @@ function RoundStoolEl({ item, session, onClick }) {
  * BarStoolEl — Taburete de barra (B1-B15).
  * Render: círculo compacto plano con etiqueta. Enforce aspect-ratio to keep it a perfect circle.
  */
-function BarStoolEl({ item, session, onClick }) {
+function BarStoolEl({ item, session, onClick, isSelected }) {
     const st = statusOf(session);
 
     const style = {
@@ -305,6 +314,9 @@ function BarStoolEl({ item, session, onClick }) {
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
+                outline: isSelected ? '3px solid #f97316' : undefined,
+                outlineOffset: '2px',
+                zIndex: isSelected ? 30 : undefined,
             }}
             className="group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer"
             title={item.label}
@@ -424,15 +436,14 @@ function LogoEl({ item }) {
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
-                background: '#f8fafc',
-                border: '1.5px solid #cbd5e1',
-                borderRadius: '6px',
             }}
-            className="flex items-center justify-center select-none shadow-sm"
+            className="flex items-center justify-center select-none pointer-events-none"
         >
-            <span className="font-extrabold uppercase text-[#475569] text-[8.5px] sm:text-[9.5px] tracking-widest text-center px-1">
-                POOL IMPERIAL
-            </span>
+            <img 
+                src="/logo.png" 
+                alt="Pool Imperial" 
+                className="h-full object-contain select-none pointer-events-none"
+            />
         </div>
     );
 }
@@ -471,7 +482,7 @@ function Legend() {
 // MAIN: FloorPlanView
 // ═══════════════════════════════════════════════════════
 
-export default function FloorPlanView({ onTableSelect }) {
+export default function FloorPlanView({ onTableSelect, selectedTableId }) {
     const { tables, activeSessions } = useTablesStore();
 
     // Resuelve cada FloorItem con su mesa y sesión correspondientes
@@ -506,17 +517,18 @@ export default function FloorPlanView({ onTableSelect }) {
     const renderItem = ({ item, table, session }) => {
         const key   = item.id;
         const click = { onClick: () => handleClick(table, session) };
+        const isSelected = table && selectedTableId === table.id;
 
         switch (item.type) {
             case 'pool_table':
-                return <PoolTableEl   key={key} item={item} session={session} {...click} />;
+                return <PoolTableEl   key={key} item={item} session={session} isSelected={isSelected} {...click} />;
             case 'dining_table':
-                return <DiningTableEl key={key} item={item} session={session} {...click} />;
+                return <DiningTableEl key={key} item={item} session={session} isSelected={isSelected} {...click} />;
             case 'round_stool':
             case 'bar_table':   // compat retroactiva con tipo anterior
-                return <RoundStoolEl  key={key} item={item} session={session} {...click} />;
+                return <RoundStoolEl  key={key} item={item} session={session} isSelected={isSelected} {...click} />;
             case 'bar_stool':
-                return <BarStoolEl    key={key} item={item} session={session} {...click} />;
+                return <BarStoolEl    key={key} item={item} session={session} isSelected={isSelected} {...click} />;
             case 'bar_counter':
                 return <BarCounterEl  key={key} item={item} />;
             case 'entry':
@@ -558,19 +570,29 @@ export default function FloorPlanView({ onTableSelect }) {
                 </div>
             </div>
 
-            {/* ── Canvas del plano ── */}
-            <div className="flex-1 overflow-auto p-3 sm:p-4 flex items-center justify-center bg-[#f4f3f0]">
-                <div
-                    className="relative w-full rounded-xl overflow-hidden shadow-sm"
-                    style={{
-                        aspectRatio: '16/9',
-                        maxHeight: 'calc(100vh - 210px)',
-                        background: '#faf9f6',
-                        borderWidth: '2px',
-                        borderStyle: 'solid',
-                        borderColor: '#cbd5e1',
-                    }}
-                >
+            {/* ── Canvas del plano (Fase 2C: Responsividad Universal) ── */}
+            <div className="flex-1 overflow-auto p-3 sm:p-4 flex items-start lg:items-center justify-start lg:justify-center bg-[#f4f3f0] w-full">
+                <style dangerouslySetInnerHTML={{__html: `
+                    .floor-plan-canvas {
+                        width: 100%;
+                        min-width: 1000px;
+                        aspect-ratio: 16/9;
+                        position: relative;
+                        background: #faf9f6;
+                        border: 2px solid #cbd5e1;
+                        border-radius: 0.75rem;
+                        overflow: hidden;
+                        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+                        flex-shrink: 0;
+                    }
+                    @media (min-width: 1024px) {
+                        .floor-plan-canvas {
+                            min-width: 0px;
+                            max-height: calc(100vh - 210px);
+                        }
+                    }
+                `}} />
+                <div className="floor-plan-canvas">
                     {/* Cuadrícula sutil */}
                     <div
                         className="absolute inset-0 opacity-[0.03]"
