@@ -63,13 +63,13 @@ function LiveTimer({ startedAt, className = '' }) {
     return <span className={className}>{fmtTimer(elapsed)}</span>;
 }
 
-/** Punto pulsante de estado en la esquina superior derecha del elemento. */
+/** Punto de estado plano y discreto. */
 function StatusDot({ status }) {
     if (status === 'free') return null;
     return (
         <span
-            className={`absolute top-[6%] right-[6%] w-2 h-2 rounded-full z-20
-                ${status === 'checkout' ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`}
+            className={`absolute top-[8%] right-[8%] w-2.5 h-2.5 rounded-full z-20 border border-white
+                ${status === 'checkout' ? 'bg-amber-500' : 'bg-emerald-500'}`}
         />
     );
 }
@@ -80,43 +80,28 @@ function StatusDot({ status }) {
 
 /**
  * PoolTableEl — Mesa de billar.
- * Render: riel de madera > fieltro > líneas de textura > bolsillos > etiqueta + estado.
- * Los bolsillos se adaptan según orientación (portrait vs landscape).
+ * Render: fieltro verde plano, riel de madera sólida mate y borde de destaque según estado.
  */
 function PoolTableEl({ item, session, onClick }) {
     const st = statusOf(session);
     const isPortrait = item.h > item.w;
 
-    // Colores del fieltro según estado
-    const feltGradient = st === 'free'
-        ? 'linear-gradient(160deg, #1a5c33 0%, #0e3b20 100%)'
+    // Colores planos de fieltro según estado
+    const feltBg = st === 'free'
+        ? '#2d6a4f' // Verde plano libre
         : st === 'checkout'
-            ? 'linear-gradient(160deg, #92400e 0%, #78350f 100%)'
-            : 'linear-gradient(160deg, #15803d 0%, #166534 100%)';
+            ? '#d97706' // Ámbar/Naranja cobro
+            : '#1a7a4a'; // Verde ocupado plano
 
-    // Sombra exterior según estado
-    const shadow = st === 'occupied'
-        ? '0 0 18px rgba(34,197,94,0.28), 0 4px 12px rgba(0,0,0,0.5)'
+    const railColor = '#5c4d43'; // Riel marrón mate
+    
+    // Si está ocupada o por cobrar, añadimos un borde de destaque claro
+    const isOccupied = st === 'occupied';
+    const borderStyle = isOccupied 
+        ? '3.5px solid #3b82f6' 
         : st === 'checkout'
-            ? '0 0 18px rgba(245,158,11,0.4), 0 4px 12px rgba(0,0,0,0.5)'
-            : '0 4px 12px rgba(0,0,0,0.5)';
-
-    // Posiciones de los 6 bolsillos: 4 esquinas + 2 centrales (en el lado largo)
-    const pocketBase = {
-        position: 'absolute',
-        width: 8, height: 8,
-        borderRadius: '50%',
-        background: '#050505',
-        border: '1.5px solid #3d2210',
-        zIndex: 15,
-    };
-    const cornerPockets = [
-        { top: -4, left: -4 }, { top: -4, right: -4 },
-        { bottom: -4, left: -4 }, { bottom: -4, right: -4 },
-    ];
-    const midPockets = isPortrait
-        ? [{ top: 'calc(50% - 4px)', left: -4 }, { top: 'calc(50% - 4px)', right: -4 }]
-        : [{ left: 'calc(50% - 4px)', top: -4 }, { left: 'calc(50% - 4px)', bottom: -4 }];
+            ? '3.5px dashed #f59e0b'
+            : '2.5px solid #4b5563'; // Borde plano gris
 
     return (
         <button
@@ -125,34 +110,24 @@ function PoolTableEl({ item, session, onClick }) {
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
-                boxShadow: shadow,
+                background: railColor,
+                border: borderStyle,
+                borderRadius: '6px',
             }}
-            className="group transition-all duration-200 active:scale-95 cursor-pointer rounded-xl overflow-visible"
+            className="group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center"
             title={item.label}
         >
-            {/* Riel de madera (capa exterior) */}
+            {/* Superficie interna de fieltro plano */}
             <div
-                className="absolute inset-0 rounded-xl"
-                style={{ background: 'linear-gradient(145deg, #7c4519 0%, #4a2610 50%, #5c321a 100%)' }}
-            />
-
-            {/* Superficie de fieltro (inset del riel) */}
-            <div
-                className="absolute rounded-lg overflow-hidden flex flex-col items-center justify-center"
-                style={{ inset: '9%', background: feltGradient }}
+                className="w-[86%] h-[86%] flex flex-col items-center justify-center relative rounded-[3px]"
+                style={{ background: feltBg }}
             >
-                {/* Textura de tela del fieltro */}
+                {/* Línea central técnica del campo */}
                 <div
-                    className="absolute inset-0 opacity-[0.06]"
-                    style={{ backgroundImage: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 5px)' }}
-                />
-
-                {/* Línea central del campo */}
-                <div
-                    className="absolute opacity-10 bg-white/20"
+                    className="absolute opacity-10 bg-white"
                     style={isPortrait
-                        ? { top: '50%', left: '10%', right: '10%', height: 1, transform: 'translateY(-50%)' }
-                        : { left: '50%', top: '10%', bottom: '10%', width: 1, transform: 'translateX(-50%)' }
+                        ? { top: '50%', left: '5%', right: '5%', height: '1px' }
+                        : { left: '50%', top: '5%', bottom: '5%', width: '1px' }
                     }
                 />
 
@@ -161,66 +136,53 @@ function PoolTableEl({ item, session, onClick }) {
                     className="relative z-10 flex flex-col items-center gap-0.5 px-1 text-center"
                     style={{ writingMode: isPortrait && item.h > 28 ? 'vertical-rl' : 'horizontal-tb' }}
                 >
-                    <span className="font-black text-white/90 leading-none text-[9px] sm:text-[11px] tracking-wide">
+                    <span className="font-bold text-white leading-none text-[10px] sm:text-[11px] tracking-wide">
                         {item.label}
                     </span>
                     {st === 'occupied' && session?.started_at && (
                         <LiveTimer
                             startedAt={session.started_at}
-                            className="font-mono font-bold text-white/70 text-[8px] sm:text-[10px]"
+                            className="font-mono font-bold text-white/95 text-[8px] sm:text-[10px]"
                         />
                     )}
                     {st === 'occupied' && session?.client_name && (
-                        <span className="text-white/50 text-[7px] truncate max-w-full">{session.client_name}</span>
+                        <span className="text-white/90 text-[7.5px] truncate max-w-full font-medium">{session.client_name}</span>
                     )}
                     {st === 'checkout' && (
-                        <span className="font-black text-amber-200 text-[7px] sm:text-[8px] uppercase tracking-widest animate-pulse">
+                        <span className="font-extrabold text-white text-[7.5px] sm:text-[8px] uppercase tracking-wider">
                             COBRAR
                         </span>
                     )}
                     {st === 'free' && (
-                        <span className="text-white/20 text-[7px] uppercase tracking-wider font-semibold">libre</span>
+                        <span className="text-white/35 text-[7px] uppercase tracking-wider font-semibold">libre</span>
                     )}
                 </div>
             </div>
 
-            {/* Bolsillos */}
-            {[...cornerPockets, ...midPockets].map((pos, i) => (
-                <div key={i} style={{ ...pocketBase, ...pos }} />
-            ))}
-
-            {/* Punto de estado */}
+            {/* Punto de estado discreto */}
             <StatusDot status={st} />
-
-            {/* Hover glow sutil cuando libre */}
-            {st === 'free' && (
-                <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                    style={{ background: 'linear-gradient(145deg, rgba(34,197,94,0.06), transparent)' }} />
-            )}
         </button>
     );
 }
 
 /**
  * DiningTableEl — Mesa comedor/social (M1, M2, M3).
- * Render top-view: 4 sillas como rectángulos redondeados en N/S/E/W + superficie central.
+ * Render top-view: 4 sillas simplificadas en los costados + superficie de mesa plana.
  */
 function DiningTableEl({ item, session, onClick }) {
     const st = statusOf(session);
 
     const colors = {
-        free:     { table: '#3d2b1a', chair: '#2a1e12', border: '#6b4226', glow: 'transparent' },
-        occupied: { table: '#4c1d95', chair: '#3b0764', border: '#8b5cf6', glow: 'rgba(139,92,246,0.25)' },
-        checkout: { table: '#92400e', chair: '#78350f', border: '#f59e0b', glow: 'rgba(245,158,11,0.3)' },
+        free:     { table: '#e2e8f0', chair: '#cbd5e1', border: '#94a3b8', text: '#475569' },
+        occupied: { table: '#dbeafe', chair: '#93c5fd', border: '#3b82f6', text: '#1e40af' },
+        checkout: { table: '#fef3c7', chair: '#fde68a', border: '#f59e0b', text: '#78350f' },
     }[st];
 
-    // Posición y dimensiones de las 4 sillas (en % del elemento)
-    // Sillas N y S: horizontales (anchas), sillas E y W: verticales (altas)
     const chairs = [
-        { key: 'n', style: { top: 0, left: '30%', width: '40%', height: '14%', borderRadius: '4px 4px 2px 2px' } },
-        { key: 's', style: { bottom: 0, left: '30%', width: '40%', height: '14%', borderRadius: '2px 2px 4px 4px' } },
-        { key: 'w', style: { left: 0, top: '22%', width: '12%', height: '40%', borderRadius: '4px 2px 2px 4px' } },
-        { key: 'e', style: { right: 0, top: '22%', width: '12%', height: '40%', borderRadius: '2px 4px 4px 2px' } },
+        { key: 'n', style: { top: 0, left: '25%', width: '50%', height: '14%', borderRadius: '2px' } },
+        { key: 's', style: { bottom: 0, left: '25%', width: '50%', height: '14%', borderRadius: '2px' } },
+        { key: 'w', style: { left: 0, top: '25%', width: '14%', height: '50%', borderRadius: '2px' } },
+        { key: 'e', style: { right: 0, top: '25%', width: '14%', height: '50%', borderRadius: '2px' } },
     ];
 
     return (
@@ -231,7 +193,7 @@ function DiningTableEl({ item, session, onClick }) {
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
             }}
-            className="group transition-all duration-200 active:scale-95 cursor-pointer"
+            className="group transition-all duration-150 active:scale-[0.98] cursor-pointer"
             title={item.label}
         >
             {/* Sillas */}
@@ -242,62 +204,50 @@ function DiningTableEl({ item, session, onClick }) {
                     style={{
                         ...style,
                         background: colors.chair,
-                        border: `1px solid ${colors.border}50`,
-                        transition: 'background 0.2s',
+                        border: `1px solid ${colors.border}`,
                     }}
                 />
             ))}
 
             {/* Superficie de la mesa */}
             <div
-                className="absolute flex flex-col items-center justify-center"
+                className="absolute flex flex-col items-center justify-center rounded"
                 style={{
                     inset: '16%',
                     background: colors.table,
-                    borderRadius: 6,
-                    border: `1.5px solid ${colors.border}`,
-                    boxShadow: `0 0 12px ${colors.glow}, 0 2px 6px rgba(0,0,0,0.4)`,
-                    transition: 'all 0.2s',
+                    border: `2px solid ${colors.border}`,
                 }}
             >
-                <span className="font-black text-white/80 text-[8px] sm:text-[10px] leading-none text-center">
+                <span className="font-bold text-[9px] sm:text-[10px] leading-none text-center" style={{ color: colors.text }}>
                     {item.label}
                 </span>
                 {st === 'occupied' && session?.client_name && (
-                    <span className="text-white/45 text-[6px] truncate max-w-full px-0.5 mt-0.5">
+                    <span className="text-[7px] truncate max-w-full px-0.5 mt-0.5 font-medium" style={{ color: colors.text }}>
                         {session.client_name}
                     </span>
                 )}
                 {st === 'checkout' && (
-                    <span className="text-amber-200 text-[6px] font-black uppercase animate-pulse mt-0.5">COBRAR</span>
+                    <span className="text-[7.5px] font-extrabold uppercase mt-0.5" style={{ color: colors.text }}>COBRAR</span>
                 )}
             </div>
 
             {/* Punto de estado */}
             <StatusDot status={st} />
-
-            {/* Hover ring (libre) */}
-            {st === 'free' && (
-                <div
-                    className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg pointer-events-none"
-                    style={{ inset: '14%', border: `1px solid ${colors.border}60` }}
-                />
-            )}
         </button>
     );
 }
 
 /**
  * RoundStoolEl — Taburete alto redondo (M4-M11).
- * Render: círculo grande con inner ring decorativo.
+ * Render: círculo plano sin gradientes con etiqueta. Enforce aspect-ratio to keep it a perfect circle.
  */
 function RoundStoolEl({ item, session, onClick }) {
     const st = statusOf(session);
 
     const style = {
-        free:     { outer: '#334155', inner: '#1e293b', border: '#475569', shadow: 'none', text: '#94a3b8' },
-        occupied: { outer: '#5b21b6', inner: '#4c1d95', border: '#8b5cf6', shadow: '0 0 10px rgba(139,92,246,0.35)', text: '#e9d5ff' },
-        checkout: { outer: '#b45309', inner: '#92400e', border: '#f59e0b', shadow: '0 0 10px rgba(245,158,11,0.4)', text: '#fde68a' },
+        free:     { bg: '#8b9aaa', border: '#475569', text: '#ffffff' },
+        occupied: { bg: '#3b82f6', border: '#1d4ed8', text: '#ffffff' },
+        checkout: { bg: '#f59e0b', border: '#b45309', text: '#ffffff' },
     }[st];
 
     return (
@@ -308,34 +258,27 @@ function RoundStoolEl({ item, session, onClick }) {
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
             }}
-            className="group flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer"
+            className="group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer"
             title={item.label}
         >
-            {/* Outer circle */}
             <div
-                className="relative w-full h-full rounded-full flex items-center justify-center"
+                className="rounded-full flex items-center justify-center border-2 font-bold shadow-sm relative"
                 style={{
-                    background: `radial-gradient(circle at 35% 35%, ${style.outer}, ${style.inner})`,
-                    border: `1.5px solid ${style.border}`,
-                    boxShadow: style.shadow,
+                    height: '100%',
+                    aspectRatio: '1/1',
+                    background: style.bg,
+                    borderColor: style.border,
+                    color: style.text,
                 }}
             >
-                {/* Inner ring decorativo */}
-                <div
-                    className="absolute rounded-full"
-                    style={{ inset: '18%', border: `1px solid ${style.border}40` }}
-                />
-                {/* Label */}
                 <span
-                    className="relative z-10 font-black leading-none text-center"
+                    className="leading-none text-center"
                     style={{
-                        color: style.text,
-                        fontSize: item.label.length > 2 ? '7px' : '8px',
+                        fontSize: item.label.length > 2 ? '7.5px' : '9px',
                     }}
                 >
                     {item.label}
                 </span>
-                {/* Estado */}
                 <StatusDot status={st} />
             </div>
         </button>
@@ -344,10 +287,16 @@ function RoundStoolEl({ item, session, onClick }) {
 
 /**
  * BarStoolEl — Taburete de barra (B1-B15).
- * Render: círculo compacto con label. Identidad diferenciada de RoundStoolEl.
+ * Render: círculo compacto plano con etiqueta. Enforce aspect-ratio to keep it a perfect circle.
  */
 function BarStoolEl({ item, session, onClick }) {
     const st = statusOf(session);
+
+    const style = {
+        free:     { bg: '#8b9aaa', border: '#475569', text: '#ffffff' },
+        occupied: { bg: '#3b82f6', border: '#1d4ed8', text: '#ffffff' },
+        checkout: { bg: '#f59e0b', border: '#b45309', text: '#ffffff' },
+    }[st];
 
     return (
         <button
@@ -357,31 +306,23 @@ function BarStoolEl({ item, session, onClick }) {
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
             }}
-            className="group flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer"
+            className="group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer"
             title={item.label}
         >
             <div
-                className={`relative w-full h-full rounded-full flex items-center justify-center transition-all duration-200
-                    ${st === 'free'
-                        ? 'group-hover:scale-110'
-                        : ''
-                    }`}
+                className="rounded-full flex items-center justify-center border font-bold relative"
                 style={{
-                    background: st === 'free'
-                        ? 'radial-gradient(circle at 35% 35%, #475569, #1e293b)'
-                        : st === 'checkout'
-                            ? 'radial-gradient(circle at 35% 35%, #d97706, #92400e)'
-                            : 'radial-gradient(circle at 35% 35%, #0369a1, #0c4a6e)',
-                    border: st === 'free' ? '1px solid #475569' : st === 'checkout' ? '1.5px solid #f59e0b' : '1.5px solid #38bdf8',
-                    boxShadow: st === 'occupied' ? '0 0 6px rgba(56,189,248,0.3)'
-                        : st === 'checkout' ? '0 0 8px rgba(245,158,11,0.35)' : 'none',
+                    height: '85%',
+                    aspectRatio: '1/1',
+                    background: style.bg,
+                    borderColor: style.border,
+                    color: style.text,
                 }}
             >
                 <span
-                    className="font-black text-center leading-none"
+                    className="leading-none text-center"
                     style={{
-                        color: st === 'free' ? '#64748b' : '#e0f2fe',
-                        fontSize: item.label.length > 2 ? '6px' : '7px',
+                        fontSize: item.label.length > 2 ? '6px' : '7.5px',
                     }}
                 >
                     {item.label}
@@ -394,7 +335,7 @@ function BarStoolEl({ item, session, onClick }) {
 
 /**
  * BarCounterEl — Mostrador de barra (Barra 1 y Barra 2).
- * Render: superficie de madera oscura con veta y etiqueta rotada si es vertical.
+ * Render: bloque plano y sólido sin gradientes ni vetas.
  */
 function BarCounterEl({ item }) {
     const isVertical = item.h > item.w * 1.5;
@@ -405,45 +346,24 @@ function BarCounterEl({ item }) {
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
+                background: '#475569',
+                border: '2px solid #334155',
+                borderRadius: '4px',
             }}
-            className="rounded-lg overflow-hidden"
+            className="overflow-hidden flex items-center justify-center"
         >
-            {/* Base de madera */}
-            <div
-                className="absolute inset-0"
-                style={{ background: 'linear-gradient(135deg, #6b3a1f 0%, #4a2710 35%, #5c3218 65%, #3d2010 100%)' }}
-            />
-
-            {/* Borde de encimera (canto brillante) */}
-            <div className="absolute inset-0 rounded-lg"
-                style={{ border: '1px solid rgba(200,130,60,0.25)', boxShadow: 'inset 0 1px 0 rgba(255,200,100,0.12)' }}
-            />
-
-            {/* Vetas de madera */}
-            <div
-                className="absolute inset-0 opacity-15"
-                style={{
-                    backgroundImage: isVertical
-                        ? 'repeating-linear-gradient(0deg, transparent, transparent 10px, rgba(255,180,80,0.25) 10px, rgba(255,180,80,0.25) 11px)'
-                        : 'repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(255,180,80,0.25) 10px, rgba(255,180,80,0.25) 11px)',
-                }}
-            />
-
             {/* Etiqueta */}
             {item.label && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <span
-                        className="font-black uppercase tracking-widest select-none text-[8px] sm:text-[9px]"
-                        style={{
-                            color: 'rgba(255,185,100,0.45)',
-                            writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
-                            textOrientation: 'mixed',
-                            transform: isVertical ? 'rotate(180deg)' : undefined,
-                        }}
-                    >
-                        {item.label}
-                    </span>
-                </div>
+                <span
+                    className="font-bold uppercase tracking-wider select-none text-[8.5px] sm:text-[9.5px] text-white/50"
+                    style={{
+                        writingMode: isVertical ? 'vertical-rl' : 'horizontal-tb',
+                        textOrientation: 'mixed',
+                        transform: isVertical ? 'rotate(180deg)' : undefined,
+                    }}
+                >
+                    {item.label}
+                </span>
             )}
         </div>
     );
@@ -451,7 +371,7 @@ function BarCounterEl({ item }) {
 
 /**
  * EntryEl — Marcador de entrada al local.
- * Render: área translúcida con flecha y etiqueta "Entrada".
+ * Render: bloque limpio y técnico de entrada.
  */
 function EntryEl({ item }) {
     return (
@@ -464,32 +384,28 @@ function EntryEl({ item }) {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 4,
-                borderRadius: '0 10px 10px 0',
-                background: 'rgba(14,165,233,0.06)',
-                borderTop: '1px solid rgba(14,165,233,0.2)',
-                borderRight: '1px solid rgba(14,165,233,0.2)',
-                borderBottom: '1px solid rgba(14,165,233,0.2)',
+                gap: 2,
+                borderRadius: '0 4px 4px 0',
+                background: '#cbd5e1',
+                border: '1.5px solid #94a3b8',
+                borderLeft: 'none',
             }}
         >
             {/* Flecha de entrada */}
             <div className="flex items-center gap-0.5">
-                <div style={{ width: 8, height: 1.5, background: 'rgba(56,189,248,0.5)', borderRadius: 1 }} />
+                <div style={{ width: 6, height: 1.5, background: '#475569', borderRadius: 1 }} />
                 <div style={{
                     width: 0, height: 0,
                     borderTop: '3px solid transparent',
                     borderBottom: '3px solid transparent',
-                    borderLeft: '4px solid rgba(56,189,248,0.5)',
+                    borderLeft: '4px solid #475569',
                 }} />
             </div>
             {/* Texto vertical */}
             <span
-                className="font-bold uppercase select-none"
+                className="font-bold uppercase select-none text-[7.5px] text-[#475569] tracking-wider"
                 style={{
-                    fontSize: '6px',
-                    color: 'rgba(56,189,248,0.4)',
                     writingMode: 'vertical-rl',
-                    letterSpacing: '0.08em',
                 }}
             >
                 Entrada
@@ -499,8 +415,7 @@ function EntryEl({ item }) {
 }
 
 /**
- * LogoEl — Área de identidad/branding central.
- * Render: rectángulo sutil con ornamento decorativo y nombre del local.
+ * LogoEl — Área de marca central simplificada.
  */
 function LogoEl({ item }) {
     return (
@@ -509,73 +424,25 @@ function LogoEl({ item }) {
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
                 width: `${item.w}%`, height: `${item.h}%`,
-                background: 'linear-gradient(135deg, rgba(180,83,9,0.08) 0%, rgba(120,53,15,0.05) 100%)',
-                border: '1px solid rgba(245,158,11,0.18)',
-                borderRadius: 8,
+                background: '#f8fafc',
+                border: '1.5px solid #cbd5e1',
+                borderRadius: '6px',
             }}
-            className="flex items-center justify-center"
+            className="flex items-center justify-center select-none shadow-sm"
         >
-            <div className="flex flex-col items-center gap-0.5">
-                {/* Ornamento superior */}
-                <div className="flex items-center gap-1">
-                    <div style={{ width: 12, height: 0.5, background: 'rgba(245,158,11,0.3)', borderRadius: 1 }} />
-                    <div style={{ width: 3, height: 3, borderRadius: '50%', background: 'rgba(245,158,11,0.4)' }} />
-                    <div style={{ width: 12, height: 0.5, background: 'rgba(245,158,11,0.3)', borderRadius: 1 }} />
-                </div>
-                {/* Nombre */}
-                <span
-                    className="font-black uppercase select-none tracking-widest"
-                    style={{
-                        fontSize: '7px',
-                        color: 'rgba(251,191,36,0.5)',
-                        letterSpacing: '0.15em',
-                    }}
-                >
-                    POOL IMPERIAL
-                </span>
-                {/* Ornamento inferior */}
-                <div style={{ width: 20, height: 0.5, background: 'rgba(245,158,11,0.2)', borderRadius: 1 }} />
-            </div>
+            <span className="font-extrabold uppercase text-[#475569] text-[8.5px] sm:text-[9.5px] tracking-widest text-center px-1">
+                POOL IMPERIAL
+            </span>
         </div>
     );
 }
 
 // ═══════════════════════════════════════════════════════
-// ZONA BACKGROUNDS — indicadores sutiles de zonas
+// ZONA BACKGROUNDS — dummy (eliminada la representación visual)
 // ═══════════════════════════════════════════════════════
 
 function ZoneBackgrounds() {
-    return (
-        <>
-            {/* Zona de pool — aura verde muy sutil */}
-            <div
-                className="absolute pointer-events-none"
-                style={{
-                    left: '47%', top: '5%', width: '46%', height: '88%',
-                    background: 'radial-gradient(ellipse 70% 60% at 50% 50%, rgba(16,85,47,0.07) 0%, transparent 70%)',
-                    borderRadius: '40%',
-                }}
-            />
-            {/* Zona Barra 1 — aura madera */}
-            <div
-                className="absolute pointer-events-none"
-                style={{
-                    left: '22%', top: '38%', width: '28%', height: '45%',
-                    background: 'radial-gradient(ellipse 80% 70% at 50% 50%, rgba(107,58,31,0.08) 0%, transparent 70%)',
-                    borderRadius: '30%',
-                }}
-            />
-            {/* Zona Barra 2 — aura madera derecha */}
-            <div
-                className="absolute pointer-events-none"
-                style={{
-                    left: '80%', top: '12%', width: '18%', height: '76%',
-                    background: 'radial-gradient(ellipse 80% 60% at 50% 50%, rgba(107,58,31,0.1) 0%, transparent 70%)',
-                    borderRadius: '20%',
-                }}
-            />
-        </>
-    );
+    return null;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -584,15 +451,16 @@ function ZoneBackgrounds() {
 
 function Legend() {
     return (
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-4 flex-wrap select-none">
             {[
-                { bg: '#1a5c33', border: '#4a2610', label: 'Libre' },
-                { bg: '#15803d', border: '#86efac', label: 'Ocupada' },
-                { bg: '#b45309', border: '#f59e0b', label: 'Por cobrar' },
+                { bg: '#8b9aaa', border: '#475569', label: 'Stool Libre' },
+                { bg: '#2d6a4f', border: '#4b5563', label: 'Pool Libre' },
+                { bg: '#3b82f6', border: '#1d4ed8', label: 'Ocupada' },
+                { bg: '#f59e0b', border: '#b45309', label: 'Por cobrar' },
             ].map(({ bg, border, label }) => (
                 <div key={label} className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm" style={{ background: bg, border: `1.5px solid ${border}` }} />
-                    <span className="text-[10px] font-medium text-slate-400">{label}</span>
+                    <div className="w-3.5 h-3.5 rounded" style={{ background: bg, border: `1.5px solid ${border}` }} />
+                    <span className="text-[11px] font-semibold text-slate-600">{label}</span>
                 </div>
             ))}
         </div>
@@ -661,26 +529,26 @@ export default function FloorPlanView({ onTableSelect }) {
     };
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full bg-[#f4f3f0]">
 
             {/* ── Barra de estadísticas ── */}
-            <div className="flex items-center gap-4 px-4 py-2.5 border-b border-white/5 flex-shrink-0 flex-wrap">
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span className="text-xs font-bold text-slate-300">
+            <div className="flex items-center gap-4 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0 flex-wrap">
+                <div className="flex items-center gap-2 bg-slate-50 px-2 py-1 rounded border border-slate-100 select-none">
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-xs font-bold text-slate-700">
                         {stats.occupied}/{stats.total} ocupadas
                     </span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-sky-400" />
-                    <span className="text-xs font-bold text-slate-300">
+                <div className="flex items-center gap-2 bg-slate-50 px-2 py-1 rounded border border-slate-100 select-none">
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    <span className="text-xs font-bold text-slate-700">
                         Billar: {stats.occupiedPool}/{stats.totalPool}
                     </span>
                 </div>
                 {stats.checkout > 0 && (
-                    <div className="flex items-center gap-2 animate-pulse">
-                        <div className="w-2 h-2 rounded-full bg-amber-400" />
-                        <span className="text-xs font-bold text-amber-400">
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-2 py-1 rounded animate-pulse select-none">
+                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                        <span className="text-xs font-black text-amber-700">
                             {stats.checkout} por cobrar
                         </span>
                     </div>
@@ -691,48 +559,28 @@ export default function FloorPlanView({ onTableSelect }) {
             </div>
 
             {/* ── Canvas del plano ── */}
-            <div className="flex-1 overflow-auto p-3 sm:p-4 flex items-center justify-center">
+            <div className="flex-1 overflow-auto p-3 sm:p-4 flex items-center justify-center bg-[#f4f3f0]">
                 <div
-                    className="relative w-full rounded-2xl overflow-hidden"
+                    className="relative w-full rounded-xl overflow-hidden shadow-sm"
                     style={{
                         aspectRatio: '16/9',
                         maxHeight: 'calc(100vh - 210px)',
-                        background: 'linear-gradient(160deg, #18110a 0%, #0e0b07 55%, #1c1309 100%)',
-                        borderWidth: 1,
+                        background: '#faf9f6',
+                        borderWidth: '2px',
                         borderStyle: 'solid',
-                        borderColor: 'rgba(90,55,25,0.4)',
+                        borderColor: '#cbd5e1',
                     }}
                 >
-                    {/* Tablones del suelo (líneas verticales sutiles) */}
+                    {/* Cuadrícula sutil */}
                     <div
-                        className="absolute inset-0 opacity-[0.05]"
+                        className="absolute inset-0 opacity-[0.03]"
                         style={{
-                            backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 55px, rgba(210,160,80,0.6) 55px, rgba(210,160,80,0.6) 56px)',
+                            backgroundImage: `
+                                linear-gradient(to right, #000 1px, transparent 1px),
+                                linear-gradient(to bottom, #000 1px, transparent 1px)
+                            `,
+                            backgroundSize: '40px 40px',
                         }}
-                    />
-
-                    {/* Luces de techo (radiales desde arriba) */}
-                    {[16, 35, 54, 73, 90].map(x => (
-                        <div
-                            key={x}
-                            className="absolute top-0 pointer-events-none"
-                            style={{
-                                left: `${x}%`,
-                                width: '18%',
-                                height: '50%',
-                                transform: 'translateX(-50%)',
-                                background: 'radial-gradient(ellipse 60% 100% at 50% 0%, rgba(255,220,130,0.07) 0%, transparent 70%)',
-                            }}
-                        />
-                    ))}
-
-                    {/* Fondos de zona */}
-                    <ZoneBackgrounds />
-
-                    {/* Marco de paredes */}
-                    <div
-                        className="absolute inset-0 rounded-2xl pointer-events-none"
-                        style={{ boxShadow: 'inset 0 0 0 4px rgba(80,45,15,0.5)', border: '1px solid rgba(100,60,20,0.3)' }}
                     />
 
                     {/* Todos los elementos del plano */}
@@ -741,7 +589,7 @@ export default function FloorPlanView({ onTableSelect }) {
             </div>
 
             {/* Indicación de uso */}
-            <p className="text-center text-[10px] text-slate-700 pb-2.5 select-none flex-shrink-0">
+            <p className="text-center text-[10px] text-slate-500 pb-2.5 select-none flex-shrink-0 bg-[#f4f3f0]">
                 Toca una mesa para gestionar · Pool Imperial
             </p>
 
