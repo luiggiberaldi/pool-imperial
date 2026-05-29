@@ -3,61 +3,26 @@ import { Layers, Check, Plus, Trash2, Edit2, X, DollarSign, AlertTriangle, Searc
 import { SectionCard } from '../../SettingsShared';
 import { useTablesStore } from '../../../hooks/store/useTablesStore';
 
-function useBcvRate() {
-    const getEffectiveRate = () => {
-        try {
-            const useAuto = JSON.parse(localStorage.getItem('bodega_use_auto_rate') ?? 'true');
-            if (!useAuto) {
-                const manual = parseFloat(localStorage.getItem('bodega_custom_rate'));
-                if (manual > 0) return { rate: manual, isManual: true };
-            }
-            const saved = JSON.parse(localStorage.getItem('monitor_rates_v12'));
-            return { rate: saved?.bcv?.price || 1, isManual: false };
-        } catch { return { rate: 1, isManual: false }; }
-    };
-    const [data, setData] = useState(getEffectiveRate);
-    useEffect(() => {
-        const handleStorage = () => setData(getEffectiveRate());
-        window.addEventListener('storage', handleStorage);
-        return () => window.removeEventListener('storage', handleStorage);
-    }, []);
-    return data;
-}
+const formatCOP = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
+const formatCOPDecimals = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
 export default function SettingsTabMesas({ showToast, triggerHaptic }) {
     const { config, updateConfig, tables, activeSessions, addTable, updateTable, deleteTable } = useTablesStore();
-    const { rate: bcvRate, isManual: isManualRate } = useBcvRate();
-    const rateLabel = isManualRate ? 'Tasa Manual' : 'Tasa BCV';
 
     // Config State — synced from store config
     const [pricePerHour, setPricePerHour] = useState(config?.pricePerHour || 0);
     const [pricePina, setPricePina] = useState(config?.pricePina || 0);
-    // Bs prices — independent, not auto-converted
-    const [pricePerHourBs, setPricePerHourBs] = useState(config?.pricePerHourBs || '');
-    const [pricePinaBs, setPricePinaBs] = useState(config?.pricePinaBs || '');
-
-    // Implied rates (informational)
-    const impliedRateHour = (parseFloat(pricePerHourBs) > 0 && parseFloat(pricePerHour) > 0)
-        ? (parseFloat(pricePerHourBs) / parseFloat(pricePerHour)).toFixed(2)
-        : null;
-    const impliedRatePina = (parseFloat(pricePinaBs) > 0 && parseFloat(pricePina) > 0)
-        ? (parseFloat(pricePinaBs) / parseFloat(pricePina)).toFixed(2)
-        : null;
 
     // Sync local state when external config changes (e.g., from another tab/device)
     const configPricePerHour = config?.pricePerHour;
     const configPricePina = config?.pricePina;
-    const configPricePerHourBs = config?.pricePerHourBs;
-    const configPricePinaBs = config?.pricePinaBs;
     useEffect(() => {
         const raf = requestAnimationFrame(() => {
             if (configPricePerHour != null) setPricePerHour(configPricePerHour);
             if (configPricePina != null) setPricePina(configPricePina);
-            if (configPricePerHourBs != null) setPricePerHourBs(configPricePerHourBs || '');
-            if (configPricePinaBs != null) setPricePinaBs(configPricePinaBs || '');
         });
         return () => cancelAnimationFrame(raf);
-    }, [configPricePerHour, configPricePina, configPricePerHourBs, configPricePinaBs]);
+    }, [configPricePerHour, configPricePina]);
 
     // Form State for adding new tables
     const [tableName, setTableName] = useState(() => {
@@ -111,43 +76,24 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
         }
     }, [tablesLength]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Check if implied rate is below BCV (would cause payment issues)
-    const hourBsVal = parseFloat(pricePerHourBs) || 0;
-    const hourUsdVal = parseFloat(pricePerHour) || 0;
-    const pinaBsVal = parseFloat(pricePinaBs) || 0;
-    const pinaUsdVal = parseFloat(pricePina) || 0;
-    const hourRateBelow = hourBsVal > 0 && hourUsdVal > 0 && (hourBsVal / hourUsdVal) < bcvRate;
-    const pinaRateBelow = pinaBsVal > 0 && pinaUsdVal > 0 && (pinaBsVal / pinaUsdVal) < bcvRate;
-    const hourBsMissing = hourUsdVal > 0 && hourBsVal <= 0;
-    const pinaBsMissing = pinaUsdVal > 0 && pinaBsVal <= 0;
-    const anyZero = hourBsVal <= 0 || hourUsdVal <= 0 || pinaBsVal <= 0 || pinaUsdVal <= 0;
-    const anyRateBelow = hourRateBelow || pinaRateBelow;
-    const anyBsMissing = hourBsMissing || pinaBsMissing;
-    const hasError = anyZero;
+    const hourVal = parseFloat(pricePerHour) || 0;
+    const pinaVal = parseFloat(pricePina) || 0;
+    const anyZero = hourVal <= 0 || pinaVal <= 0;
 
     const handleSaveConfig = async () => {
         if (anyZero) {
             const items = [];
-            if (hourUsdVal <= 0) items.push('Hora Libre (USD)');
-            if (hourBsVal <= 0) items.push('Hora Libre (Bs)');
-            if (pinaUsdVal <= 0) items.push('La Piña (USD)');
-            if (pinaBsVal <= 0) items.push('La Piña (Bs)');
+            if (hourVal <= 0) items.push('Hora Libre (COP)');
+            if (pinaVal <= 0) items.push('La Piña (COP)');
             showToast(`Tarifa en 0: ${items.join(', ')}. Todas las tarifas deben ser mayores a 0.`, 'error');
             triggerHaptic?.('error');
             return;
         }
-        if (anyRateBelow) {
-            const items = [];
-            if (hourRateBelow) items.push(`Hora Libre: ${(hourBsVal / hourUsdVal).toFixed(0)} Bs/$`);
-            if (pinaRateBelow) items.push(`La Piña: ${(pinaBsVal / pinaUsdVal).toFixed(0)} Bs/$`);
-            showToast(`Tasa implícita (${items.join(', ')}) menor que ${rateLabel} (${bcvRate.toFixed(0)} Bs/$). Al cobrar en Bs no cubrirá el monto en USD.`, 'warning');
-            triggerHaptic?.('warning');
-        }
         await updateConfig({
             pricePerHour: parseFloat(pricePerHour) || 0,
-            pricePerHourBs: parseFloat(pricePerHourBs) || 0,
+            pricePerHourBs: 0,
             pricePina: parseFloat(pricePina) || 0,
-            pricePinaBs: parseFloat(pricePinaBs) || 0,
+            pricePinaBs: 0,
         });
         showToast('Tarifas guardadas', 'success');
         triggerHaptic?.('light');
@@ -237,15 +183,7 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
         <div className="space-y-6">
             {/* Tarifas */}
             <div data-tour="settings-mesas-rates">
-            <SectionCard icon={DollarSign} title="Tarifas de Juego" subtitle="Precio en $ y Bs por separado" iconColor="text-emerald-500">
-                {/* Rate Reference */}
-                {bcvRate > 0 && (
-                    <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <DollarSign size={13} className="text-slate-400 shrink-0" />
-                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">{rateLabel}: <span className="text-emerald-600 dark:text-emerald-400">{bcvRate.toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs/$</span></span>
-                        {isManualRate && <span className="text-[10px] text-amber-500 ml-auto">manual</span>}
-                    </div>
-                )}
+            <SectionCard icon={DollarSign} title="Tarifas de Juego" subtitle="Precio en Pesos Colombianos (COP)" iconColor="text-emerald-500">
 
                 <div className="space-y-4">
                     {/* Hora Libre Block */}
@@ -256,68 +194,27 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                             </div>
                             <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Hora Libre</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">USD</label>
-                                <div className="relative">
-                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center font-bold text-slate-400">$</span>
-                                    <input
-                                        type="number"
-                                        value={pricePerHour}
-                                        onChange={e => setPricePerHour(e.target.value)}
-                                        onWheel={e => e.target.blur()}
-                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-sky-500/30 transition-all dark:text-white"
-                                    />
-                                </div>
-                            </div>
-                            <Plus size={14} className="text-slate-300 dark:text-slate-600 mt-5 shrink-0" />
-                            <div className="flex-1">
-                                <label className="text-[10px] uppercase font-bold text-emerald-500 mb-1 block">Bolívares</label>
-                                <div className="relative">
-                                    <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center font-bold text-emerald-500 text-xs">Bs</span>
-                                    <input
-                                        type="number"
-                                        value={pricePerHourBs}
-                                        onChange={e => setPricePerHourBs(e.target.value)}
-                                        onWheel={e => e.target.blur()}
-                                        placeholder="0"
-                                        className="w-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all text-emerald-700 dark:text-emerald-300"
-                                    />
-                                </div>
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Pesos Colombianos (COP)</label>
+                            <div className="relative">
+                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center font-bold text-slate-400">$</span>
+                                <input
+                                    type="number"
+                                    value={pricePerHour}
+                                    onChange={e => setPricePerHour(e.target.value)}
+                                    onWheel={e => e.target.blur()}
+                                    className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-sky-500/30 transition-all dark:text-white"
+                                />
                             </div>
                         </div>
-                        {/* Implied rate + price per minute */}
+                        {/* Price per minute helper */}
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-slate-400">
                             {pricePerHour > 0 && (
                                 <span className="flex items-center gap-1">
-                                    <Clock size={10} /> ${(parseFloat(pricePerHour) / 60).toFixed(4)}/min
-                                </span>
-                            )}
-                            {impliedRateHour && (
-                                <span className={`px-1.5 py-0.5 rounded-full ${
-                                    hourRateBelow
-                                        ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400'
-                                        : Math.abs(parseFloat(impliedRateHour) - bcvRate) / bcvRate < 0.1
-                                            ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                            : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
-                                }`}>
-                                    Tasa: {parseFloat(impliedRateHour).toLocaleString('es-VE')} Bs/$
-                                    {bcvRate > 0 && <span className="opacity-60"> ({rateLabel}: {bcvRate.toLocaleString('es-VE')})</span>}
+                                    <Clock size={10} /> {formatCOPDecimals(parseFloat(pricePerHour) / 60)}/min
                                 </span>
                             )}
                         </div>
-                        {hourRateBelow && (
-                            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800">
-                                <AlertTriangle size={12} className="shrink-0" />
-                                <span>Tasa menor que {rateLabel} — al cobrar en Bs no cubrirá el monto en USD</span>
-                            </div>
-                        )}
-                        {hourBsMissing && (
-                            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800">
-                                <AlertTriangle size={12} className="shrink-0" />
-                                <span>Falta precio en Bs — coloca el precio en Bolívares para la Hora Libre</span>
-                            </div>
-                        )}
                     </div>
 
                     {/* La Piña Block */}
@@ -328,63 +225,19 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                             </div>
                             <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">La Piña</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">USD</label>
-                                <div className="relative">
-                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center font-bold text-slate-400">$</span>
-                                    <input
-                                        type="number"
-                                        value={pricePina}
-                                        onChange={e => setPricePina(e.target.value)}
-                                        onWheel={e => e.target.blur()}
-                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-amber-500/30 transition-all dark:text-white"
-                                    />
-                                </div>
-                            </div>
-                            <Plus size={14} className="text-slate-300 dark:text-slate-600 mt-5 shrink-0" />
-                            <div className="flex-1">
-                                <label className="text-[10px] uppercase font-bold text-emerald-500 mb-1 block">Bolívares</label>
-                                <div className="relative">
-                                    <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center font-bold text-emerald-500 text-xs">Bs</span>
-                                    <input
-                                        type="number"
-                                        value={pricePinaBs}
-                                        onChange={e => setPricePinaBs(e.target.value)}
-                                        onWheel={e => e.target.blur()}
-                                        placeholder="0"
-                                        className="w-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl pl-9 pr-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all text-emerald-700 dark:text-emerald-300"
-                                    />
-                                </div>
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Pesos Colombianos (COP)</label>
+                            <div className="relative">
+                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center font-bold text-slate-400">$</span>
+                                <input
+                                    type="number"
+                                    value={pricePina}
+                                    onChange={e => setPricePina(e.target.value)}
+                                    onWheel={e => e.target.blur()}
+                                    className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-amber-500/30 transition-all dark:text-white"
+                                />
                             </div>
                         </div>
-                        {/* Implied rate for Pi\u00f1a */}
-                        {impliedRatePina && (
-                            <div className="mt-2 text-[10px] font-bold">
-                                <span className={`px-1.5 py-0.5 rounded-full ${
-                                    pinaRateBelow
-                                        ? 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400'
-                                        : Math.abs(parseFloat(impliedRatePina) - bcvRate) / bcvRate < 0.1
-                                            ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-                                            : 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400'
-                                }`}>
-                                    Tasa: {parseFloat(impliedRatePina).toLocaleString('es-VE')} Bs/$
-                                    {bcvRate > 0 && <span className="opacity-60"> (BCV: {bcvRate.toLocaleString('es-VE')})</span>}
-                                </span>
-                            </div>
-                        )}
-                        {pinaRateBelow && (
-                            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800">
-                                <AlertTriangle size={12} className="shrink-0" />
-                                <span>Tasa menor que {rateLabel} — al cobrar en Bs no cubrirá el monto en USD</span>
-                            </div>
-                        )}
-                        {pinaBsMissing && (
-                            <div className="mt-1.5 flex items-center gap-1.5 text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-2.5 py-1.5 rounded-lg border border-rose-200 dark:border-rose-800">
-                                <AlertTriangle size={12} className="shrink-0" />
-                                <span>Falta precio en Bs — coloca el precio en Bolívares para La Piña</span>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -393,12 +246,10 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                     className={`w-full flex items-center justify-center gap-2 py-3 mt-4 font-bold text-xs uppercase tracking-wider rounded-xl transition-colors active:scale-[0.98] ${
                         anyZero
                             ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400 hover:bg-rose-100'
-                            : anyRateBelow
-                            ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100'
                             : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100'
                     }`}
                 >
-                    {anyZero ? <><AlertTriangle size={16} /> Tarifas en 0</> : anyRateBelow ? <><AlertTriangle size={16} /> Guardar con tasa menor</> : <><Check size={16} /> Guardar Tarifas</>}
+                    {anyZero ? <><AlertTriangle size={16} /> Tarifas en 0</> : <><Check size={16} /> Guardar Tarifas</>}
                 </button>
             </SectionCard>
             </div>

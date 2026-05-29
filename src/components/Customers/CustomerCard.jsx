@@ -1,7 +1,8 @@
 import { Phone, Trash2, CheckCircle2 } from 'lucide-react';
-import { formatBs, formatUsd } from '../../utils/calculatorUtils';
 
-export default function CustomerCard({ customer, bcvRate, tasaCop, copEnabled, onClick, onDelete }) {
+const formatCOP = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(val || 0));
+
+export default function CustomerCard({ customer, onClick, onDelete }) {
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl px-4 py-3 border border-slate-100 dark:border-slate-800 shadow-sm transition-all active:scale-[0.98] flex items-center gap-2 relative">
             <div
@@ -30,17 +31,9 @@ export default function CustomerCard({ customer, bcvRate, tasaCop, copEnabled, o
                 </div>
                 <div className="text-right shrink-0">
                     {customer.deuda > 0 ? (
-                        <>
-                            <p className="text-sm font-black text-red-500 leading-tight">-${formatUsd(customer.deuda)}</p>
-                            {bcvRate > 0 && <p className="text-[10px] font-bold text-red-400/70">-{formatBs(customer.deuda * bcvRate)} Bs</p>}
-                            {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-red-400/90">-{(customer.deuda * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
-                        </>
+                        <p className="text-sm font-black text-red-500 leading-tight">-{formatCOP(customer.deuda)}</p>
                     ) : customer.favor > 0 ? (
-                        <>
-                            <p className="text-sm font-black text-emerald-500 leading-tight">+${formatUsd(customer.favor)}</p>
-                            {bcvRate > 0 && <p className="text-[10px] font-bold text-emerald-400/70">+{formatBs(customer.favor * bcvRate)} Bs</p>}
-                            {copEnabled && tasaCop > 0 && <p className="text-[10px] font-bold text-emerald-400/90">+{(customer.favor * tasaCop).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} COP</p>}
-                        </>
+                        <p className="text-sm font-black text-emerald-500 leading-tight">+{formatCOP(customer.favor)}</p>
                     ) : (
                         <p className="text-xs font-bold text-slate-400 flex items-center gap-1">
                             <CheckCircle2 size={12} className="text-emerald-400" /> Al día

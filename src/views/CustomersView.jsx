@@ -104,8 +104,9 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
     const handleDeleteCustomerRequest = (customer) => {
         const deuda = customer.deuda || 0;
         const saldo = customer.saldoFavor || 0;
-        if (deuda > 0.005) { showToast(`No se puede eliminar: ${customer.name} tiene una deuda de $${deuda.toFixed(2)} pendiente.`, 'error'); return; }
-        if (saldo > 0.005) { showToast(`No se puede eliminar: ${customer.name} tiene un saldo a favor de $${saldo.toFixed(2)}.`, 'error'); return; }
+        const fmtCop = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(v || 0));
+        if (deuda > 0.005) { showToast(`No se puede eliminar: ${customer.name} tiene una deuda de ${fmtCop(deuda)} pendiente.`, 'error'); return; }
+        if (saldo > 0.005) { showToast(`No se puede eliminar: ${customer.name} tiene un saldo a favor de ${fmtCop(saldo)}.`, 'error'); return; }
         setDeleteCustomerTarget(customer);
     };
 
@@ -134,17 +135,16 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
         if (!transactionAmount || isNaN(transactionAmount) || parseFloat(transactionAmount) <= 0) return;
         triggerHaptic();
         const { newCustomers } = await processCustomerTransaction({
-            transactionAmount, currencyMode, type: transactionModal.type,
+            transactionAmount, currencyMode: 'COP', type: transactionModal.type,
             customer: transactionModal.customer, paymentMethod, bcvRate, tasaCop, copEnabled
         });
         await saveCustomers(newCustomers);
         showToast(`Operación de ${transactionModal.type} exitosa`, 'success');
         auditLog('CLIENTE', transactionModal.type === 'ABONO' ? 'ABONO_REGISTRADO' : 'CREDITO_REGISTRADO',
-            `${transactionModal.type} de ${transactionAmount} ${currencyMode} para ${transactionModal.customer?.name}`);
+            `${transactionModal.type} de ${transactionAmount} COP para ${transactionModal.customer?.name}`);
         setTransactionModal({ isOpen: false, type: null, customer: null });
         setTransactionAmount('');
-        setCurrencyMode('BS');
-        setPaymentMethod('efectivo_bs');
+        setPaymentMethod('efectivo');
     };
 
     // ── LÓGICA DE PROVEEDORES ──

@@ -22,10 +22,7 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
     const [methods, setMethods] = useState([]);
     const [showAdd, setShowAdd] = useState(false);
     const [newLabel, setNewLabel] = useState('');
-    const [newCurrency, setNewCurrency] = useState('BS');
     const [newIcon, setNewIcon] = useState('Banknote');
-
-    const copEnabled = localStorage.getItem('cop_enabled') === 'true';
 
     useEffect(() => {
         getAllPaymentMethods().then(setMethods);
@@ -48,7 +45,7 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
             id: 'custom_' + Date.now(),
             label: toTitleCase(newLabel.trim()),
             icon: newIcon,
-            currency: newCurrency,
+            currency: 'COP',
             isFactory: false,
         }];
         await savePaymentMethods(updated);
@@ -58,7 +55,7 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
         setNewLabel('');
         setShowAdd(false);
         showToast('Método de pago agregado', 'success');
-        log('CONFIG', 'METODO_PAGO_CREADO', `Método de pago creado: ${toTitleCase(newLabel.trim())} (${newCurrency})`, { label: toTitleCase(newLabel.trim()), currency: newCurrency, icon: newIcon });
+        log('CONFIG', 'METODO_PAGO_CREADO', `Método de pago creado: ${toTitleCase(newLabel.trim())} (COP)`, { label: toTitleCase(newLabel.trim()), currency: 'COP', icon: newIcon });
     };
 
     const handleRemove = async (id) => {
@@ -78,8 +75,6 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
         setMethods(updated);
     };
 
-    const methodsBs = methods.filter(m => m.currency === 'BS');
-    const methodsUsd = methods.filter(m => m.currency === 'USD');
     const methodsCop = methods.filter(m => m.currency === 'COP');
 
     const renderMethod = (m) => {
@@ -144,28 +139,6 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
                         className="w-full py-2.5 px-3 rounded-lg border border-emerald-200 dark:border-emerald-700 bg-white dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/30"
                     />
                     <div className="flex flex-wrap gap-2">
-                        <button
-                            onClick={() => setNewCurrency('BS')}
-                            className={`flex-1 min-w-[120px] py-2 rounded-lg text-xs font-black transition-all ${newCurrency === 'BS' ? 'bg-blue-500 text-white' : 'bg-white dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700'}`}
-                        >
-                            Bolívares (Bs)
-                        </button>
-                        <button
-                            onClick={() => setNewCurrency('USD')}
-                            className={`flex-1 min-w-[120px] py-2 rounded-lg text-xs font-black transition-all ${newCurrency === 'USD' ? 'bg-emerald-500 text-white' : 'bg-white dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700'}`}
-                        >
-                            Dólares ($)
-                        </button>
-                        {copEnabled && (
-                            <button
-                                onClick={() => setNewCurrency('COP')}
-                                className={`flex-1 min-w-[120px] py-2 rounded-lg text-xs font-black transition-all ${newCurrency === 'COP' ? 'bg-amber-500 text-white' : 'bg-white dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700'}`}
-                            >
-                                Pesos (COP)
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
                         {ICON_OPTIONS.map(({ key, Icon }) => (
                             <button
                                 key={key}
@@ -185,29 +158,10 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
                 </div>
             )}
 
-            {/* Sección Dólares */}
-            {methodsUsd.length > 0 && (
-                <div>
-                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2">Dólares ($)</p>
-                    {methodsUsd.map(renderMethod)}
-                </div>
-            )}
-
-            {/* Sección Bolívares */}
-            {methodsBs.length > 0 && (
-                <div>
-                    <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-2">Bolívares (Bs)</p>
-                    {methodsBs.map(renderMethod)}
-                </div>
-            )}
-
-            {/* Sección COP */}
-            {copEnabled && methodsCop.length > 0 && (
-                <div>
-                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2 mt-4">Pesos Colombianos (COP)</p>
-                    {methodsCop.map(renderMethod)}
-                </div>
-            )}
+            {/* Lista de Métodos de Pago */}
+            <div className="space-y-1">
+                {methodsCop.map(renderMethod)}
+            </div>
         </div>
     );
 }

@@ -7,13 +7,13 @@ import { showToast } from '../Toast';
 import { DollarSign, Plus, Minus, Clock, CheckCircle, Trash2, CreditCard, ArrowLeft, Search, Loader2, ShoppingBag, Package, StickyNote } from 'lucide-react';
 import { ROLE_CONFIG } from './UserPinInput';
 
-const fmtBs = (usd, rate) => rate > 0 ? (usd * rate).toFixed(2) : null;
+const formatCOP = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(val || 0));
 
 // ── Modal: Agregar Deuda ──────────────────────────────────────
 export function AddDebtModal({ isOpen, onClose }) {
     const { cachedUsers } = useAuthStore();
     const { createDebt } = useDebtsStore();
-    const { products, effectiveRate, adjustStock } = useProductContext();
+    const { products, adjustStock } = useProductContext();
     const [step, setStep] = useState(1);
     const [staffId, setStaffId] = useState('');
     const [search, setSearch] = useState('');
@@ -42,7 +42,7 @@ export function AddDebtModal({ isOpen, onClose }) {
         : activeUsers;
     const selectedUser = activeUsers.find(u => u.id === staffId);
 
-    // Product filtering (exclude combos with no stock logic issues)
+    // Product filtering
     const availableProducts = useMemo(() => {
         return products.filter(p => {
             if (!productSearch) return true;
@@ -51,10 +51,9 @@ export function AddDebtModal({ isOpen, onClose }) {
     }, [products, productSearch]);
 
     // Calculate total from selected products
-    const totalUsd = selectedProducts.reduce((sum, sp) => sum + (sp.qty * sp.priceUsd), 0);
-    const totalBs = effectiveRate > 0 ? totalUsd * effectiveRate : 0;
+    const totalCop = selectedProducts.reduce((sum, sp) => sum + (sp.qty * sp.priceUsd), 0);
 
-    const canSubmit = staffId && selectedProducts.length > 0 && totalUsd > 0 && !saving;
+    const canSubmit = staffId && selectedProducts.length > 0 && totalCop > 0 && !saving;
 
     const selectUser = (id) => { setStaffId(id); setStep(2); };
 
@@ -105,7 +104,7 @@ export function AddDebtModal({ isOpen, onClose }) {
             // Build concept string from products
             const concept = selectedProducts.map(sp => `${sp.qty}x ${sp.name}`).join(', ');
 
-            await createDebt(staffId, concept, Math.round(totalUsd * 100) / 100, note);
+            await createDebt(staffId, concept, Math.round(totalCop * 100) / 100, note);
 
             // Deduct stock for each product
             selectedProducts.forEach(sp => {
@@ -206,7 +205,7 @@ export function AddDebtModal({ isOpen, onClose }) {
                                     <div key={sp.productId} className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{sp.name}</p>
-                                            <p className="text-[10px] text-slate-400">${sp.priceUsd.toFixed(2)} c/u · <span className="text-rose-500 font-bold">${(sp.qty * sp.priceUsd).toFixed(2)}</span></p>
+                                            <p className="text-[10px] text-slate-400">{formatCOP(sp.priceUsd)} c/u · <span className="text-rose-500 font-bold">{formatCOP(sp.qty * sp.priceUsd)}</span></p>
                                         </div>
                                         <div className="flex items-center gap-1 shrink-0">
                                             <button onClick={() => removeProduct(sp.productId)}
@@ -230,8 +229,7 @@ export function AddDebtModal({ isOpen, onClose }) {
                             <div className="flex items-center justify-between bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/30 rounded-xl px-3 py-2">
                                 <span className="text-[10px] uppercase font-bold text-rose-400">Total deuda</span>
                                 <div className="text-right">
-                                    <span className="text-sm font-black text-rose-600">${totalUsd.toFixed(2)}</span>
-                                    {totalBs > 0 && <p className="text-[9px] text-slate-400 font-bold">Bs {totalBs.toFixed(2)}</p>}
+                                    <span className="text-sm font-black text-rose-600">{formatCOP(totalCop)}</span>
                                 </div>
                             </div>
                         </div>
@@ -267,7 +265,7 @@ export function AddDebtModal({ isOpen, onClose }) {
                                         }`}>
                                         <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{p.name}</p>
                                         <div className="flex items-center justify-between mt-1">
-                                            <span className="text-emerald-500 font-black text-xs">${Number(p.priceUsdt || p.priceUsd || p.price || 0).toFixed(2)}</span>
+                                            <span className="text-emerald-500 font-black text-xs">{formatCOP(p.priceUsdt || p.priceUsd || p.price || 0)}</span>
                                             {!p.isCombo && (
                                                 <span className={`text-[9px] font-bold ${isOut ? 'text-red-500' : stock <= (p.lowStockAlert ?? 5) ? 'text-amber-500' : 'text-slate-400'}`}>
                                                     {isOut ? 'Agotado' : `${stock}`}
@@ -303,7 +301,7 @@ export function AddDebtModal({ isOpen, onClose }) {
                     <button onClick={handleSubmit} disabled={!canSubmit}
                         className="w-full py-3.5 bg-rose-500 hover:bg-rose-600 disabled:bg-slate-200 dark:disabled:bg-slate-700 text-white disabled:text-slate-400 font-black text-sm uppercase tracking-wider rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-rose-500/20 disabled:shadow-none flex items-center justify-center gap-2">
                         {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} strokeWidth={3} />}
-                        {saving ? 'Guardando...' : `Registrar $${totalUsd.toFixed(2)}`}
+                        {saving ? 'Guardando...' : `Registrar ${formatCOP(totalCop)}`}
                     </button>
                 </div>
             )}
@@ -314,10 +312,8 @@ export function AddDebtModal({ isOpen, onClose }) {
 // ── Modal: Detalle de Deuda + Historial ───────────────────────
 export function DebtDetailModal({ debt, onClose }) {
     const { fetchPayments, payments, addPayment, deleteDebt } = useDebtsStore();
-    const { effectiveRate } = useProductContext();
     const [showPayForm, setShowPayForm] = useState(false);
     const [payAmount, setPayAmount] = useState('');
-    const [payCurrency, setPayCurrency] = useState('USD');
     const [payNote, setPayNote] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -326,7 +322,6 @@ export function DebtDetailModal({ debt, onClose }) {
             fetchPayments(debt.id);
             setShowPayForm(false);
             setPayAmount('');
-            setPayCurrency('USD');
             setPayNote('');
         }
     }, [debt?.id]);
@@ -335,22 +330,17 @@ export function DebtDetailModal({ debt, onClose }) {
 
     const debtPayments = payments[debt.id] || [];
     const isPaid = debt.status === 'paid';
-    const amountUsd = Number(debt.amount_usd);
-    const remainingUsd = Number(debt.remaining_usd);
-    const amountBs = fmtBs(amountUsd, effectiveRate);
-    const remainingBs = fmtBs(remainingUsd, effectiveRate);
-    const progressPct = amountUsd > 0 ? Math.min(((amountUsd - remainingUsd) / amountUsd) * 100, 100) : 0;
+    const amountCop = Number(debt.amount_usd);
+    const remainingCop = Number(debt.remaining_usd);
+    const progressPct = amountCop > 0 ? Math.min(((amountCop - remainingCop) / amountCop) * 100, 100) : 0;
 
     const handlePay = async () => {
         const raw = Number(payAmount);
         if (raw <= 0) return;
-        const usdAmt = payCurrency === 'BS' && effectiveRate > 0
-            ? Math.round((raw / effectiveRate) * 100) / 100
-            : raw;
-        if (usdAmt > debt.remaining_usd) return;
+        if (raw > debt.remaining_usd) return;
         setSaving(true);
         try {
-            await addPayment(debt.id, usdAmt, payNote);
+            await addPayment(debt.id, raw, payNote);
             showToast('Abono registrado', 'success');
             setShowPayForm(false);
             setPayAmount('');
@@ -375,9 +365,7 @@ export function DebtDetailModal({ debt, onClose }) {
 
     // Pay form validation
     const payRaw = Number(payAmount) || 0;
-    const payUsdPreview = payCurrency === 'BS' && effectiveRate > 0 ? payRaw / effectiveRate : payRaw;
-    const payBsPreview = payCurrency === 'USD' && effectiveRate > 0 ? payRaw * effectiveRate : payRaw;
-    const payValid = payRaw > 0 && payUsdPreview <= debt.remaining_usd + 0.01;
+    const payValid = payRaw > 0 && payRaw <= debt.remaining_usd + 0.01;
 
     return (
         <Modal isOpen={!!debt} onClose={onClose} title="Detalle de Deuda">
@@ -397,15 +385,13 @@ export function DebtDetailModal({ debt, onClose }) {
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-[10px] text-slate-400 uppercase font-bold">Monto original</p>
-                            <p className="text-lg font-black text-slate-700 dark:text-slate-200">${amountUsd.toFixed(2)}</p>
-                            {amountBs && <p className="text-[10px] text-slate-400 font-bold">Bs {amountBs}</p>}
+                            <p className="text-lg font-black text-slate-700 dark:text-slate-200">{formatCOP(amountCop)}</p>
                         </div>
                         <div className="text-right">
                             <p className="text-[10px] text-slate-400 uppercase font-bold">Pendiente</p>
                             <p className={`text-lg font-black ${isPaid ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {isPaid ? 'PAGADA' : `$${remainingUsd.toFixed(2)}`}
+                                {isPaid ? 'PAGADA' : formatCOP(remainingCop)}
                             </p>
-                            {!isPaid && remainingBs && <p className="text-[10px] text-slate-400 font-bold">Bs {remainingBs}</p>}
                         </div>
                     </div>
 
@@ -424,7 +410,7 @@ export function DebtDetailModal({ debt, onClose }) {
                     )}
 
                     <p className="text-[10px] text-slate-400 mt-2">
-                        {new Date(debt.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(debt.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>
                 </div>
 
@@ -438,16 +424,14 @@ export function DebtDetailModal({ debt, onClose }) {
                     ) : (
                         <div className="space-y-1.5 max-h-40 overflow-y-auto">
                             {debtPayments.map(p => {
-                                const pBs = fmtBs(Number(p.amount_usd), effectiveRate);
                                 return (
                                     <div key={p.id} className="flex items-center justify-between bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-3 py-2.5">
                                         <div>
-                                            <p className="text-xs font-bold text-emerald-600">+${Number(p.amount_usd).toFixed(2)}</p>
-                                            {pBs && <p className="text-[9px] text-slate-400 font-medium">Bs {pBs}</p>}
+                                            <p className="text-xs font-bold text-emerald-600">+{formatCOP(p.amount_usd)}</p>
                                             {p.note && <p className="text-[10px] text-slate-400 mt-0.5">{p.note}</p>}
                                         </div>
                                         <p className="text-[10px] text-slate-400">
-                                            {new Date(p.created_at).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            {new Date(p.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                                         </p>
                                     </div>
                                 );
@@ -462,49 +446,13 @@ export function DebtDetailModal({ debt, onClose }) {
                         <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/30 rounded-2xl p-4 space-y-3">
                             <p className="text-[10px] uppercase font-bold text-emerald-600">Registrar Abono</p>
 
-                            {/* Currency toggle for payment */}
-                            <div className="flex bg-white dark:bg-slate-800 rounded-xl p-0.5">
-                                <button onClick={() => { setPayCurrency('USD'); setPayAmount(''); }}
-                                    className={`flex-1 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${
-                                        payCurrency === 'USD'
-                                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 shadow-sm'
-                                            : 'text-slate-400'
-                                    }`}>
-                                    $ USD
-                                </button>
-                                <button onClick={() => { setPayCurrency('BS'); setPayAmount(''); }}
-                                    className={`flex-1 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${
-                                        payCurrency === 'BS'
-                                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 shadow-sm'
-                                            : 'text-slate-400'
-                                    }`}>
-                                    Bs
-                                </button>
-                            </div>
-
                             <div className="relative">
-                                {payCurrency === 'USD'
-                                    ? <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500" />
-                                    : <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 font-black text-xs">Bs</span>
-                                }
-                                <input type="number" step="0.01" min="0"
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 font-black text-xs">$</span>
+                                <input type="number" step="1" min="0"
                                     value={payAmount} onChange={e => setPayAmount(e.target.value)}
-                                    placeholder={payCurrency === 'USD'
-                                        ? `Máx: $${remainingUsd.toFixed(2)}`
-                                        : `Máx: Bs ${remainingBs || '...'}`
-                                    }
+                                    placeholder={`Máx: ${formatCOP(remainingCop)}`}
                                     className="w-full bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/30" />
                             </div>
-
-                            {/* Pay conversion preview */}
-                            {payRaw > 0 && effectiveRate > 0 && (
-                                <p className="text-[10px] text-slate-400 text-center">
-                                    {payCurrency === 'BS'
-                                        ? <>≈ <span className="font-bold text-emerald-600">${payUsdPreview.toFixed(2)} USD</span></>
-                                        : <>≈ <span className="font-bold text-blue-600">Bs {payBsPreview.toFixed(2)}</span></>
-                                    }
-                                </p>
-                            )}
 
                             <input type="text" value={payNote} onChange={e => setPayNote(e.target.value)}
                                 placeholder="Nota (opcional)"
@@ -523,7 +471,7 @@ export function DebtDetailModal({ debt, onClose }) {
                             </div>
                         </div>
                     ) : (
-                        <button onClick={() => { setShowPayForm(true); setPayAmount(''); setPayNote(''); setPayCurrency('USD'); }}
+                        <button onClick={() => { setShowPayForm(true); setPayAmount(''); setPayNote(''); }}
                             className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all active:scale-[0.98] shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2">
                             <CreditCard size={16} /> Registrar Abono
                         </button>
