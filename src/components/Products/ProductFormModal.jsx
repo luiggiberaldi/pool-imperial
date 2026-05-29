@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Camera, X, AlertTriangle, Package, CheckCircle, Clock, ShoppingBag, CreditCard, ArrowUpRight, Plus, Minus } from 'lucide-react';
+import { Camera, X, AlertTriangle, Package, CheckCircle, Clock, ShoppingBag, CreditCard, ArrowUpRight, Plus, Minus, ChevronUp, ChevronDown } from 'lucide-react';
 import { Modal } from '../Modal';
 import { useProductContext } from '../../context/ProductContext';
 import SpotlightTour from '../SpotlightTour';
