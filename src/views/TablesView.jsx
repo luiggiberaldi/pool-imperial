@@ -68,6 +68,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
     const [statusFilter, setStatusFilter] = useState('Todas');
     const [ownerFilter, setOwnerFilter]   = useState('Todas');
     const [viewMode, setViewMode]         = useState('floor'); // 'grid' | 'floor'
+    const [isEditingPlan, setIsEditingPlan] = useState(false);
 
     // When a table is selected from the floor plan, we open its TableCard via a mini panel
     const [selectedTableId, setSelectedTableId] = useState(null);
@@ -158,6 +159,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
 
     // Handle floor plan table selection
     const handleFloorTableSelect = useCallback((table, session) => {
+        if (isEditingPlan) return;
         if (transferSourceTableId) {
             if (table.id === transferSourceTableId) {
                 showToast("No puedes transferir una mesa a sí misma. Selecciona otra mesa diferente.", "warning");
@@ -167,7 +169,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
             return;
         }
         setSelectedTableId(table.id);
-    }, [transferSourceTableId]);
+    }, [transferSourceTableId, isEditingPlan]);
 
     const filteredTables = useMemo(() => {
         const filtered = tables.filter(table => {
@@ -232,7 +234,23 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                     </div>
                     <div className="flex items-center gap-2">
                         {/* View Mode Toggle */}
-                        <ViewToggle mode={viewMode} onChange={setViewMode} />
+                        <ViewToggle mode={viewMode} onChange={(mode) => { setViewMode(mode); if (mode === 'grid') setIsEditingPlan(false); }} />
+
+                        {viewMode === 'floor' && isAdmin && (
+                            <button
+                                onClick={() => {
+                                    setSelectedTableId(null);
+                                    setIsEditingPlan(!isEditingPlan);
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-sm border ${
+                                    isEditingPlan
+                                        ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500 shadow-amber-500/20'
+                                        : 'bg-white dark:bg-white/5 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-white/10 hover:border-slate-300'
+                                }`}
+                            >
+                                <span>🔧 {isEditingPlan ? 'Salir Editor' : 'Editar Plano'}</span>
+                            </button>
+                        )}
 
                         {/* Botón pausa general — solo admin, solo si hay sesiones activas */}
                         {isAdmin && pausableSessions.length > 0 && (
@@ -320,6 +338,8 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                             <FloorPlanView 
                                 onTableSelect={handleFloorTableSelect} 
                                 selectedTableId={selectedTableId}
+                                isEditing={isEditingPlan}
+                                onExitEditing={() => setIsEditingPlan(false)}
                             />
                         </div>
 
