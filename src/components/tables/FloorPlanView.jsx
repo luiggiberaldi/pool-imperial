@@ -1366,6 +1366,34 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         }
     };
 
+    // Exportar configuración del plano
+    const handleExportLayout = () => {
+        try {
+            const dataStr = JSON.stringify(dynamicItems, null, 2);
+            
+            // 1. Copiar al portapapeles
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(dataStr);
+            }
+            
+            // 2. Descargar como archivo
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `distribucion_plano_pool_imperial_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showToast("Configuración copiada al portapapeles y descargada como JSON", "success");
+        } catch (err) {
+            console.error("Error exporting layout:", err);
+            showToast("Error al exportar la configuración", "error");
+        }
+    };
+
     // Handler de Arrastre visual (Mouse & Touch)
     const handleDragStart = (e, itemId) => {
         if (!isEditing) return;
@@ -1551,7 +1579,13 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             </span>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
-
+                            <button
+                                onClick={handleExportLayout}
+                                className="bg-amber-100 hover:bg-amber-250 text-amber-900 font-extrabold text-[11px] px-2.5 py-1.5 rounded-lg border border-amber-300 transition-all active:scale-95 flex items-center gap-1.5"
+                                title="Exportar la distribución de mesas a un archivo JSON y al portapapeles"
+                            >
+                                📤 Exportar Configuración
+                            </button>
                             <button
                                 onClick={handleResetLayout}
                                 className="bg-rose-100 hover:bg-rose-200 text-rose-800 font-extrabold text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-350 transition-all active:scale-95"
