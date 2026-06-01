@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare } from 'lucide-react';
+import { Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Move } from 'lucide-react';
 import { calculateElapsedTime, calculateSessionCost, calculateSessionCostBreakdown, calculateConsumptionBs } from '../../utils/tableBillingEngine';
 import { round2 } from '../../utils/dinero';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
@@ -27,7 +27,7 @@ function useStaffName(staffId) {
 
 
 
-export default function TableCard({ table, session }) {
+export default function TableCard({ table, session, onStartTransfer }) {
     const { config, openSession, closeSession, requestCheckout, cancelCheckoutRequest, updateSessionMetadata, updateSessionSeats, updateSessionTime, addPinaToSession, addHoursToSession, pauseSession, resumeSession } = useTablesStore();
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
@@ -513,6 +513,15 @@ export default function TableCard({ table, session }) {
                                 >
                                     <Printer size={12} />
                                 </button>
+                                {onStartTransfer && (
+                                    <button
+                                        onClick={onStartTransfer}
+                                        className="w-6 h-6 rounded-full flex items-center justify-center bg-white/20 hover:bg-white/40 text-white transition-all active:scale-95 shrink-0"
+                                        title="Mover / Transferir Mesa"
+                                    >
+                                        <Move size={12} />
+                                    </button>
+                                )}
                                 {(currentUser?.role === 'ADMIN' || currentUser?.role === 'CAJERO') && (
                                     <button
                                         onClick={() => setShowCancelModal(true)}

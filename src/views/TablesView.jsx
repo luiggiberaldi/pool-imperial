@@ -3,7 +3,6 @@ import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useAuthStore } from '../hooks/store/authStore';
 import TableCard from '../components/tables/TableCard';
 import FloorPlanView from '../components/tables/FloorPlanView';
-import TableContextPanel from '../components/tables/TableContextPanel';
 import { Layers, PauseCircle, PlayCircle, LayoutGrid, Map, X, ArrowRight, AlertTriangle } from 'lucide-react';
 import { calculateElapsedTime } from '../utils/tableBillingEngine';
 import { showToast } from '../components/Toast';
@@ -343,77 +342,35 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                             />
                         </div>
 
-                        {/* Panel lateral en Desktop (fijo / w-96) */}
+                        {/* Centro Operativo Flotante (Table Card Hub) */}
                         {selectedTableId && (() => {
                             const table = tables.find(t => t.id === selectedTableId);
                             const session = activeSessions.find(s => s.table_id === selectedTableId);
                             if (!table) return null;
                             return (
-                                <>
-                                    <div className="hidden lg:flex w-96 border-l border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-950 flex-col h-full overflow-y-auto">
-                                        <div className="sticky top-0 z-10 bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-md px-4 py-3 border-b border-slate-200 dark:border-white/5 flex items-center justify-between">
-                                            <h3 className="font-bold text-xs text-slate-500 uppercase tracking-wider">
-                                                Control de Mesa
-                                            </h3>
-                                            <button 
-                                                onClick={() => setSelectedTableId(null)}
-                                                className="p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 transition-colors"
-                                            >
-                                                <X size={18} />
-                                            </button>
-                                        </div>
-                                        <div className="p-4 flex-1">
-                                            <TableContextPanel 
-                                                tableId={selectedTableId} 
-                                                onClose={() => setSelectedTableId(null)} 
-                                                onStartTransfer={() => {
-                                                    setTransferSourceTableId(selectedTableId);
-                                                    setSelectedTableId(null); // Close panel so operator can clearly see floor plan
-                                                    showToast("Selecciona la mesa de destino en el plano", "info");
-                                                }}
-                                            />
-                                        </div>
+                                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+                                    {/* Click fuera para cerrar */}
+                                    <div className="absolute inset-0" onClick={() => setSelectedTableId(null)} />
+                                    
+                                    {/* Contenedor de la Tarjeta */}
+                                    <div className="relative w-full max-w-sm z-10 animate-in zoom-in-95 duration-200">
+                                        <button 
+                                            onClick={() => setSelectedTableId(null)}
+                                            className="absolute -top-3 -right-3 z-30 w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-lg border border-slate-700/50 active:scale-95 transition-all text-sm font-bold animate-in zoom-in duration-300"
+                                        >
+                                            ✕
+                                        </button>
+                                        <TableCard 
+                                            table={table} 
+                                            session={session} 
+                                            onStartTransfer={() => {
+                                                setTransferSourceTableId(selectedTableId);
+                                                setSelectedTableId(null); // Cerrar panel para ver plano con claridad
+                                                showToast("Selecciona la mesa de destino en el plano", "info");
+                                            }}
+                                        />
                                     </div>
-
-                                    {/* Drawer responsivo para móvil (bottom sheet) */}
-                                    <div 
-                                        className="lg:hidden fixed inset-0 bg-black/40 dark:bg-black/60 z-40 transition-opacity"
-                                        onClick={() => setSelectedTableId(null)}
-                                    />
-                                    <div 
-                                        className="lg:hidden fixed bottom-0 left-0 right-0 max-h-[85vh] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-3xl z-50 overflow-y-auto flex flex-col shadow-2xl"
-                                        style={{
-                                            animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-                                        }}
-                                    >
-                                        {/* Barra de arrastre visual del Drawer */}
-                                        <div className="w-full flex justify-center py-2 shrink-0">
-                                            <div className="w-12 h-1 bg-slate-300 dark:bg-slate-700 rounded-full" />
-                                        </div>
-                                        <div className="px-4 pb-3 flex items-center justify-between shrink-0">
-                                            <h3 className="font-extrabold text-slate-800 dark:text-white text-base">
-                                                Operación de Mesa
-                                            </h3>
-                                            <button 
-                                                onClick={() => setSelectedTableId(null)}
-                                                className="p-1.5 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400"
-                                            >
-                                                <X size={16} />
-                                            </button>
-                                        </div>
-                                        <div className="p-4 pt-0 overflow-y-auto flex-1">
-                                            <TableContextPanel 
-                                                tableId={selectedTableId} 
-                                                onClose={() => setSelectedTableId(null)} 
-                                                onStartTransfer={() => {
-                                                    setTransferSourceTableId(selectedTableId);
-                                                    setSelectedTableId(null); // Close panel so operator can clearly see floor plan
-                                                    showToast("Selecciona la mesa de destino en el plano", "info");
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                </>
+                                </div>
                             );
                         })()}
                     </div>
@@ -446,7 +403,15 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                                     : ''
                                             }`}
                                         >
-                                            <TableCard table={table} session={session} />
+                                            <TableCard 
+                                                table={table} 
+                                                session={session} 
+                                                onStartTransfer={() => {
+                                                    setTransferSourceTableId(table.id);
+                                                    setViewMode('floor'); // Cambiar a plano automáticamente
+                                                    showToast("Selecciona la mesa de destino en el plano", "info");
+                                                }}
+                                            />
                                         </div>
                                     );
                                 })}

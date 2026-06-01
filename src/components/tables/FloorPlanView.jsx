@@ -107,7 +107,7 @@ function StatusDot({ status }) {
  * Render: fieltro realístico cargando la imagen mesa-pool.svg, con soporte de rotación portrait
  * y capas de estado e información en tiempo real.
  */
-function PoolTableEl({ item, session, onClick, isSelected, isCanvasRotated }) {
+function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
     const st = statusOf(session);
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
@@ -158,7 +158,7 @@ function PoolTableEl({ item, session, onClick, isSelected, isCanvasRotated }) {
 
     return (
         <button
-            onClick={onClick}
+            {...props}
             style={{
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
@@ -170,8 +170,9 @@ function PoolTableEl({ item, session, onClick, isSelected, isCanvasRotated }) {
                 outlineOffset: '2px',
                 zIndex: isSelected ? 30 : undefined,
                 filter: 'drop-shadow(0px 3.5px 5px rgba(0,0,0,0.5))',
+                ...props.style,
             }}
-            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''}`}
+            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             {/* The high-fidelity pool table SVG */}
@@ -234,7 +235,7 @@ function PoolTableEl({ item, session, onClick, isSelected, isCanvasRotated }) {
  * DiningTableEl — Mesa comedor/social (M1, M2, M3).
  * Render top-view: 4 sillas simplificadas en los costados + superficie de mesa plana.
  */
-function DiningTableEl({ item, session, onClick, isSelected, isCanvasRotated }) {
+function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
     const st = statusOf(session);
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
@@ -251,7 +252,7 @@ function DiningTableEl({ item, session, onClick, isSelected, isCanvasRotated }) 
 
     return (
         <button
-            onClick={onClick}
+            {...props}
             style={{
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
@@ -263,8 +264,9 @@ function DiningTableEl({ item, session, onClick, isSelected, isCanvasRotated }) 
                 background: 'transparent',
                 border: 'none',
                 filter: 'drop-shadow(0px 3.5px 5px rgba(0,0,0,0.5))',
+                ...props.style,
             }}
-            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''}`}
+            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             {/* The high-fidelity dining table SVG */}
@@ -318,7 +320,7 @@ function DiningTableEl({ item, session, onClick, isSelected, isCanvasRotated }) 
  * RoundStoolEl — Taburete alto redondo / Mesa redonda (M4-M11).
  * Render: fieltro realístico cargando la imagen mesa-redonda.svg, con capas de estado e información en tiempo real.
  */
-function RoundStoolEl({ item, session, onClick, isSelected, isCanvasRotated }) {
+function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
     const st = statusOf(session);
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
@@ -335,7 +337,7 @@ function RoundStoolEl({ item, session, onClick, isSelected, isCanvasRotated }) {
 
     return (
         <button
-            onClick={onClick}
+            {...props}
             style={{
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
@@ -346,8 +348,9 @@ function RoundStoolEl({ item, session, onClick, isSelected, isCanvasRotated }) {
                 background: 'transparent',
                 border: 'none',
                 filter: 'drop-shadow(0px 3.5px 5px rgba(0,0,0,0.5))',
+                ...props.style,
             }}
-            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''}`}
+            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             <div
@@ -387,7 +390,7 @@ function RoundStoolEl({ item, session, onClick, isSelected, isCanvasRotated }) {
  * BarStoolEl — Taburete de barra (B1-B15).
  * Render: círculo compacto plano con etiqueta. Enforce aspect-ratio to keep it a perfect circle.
  */
-function BarStoolEl({ item, session, onClick, isSelected, isCanvasRotated }) {
+function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
     const st = statusOf(session);
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
@@ -404,7 +407,7 @@ function BarStoolEl({ item, session, onClick, isSelected, isCanvasRotated }) {
 
     return (
         <button
-            onClick={onClick}
+            {...props}
             style={{
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
@@ -414,8 +417,9 @@ function BarStoolEl({ item, session, onClick, isSelected, isCanvasRotated }) {
                 zIndex: isSelected ? 30 : undefined,
                 background: 'transparent',
                 border: 'none',
+                ...props.style,
             }}
-            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''}`}
+            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             <div
