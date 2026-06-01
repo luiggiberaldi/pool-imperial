@@ -1760,6 +1760,18 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             cursor: pointer;
                             z-index: 5;
                         }
+                        .floor-plan-canvas button {
+                            outline: none;
+                            box-shadow: none;
+                        }
+                        .floor-plan-canvas button:focus {
+                            outline: none;
+                            box-shadow: none;
+                        }
+                        .floor-plan-canvas button:active {
+                            outline: none;
+                            box-shadow: none;
+                        }
                     `}} />
                     {/* Zoom & Pan container */}
                     <div
