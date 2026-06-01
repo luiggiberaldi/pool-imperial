@@ -24,66 +24,7 @@ import { FLOOR_ITEMS } from '../../data/floorPlanData';
 import { calculateElapsedTime } from '../../utils/tableBillingEngine';
 import { showToast } from '../Toast';
 
-// ═══════════════════════════════════════════════════════
-// FLOOR THEMES DEFINITIONS
-// ═══════════════════════════════════════════════════════
 
-export const FLOOR_THEMES = [
-    {
-        id: 'light-wood-herringbone',
-        name: '🪵 Herringbone Roble (Recomendado)',
-        style: {
-            backgroundImage: "url('/piso-madera-clara.png')",
-            backgroundRepeat: 'repeat',
-            backgroundSize: '220px 220px',
-        }
-    },
-    {
-        id: 'luxury-cream',
-        name: '🏆 Marfil Imperial',
-        style: {
-            backgroundImage: "linear-gradient(rgba(245, 243, 238, 0.90), rgba(245, 243, 238, 0.90)), url('/piso-alfombra.png')",
-            backgroundRepeat: 'repeat',
-            backgroundSize: '160px 160px',
-        }
-    },
-    {
-        id: 'dark-carpet',
-        name: '🔴 Alfombra Imperial (Clásica)',
-        style: {
-            backgroundImage: "url('/piso-alfombra.png')",
-            backgroundRepeat: 'repeat',
-            backgroundSize: '160px 160px',
-        }
-    },
-    {
-        id: 'modern-gray',
-        name: '🥈 Gris Plata Moderno',
-        style: {
-            backgroundImage: "linear-gradient(rgba(240, 242, 245, 0.91), rgba(240, 242, 245, 0.91)), url('/piso-alfombra.png')",
-            backgroundRepeat: 'repeat',
-            backgroundSize: '160px 160px',
-        }
-    },
-    {
-        id: 'royal-gold',
-        name: '👑 Oro Champagne',
-        style: {
-            backgroundImage: "linear-gradient(rgba(247, 240, 222, 0.88), rgba(247, 240, 222, 0.88)), url('/piso-alfombra.png')",
-            backgroundRepeat: 'repeat',
-            backgroundSize: '160px 160px',
-        }
-    },
-    {
-        id: 'clean-marble',
-        name: '🏛️ Mármol Blanco Puro',
-        style: {
-            backgroundColor: '#fbfbfa',
-            backgroundImage: "linear-gradient(to right, rgba(0,0,0,0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.02) 1px, transparent 1px)",
-            backgroundSize: '60px 60px',
-        }
-    }
-];
 
 // ═══════════════════════════════════════════════════════
 // HELPERS
@@ -564,9 +505,9 @@ function BarCounterEl({ item, isCanvasRotated, ...props }) {
                 <span
                     className="absolute z-10 font-bold uppercase tracking-wider select-none text-[8.5px] sm:text-[9.5px] text-white font-black drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]"
                     style={{
-                        writingMode: isCanvasRotated ? 'horizontal-tb' : (isPortrait ? 'vertical-rl' : 'horizontal-tb'),
+                        writingMode: isPortrait ? 'vertical-rl' : 'horizontal-tb',
                         textOrientation: 'mixed',
-                        transform: isCanvasRotated ? 'rotate(90deg)' : (isPortrait ? 'rotate(180deg)' : undefined),
+                        transform: isPortrait ? 'rotate(180deg)' : undefined,
                     }}
                 >
                     {item.label}
@@ -595,12 +536,13 @@ function EntryEl({ item, ...props }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: isHorizontal ? 6 : 2,
-                borderRadius: isHorizontal ? '4px 4px 0 0' : '0 4px 4px 0',
-                background: '#cbd5e1',
-                border: '1.5px solid #94a3b8',
+                borderRadius: isHorizontal ? '6px 6px 0 0' : '0 6px 6px 0',
+                background: '#2f1a05', // Rich dark mahogany wood matching tables M1/M2/M3
+                border: '1.5px solid #d97706', // Gold frame border matching the canvas outline
                 borderLeft: isHorizontal ? undefined : 'none',
                 borderBottom: isHorizontal ? 'none' : undefined,
                 transform: rotation ? `rotate(${rotation}deg)` : undefined,
+                boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
                 ...props.style,
             }}
             className={props.className || ''}
@@ -610,26 +552,26 @@ function EntryEl({ item, ...props }) {
                 <div className="flex flex-col items-center gap-0.5">
                     <div style={{
                         width: 0, height: 0,
-                        borderLeft: '3px solid transparent',
-                        borderRight: '3px solid transparent',
-                        borderBottom: '4px solid #475569',
+                        borderLeft: '3.5px solid transparent',
+                        borderRight: '3.5px solid transparent',
+                        borderBottom: '4.5px solid #f59e0b', // Warm brand gold
                     }} />
-                    <div style={{ width: 1.5, height: 6, background: '#475569', borderRadius: 1 }} />
+                    <div style={{ width: 1.5, height: 6, background: '#f59e0b', borderRadius: 1 }} />
                 </div>
             ) : (
                 <div className="flex items-center gap-0.5">
-                    <div style={{ width: 6, height: 1.5, background: '#475569', borderRadius: 1 }} />
+                    <div style={{ width: 6, height: 1.5, background: '#f59e0b', borderRadius: 1 }} />
                     <div style={{
                         width: 0, height: 0,
-                        borderTop: '3px solid transparent',
-                        borderBottom: '3px solid transparent',
-                        borderLeft: '4px solid #475569',
+                        borderTop: '3.5px solid transparent',
+                        borderBottom: '3.5px solid transparent',
+                        borderLeft: '4.5px solid #f59e0b',
                     }} />
                 </div>
             )}
             {/* Texto */}
             <span
-                className="font-black uppercase select-none text-[8px] text-[#475569] tracking-wider"
+                className="font-black uppercase select-none text-[8.5px] text-amber-100 tracking-widest drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.85)]"
                 style={{
                     writingMode: isHorizontal ? 'horizontal-tb' : 'vertical-rl',
                 }}
@@ -661,7 +603,7 @@ function LogoEl({ item, isCanvasRotated, ...props }) {
                 src="/logo.png" 
                 alt="Pool Imperial" 
                 className="h-full object-contain select-none pointer-events-none transition-transform duration-300"
-                style={{ transform: `rotate(${isCanvasRotated ? rotation + 90 : rotation}deg) scale(${scale})` }}
+                style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
             />
         </div>
     );
@@ -1144,16 +1086,6 @@ function FloorPlanEditorPanel({ selectedItemId, items, setItems, onClose }) {
 export default function FloorPlanView({ onTableSelect, selectedTableId, isEditing, onExitEditing }) {
     const { tables, activeSessions } = useTablesStore();
 
-    // Estado del tema de piso (persiste en localStorage, por defecto 'light-wood-herringbone')
-    const [floorTheme, setFloorTheme] = useState(() => {
-        return localStorage.getItem('custom_floor_theme') || 'light-wood-herringbone';
-    });
-
-    const currentThemeStyle = useMemo(() => {
-        const theme = FLOOR_THEMES.find(t => t.id === floorTheme) || FLOOR_THEMES[0];
-        return theme.style;
-    }, [floorTheme]);
-
     // Auto-scaling responsive logic
     const canvasParentRef = useRef(null);
     const [dimensions, setDimensions] = useState({ width: 1000, height: 562.5, scale: 1, isRotated: false });
@@ -1441,24 +1373,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                                 </span>
                             </div>
                         )}
-                        
-                        {/* Selector de Color de Piso (Contraste) */}
-                        <div className="flex items-center gap-1.5 bg-white hover:bg-slate-50 transition-colors px-2.5 py-1 rounded-lg border border-slate-250 select-none text-xs font-extrabold text-slate-750 shadow-sm">
-                            <span className="text-amber-500">🎨</span>
-                            <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400">Piso:</span>
-                            <select 
-                                value={floorTheme} 
-                                onChange={(e) => {
-                                    setFloorTheme(e.target.value);
-                                    localStorage.setItem('custom_floor_theme', e.target.value);
-                                }}
-                                className="bg-transparent border-none font-black focus:outline-none cursor-pointer text-slate-800 text-xs py-0.5"
-                            >
-                                {FLOOR_THEMES.map(theme => (
-                                    <option key={theme.id} value={theme.id}>{theme.name}</option>
-                                ))}
-                            </select>
-                        </div>
+
 
                         <div className="ml-auto">
                             <Legend />
@@ -1478,23 +1393,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             </span>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
-                            {/* Selector de Color de Piso en Modo Edición */}
-                            <div className="flex items-center gap-1.5 bg-white hover:bg-slate-55 transition-colors px-2.5 py-1.5 rounded-lg border border-amber-250 select-none text-[11px] font-extrabold text-amber-950 shadow-sm">
-                                <span className="text-amber-500">🎨</span>
-                                <span className="text-[9.5px] font-black uppercase tracking-wider text-slate-400">Piso:</span>
-                                <select 
-                                    value={floorTheme} 
-                                    onChange={(e) => {
-                                        setFloorTheme(e.target.value);
-                                        localStorage.setItem('custom_floor_theme', e.target.value);
-                                    }}
-                                    className="bg-transparent border-none font-black focus:outline-none cursor-pointer text-slate-800 text-[11px] py-0.5"
-                                >
-                                    {FLOOR_THEMES.map(theme => (
-                                        <option key={theme.id} value={theme.id}>{theme.name}</option>
-                                    ))}
-                                </select>
-                            </div>
+
                             <button
                                 onClick={handleResetLayout}
                                 className="bg-rose-100 hover:bg-rose-200 text-rose-800 font-extrabold text-[11px] px-2.5 py-1.5 rounded-lg border border-rose-350 transition-all active:scale-95"
@@ -1537,12 +1436,14 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             left: 0;
                             width: 1000px;
                             height: 562.5px;
+                            background-image: url('/piso-madera-clara.png');
+                            background-repeat: repeat;
+                            background-size: 220px 220px;
                             border: 3.5px solid #d97706; /* Luxurious brass/gold frame */
                             border-radius: 0.75rem;
                             overflow: hidden;
                             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
                             flex-shrink: 0;
-                            transition: background-image 0.3s ease, background-color 0.3s ease;
                         }
                         @keyframes pulseBorder {
                             0% {
@@ -1574,7 +1475,6 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                                     ? `scale(${dimensions.scale}) translate(0px, 1000px) rotate(-90deg)`
                                     : `scale(${dimensions.scale})`,
                                 transformOrigin: 'top left',
-                                ...currentThemeStyle
                             }}
                         >
                             {/* Cuadrícula sutil */}
