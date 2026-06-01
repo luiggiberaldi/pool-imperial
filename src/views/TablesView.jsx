@@ -363,6 +363,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                         <TableCard 
                                             table={table} 
                                             session={session} 
+                                            initialOpenMode={table.type === 'NORMAL' ? 'CONSUMPTION' : 'SHOW_MODE'}
                                             onStartTransfer={() => {
                                                 setTransferSourceTableId(selectedTableId);
                                                 setSelectedTableId(null); // Cerrar panel para ver plano con claridad

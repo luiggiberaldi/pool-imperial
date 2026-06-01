@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Layers, Check, Plus, Trash2, Edit2, X, DollarSign, AlertTriangle, Search, Clock, Trophy } from 'lucide-react';
 import { SectionCard } from '../../SettingsShared';
 import { useTablesStore } from '../../../hooks/store/useTablesStore';
+import { useConfirm } from '../../../hooks/useConfirm';
 
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
 const formatCOPDecimals = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
 export default function SettingsTabMesas({ showToast, triggerHaptic }) {
     const { config, updateConfig, tables, activeSessions, addTable, updateTable, deleteTable } = useTablesStore();
+    const confirm = useConfirm();
 
     // Config State — synced from store config
     const [pricePerHour, setPricePerHour] = useState(config?.pricePerHour || 0);
@@ -112,6 +114,66 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
             setTableType('POOL');
         } catch (e) {
             showToast('Error al agregar mesa', 'error');
+        } finally {
+            setIsSaving(false);
+            triggerHaptic?.('light');
+        }
+    };
+
+    // Inicializar mesas por defecto de acuerdo al plano del local (3 Pool + Normales/Stools)
+    const handleInitializeDefaultTables = async () => {
+        const ok = await confirm({
+            title: "Inicializar Distribución del Local",
+            message: "Esta acción registrará automáticamente las 3 mesas de pool (Pool 1, Pool 2, Pool 3) y las 26 mesas comedor y taburetes de barra (M1 a M11, B1 a B15) de acuerdo al plano arquitectónico de Pool Imperial. Las mesas existentes no se duplicarán.",
+            confirmText: "Inicializar Local",
+            cancelText: "Cancelar",
+            variant: "warning"
+        });
+        if (!ok) return;
+
+        setIsSaving(true);
+        try {
+            // 3 mesas de Pool
+            const poolTables = ['Pool 1', 'Pool 2', 'Pool 3'];
+            // Mesas normales comedor y taburetes redondos
+            const normalTables = [];
+            for (let i = 1; i <= 11; i++) {
+                normalTables.push(`M${i}`);
+            }
+            // Taburetes de barra
+            for (let i = 1; i <= 15; i++) {
+                normalTables.push(`B${i}`);
+            }
+
+            let createdCount = 0;
+            let skippedCount = 0;
+
+            // Registrar mesas de Pool
+            for (const name of poolTables) {
+                const exists = tables.some(t => t.name.trim().toLowerCase() === name.toLowerCase());
+                if (!exists) {
+                    await addTable(name, 'POOL');
+                    createdCount++;
+                } else {
+                    skippedCount++;
+                }
+            }
+
+            // Registrar mesas normales
+            for (const name of normalTables) {
+                const exists = tables.some(t => t.name.trim().toLowerCase() === name.toLowerCase());
+                if (!exists) {
+                    await addTable(name, 'NORMAL');
+                    createdCount++;
+                } else {
+                    skippedCount++;
+                }
+            }
+
+            showToast(`Mesas inicializadas: ${createdCount} creadas, ${skippedCount} ya existían.`, 'success');
+        } catch (e) {
+            console.error(e);
+            showToast('Error al inicializar mesas por defecto', 'error');
         } finally {
             setIsSaving(false);
             triggerHaptic?.('light');
@@ -297,6 +359,21 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                             </button>
                         </div>
                     </div>
+                </div>
+
+                {/* Botón de Inicialización Rápida en Lote */}
+                <div className="bg-sky-50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/30 rounded-xl p-4 mb-6 text-center">
+                    <p className="text-[11px] font-bold text-sky-700 dark:text-sky-300 mb-2 leading-relaxed">
+                        ¿Quieres poblar la base de datos automáticamente? Inicializa todas las mesas del local (3 de Pool y 26 normales/bancos) de un solo golpe de acuerdo al plano.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={handleInitializeDefaultTables}
+                        disabled={isSaving}
+                        className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-black px-4 py-2.5 rounded-lg text-xs tracking-wider uppercase transition-all active:scale-95 flex items-center justify-center gap-1.5 mx-auto shadow-sm shadow-sky-500/10"
+                    >
+                        ⚡ Inicializar Mesas del Local
+                    </button>
                 </div>
 
                 {/* Counter */}

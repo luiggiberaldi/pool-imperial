@@ -234,7 +234,7 @@ export const FLOOR_ITEMS = [
   {
     id: 'floor-pool1',
     type: 'pool_table',
-    refName: 'Mesa Pool 1',
+    refName: 'Pool 1',
     label: 'Pool 1',
     x: 49,
     y: 17,
@@ -248,7 +248,7 @@ export const FLOOR_ITEMS = [
   {
     id: 'floor-pool3',
     type: 'pool_table',
-    refName: 'Mesa Pool 3',
+    refName: 'Pool 3',
     label: 'Pool 3',
     x: 63,
     y: 13,
@@ -262,7 +262,7 @@ export const FLOOR_ITEMS = [
   {
     id: 'floor-pool2',
     type: 'pool_table',
-    refName: 'Mesa Pool 2',
+    refName: 'Pool 2',
     label: 'Pool 2',
     x: 63,
     y: 47,

@@ -200,7 +200,7 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
     // --- ADMINISTRACIÓN DE MESAS ---
     addTable: async (name, type = 'POOL') => {
         const userId = await getAuthUserId();
-        const insertPayload = { name, type, status: 'libre', active: true };
+        const insertPayload = { name, type, active: true };
         if (userId) insertPayload.user_id = userId;
         const { data, error } = await supabaseCloud.from('tables').insert([insertPayload]).select().single();
         if (error) throw error;

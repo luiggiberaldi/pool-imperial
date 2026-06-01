@@ -40,9 +40,87 @@ function fmtTimer(seconds) {
 }
 
 /** Resuelve un FloorItem → mesa del store por nombre. */
+/** Resuelve un FloorItem → mesa del store de forma robusta por nombre o código numérico. */
 function resolveTable(item, tables) {
     if (!item.refName) return null;
-    return tables.find(t => t.name === item.refName) ?? null;
+    
+    // 1. Coincidencia exacta
+    let found = tables.find(t => t.name === item.refName);
+    if (found) {
+        console.log(`[FloorPlan] Coincidencia exacta: ${item.refName} -> ${found.name}`);
+        return found;
+    }
+    
+    // 2. Coincidencia exacta insensible a mayúsculas y espacios
+    const cleanRef = item.refName.trim().toLowerCase();
+    found = tables.find(t => t.name.trim().toLowerCase() === cleanRef);
+    if (found) {
+        console.log(`[FloorPlan] Coincidencia case-insensitive: ${item.refName} -> ${found.name}`);
+        return found;
+    }
+
+    // 3. Coincidencia para mesas de billar (POOL) por número (ej. "Pool 1" o "Mesa Pool 1")
+    if (item.type === 'pool_table') {
+        const itemDigits = item.refName.match(/\d+/)?.[0];
+        if (itemDigits) {
+            found = tables.find(t => t.type === 'POOL' && t.name.match(/\d+/)?.[0] === itemDigits);
+            if (found) {
+                console.log(`[FloorPlan] Coincidencia Pool por dígito (${itemDigits}): ${item.refName} -> ${found.name}`);
+                return found;
+            }
+        }
+    }
+
+    // 4. Coincidencia para mesas normales (Bar/Comedor) por número (ej. "M1" o "Mesa 1")
+    if (item.type === 'dining_table' || item.type === 'round_stool' || item.type === 'bar_table') {
+        const itemDigits = item.refName.match(/\d+/)?.[0];
+        if (itemDigits) {
+            found = tables.find(t => {
+                if (t.type !== 'NORMAL') return false;
+                const tDigits = t.name.match(/\d+/)?.[0];
+                if (tDigits !== itemDigits) return false;
+                const nameLower = t.name.toLowerCase();
+                // Evitar cruce con taburetes de barra (B1, B2)
+                return !nameLower.includes('b') && !nameLower.includes('banco') && !nameLower.includes('barra');
+            });
+            if (found) {
+                console.log(`[FloorPlan] Coincidencia Mesa Normal por dígito (${itemDigits}): ${item.refName} -> ${found.name}`);
+                return found;
+            }
+        }
+    }
+
+    // 5. Coincidencia para bancos/taburetes de barra (B1, B2, etc.) por número
+    if (item.type === 'bar_stool') {
+        const itemDigits = item.refName.match(/\d+/)?.[0];
+        if (itemDigits) {
+            found = tables.find(t => {
+                if (t.type !== 'NORMAL') return false;
+                const tDigits = t.name.match(/\d+/)?.[0];
+                if (tDigits !== itemDigits) return false;
+                const nameLower = t.name.toLowerCase();
+                return nameLower.includes('b') || nameLower.includes('banco') || nameLower.includes('barra');
+            });
+            if (found) {
+                console.log(`[FloorPlan] Coincidencia Barra/Banco por dígito (${itemDigits}): ${item.refName} -> ${found.name}`);
+                return found;
+            }
+        }
+    }
+
+    // 6. Último recurso: coincidencia genérica por tipo y dígito
+    const itemDigits = item.refName.match(/\d+/)?.[0];
+    if (itemDigits) {
+        const expectedType = item.type === 'pool_table' ? 'POOL' : 'NORMAL';
+        found = tables.find(t => t.type === expectedType && t.name.match(/\d+/)?.[0] === itemDigits);
+        if (found) {
+            console.log(`[FloorPlan] Coincidencia genérica por tipo y dígito (${itemDigits}): ${item.refName} -> ${found.name}`);
+            return found;
+        }
+    }
+
+    console.warn(`[FloorPlan] No se pudo resolver la mesa para refName: "${item.refName}"`);
+    return null;
 }
 
 /** Devuelve el estado semántico de una sesión: 'free' | 'occupied' | 'checkout' | 'exceeded' */

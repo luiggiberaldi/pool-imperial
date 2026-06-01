@@ -27,7 +27,7 @@ function useStaffName(staffId) {
 
 
 
-export default function TableCard({ table, session, onStartTransfer }) {
+export default function TableCard({ table, session, onStartTransfer, initialOpenMode }) {
     const { config, openSession, closeSession, requestCheckout, cancelCheckoutRequest, updateSessionMetadata, updateSessionSeats, updateSessionTime, addPinaToSession, addHoursToSession, pauseSession, resumeSession } = useTablesStore();
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
@@ -230,6 +230,17 @@ export default function TableCard({ table, session, onStartTransfer }) {
         setPendingOpen({ mode, hours });
         setShowOpenModal(true);
     };
+
+    // Auto-apertura rápida en plano de producción con delay para evitar colisiones de render/animación
+    useEffect(() => {
+        if (isAvailable && initialOpenMode) {
+            console.log(`[TableCard] Auto-apertura gatillada para: ${table.name} con modo: ${initialOpenMode}`);
+            const timer = setTimeout(() => {
+                handleRequestOpen(initialOpenMode);
+            }, 80);
+            return () => clearTimeout(timer);
+        }
+    }, [isAvailable, initialOpenMode]);
 
     const handleCreateCustomer = async (name, phone, documentId) => {
         const newCustomer = await createCustomer(name, phone, documentId);

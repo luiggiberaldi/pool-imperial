@@ -1,10 +1,11 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export const Modal = ({ isOpen, onClose, title, children, className = '', maxWidthClass = 'max-w-sm md:max-w-md' }) => {
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     // ✅ z-[100] asegura que esté por encima de la barra de navegación (z-30)
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
       
@@ -29,11 +30,12 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', maxWid
         </div>
 
         {/* Body con Scroll Mejorado */}
-        {/* ✅ CAMBIO: max-h-[85vh] para más espacio y pb-10 para margen inferior seguro */}
         <div className="p-6 max-h-[85vh] overflow-y-auto custom-scrollbar pb-10">
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
+
