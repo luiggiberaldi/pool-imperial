@@ -114,6 +114,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     
     const handleCancelTable = async () => {
         setShowCancelModal(false);
+        onClose?.(); // Reset selectedTableId in TablesView to prevent reopening wizard modal on the free table
         try {
             // Devolver stock de cada producto al inventario antes de cancelar
             currentItems.forEach(item => {

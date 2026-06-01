@@ -18,8 +18,8 @@ export function OpenWizardModal({
     config, tableName,
     onFinish,
 }) {
-    const title = wizardStep === 1 ? 'Abrir Mesa'
-        : wizardStep === 2 ? 'Modo de Juego'
+    const title = wizardStep === 1 ? (tableName ? `Abrir ${tableName}` : 'Abrir Mesa')
+        : wizardStep === 2 ? (tableName ? `Modo de Juego — ${tableName}` : 'Modo de Juego')
         : wizardStep === 3 ? '¿A quién cobrar?'
         : 'Confirmar Apertura';
 
@@ -30,6 +30,12 @@ export function OpenWizardModal({
                 {/* ── Step 1: Clientes ── */}
                 {wizardStep === 1 && (
                     <>
+                        {tableName && (
+                            <div className="bg-slate-50 border border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center justify-between select-none -mt-1">
+                                <span>Mesa Seleccionada</span>
+                                <span className="font-black text-sm text-slate-800 dark:text-white uppercase tracking-wider">{tableName}</span>
+                            </div>
+                        )}
                         <SeatEditor
                             seats={sessionSeats}
                             onSeatsChange={(s) => { setSeatValidationError(false); onSeatsChange(s); }}

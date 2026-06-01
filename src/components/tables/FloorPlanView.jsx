@@ -463,9 +463,6 @@ function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) 
                 background: 'transparent',
                 border: 'none',
                 filter: 'drop-shadow(0px 3.5px 5px rgba(0,0,0,0.5))',
-                // Opción 1 – área táctil invisible expandida en móvil
-                padding: `${TOUCH_EXPAND_PX}px`,
-                margin: `-${TOUCH_EXPAND_PX}px`,
                 ...props.style,
             }}
             className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
@@ -509,12 +506,6 @@ function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) 
  * BarStoolEl — Taburete de barra (B1-B15).
  * Render: círculo compacto plano con etiqueta. Enforce aspect-ratio to keep it a perfect circle.
  */
-/**
- * Expanded invisible touch hitbox wrapper for small elements (Opción 1 móvil).
- * Visualmente idéntico, pero el área táctil es más grande. Solo aplica en móviles.
- */
-const TOUCH_EXPAND_PX = 14;
-
 function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
     const st = statusOf(session);
     const rotation = item.r || 0;
@@ -558,9 +549,6 @@ function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                 zIndex: isSelected ? 30 : undefined,
                 background: 'transparent',
                 border: 'none',
-                // Opción 1 – área táctil invisible expandida en móvil
-                padding: `${TOUCH_EXPAND_PX}px`,
-                margin: `-${TOUCH_EXPAND_PX}px`,
                 ...props.style,
             }}
             className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
@@ -1261,16 +1249,6 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     const [dimensions, setDimensions] = useState({ width: 1000, height: 562.5, scale: 1, isRotated: false });
     const [isMeasured, setIsMeasured] = useState(false);
 
-    // ── Zoom & Pan state (Opción 2 móvil) ──
-    const [zoomLevel, setZoomLevel] = useState(1);
-    const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-    const zoomContainerRef = useRef(null);
-    const lastPinchDistRef = useRef(null);
-    const isPanningRef = useRef(false);
-    const panStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
-    const MIN_ZOOM = 1;
-    const MAX_ZOOM = 3.5;
-
     useEffect(() => {
         if (!canvasParentRef.current) return;
         const resizeObserver = new ResizeObserver((entries) => {
@@ -1414,82 +1392,6 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
             console.error("Error exporting layout:", err);
             showToast("Error al exportar la configuración", "error");
         }
-    };
-
-    // ── Zoom & Pan handlers ──
-    const clampPan = (ox, oy, zoom) => {
-        if (!zoomContainerRef.current) return { x: ox, y: oy };
-        const containerW = zoomContainerRef.current.offsetWidth;
-        const containerH = zoomContainerRef.current.offsetHeight;
-        const scaledW = containerW * zoom;
-        const scaledH = containerH * zoom;
-        const maxX = Math.max(0, (scaledW - containerW) / 2);
-        const maxY = Math.max(0, (scaledH - containerH) / 2);
-        return {
-            x: Math.max(-maxX, Math.min(maxX, ox)),
-            y: Math.max(-maxY, Math.min(maxY, oy)),
-        };
-    };
-
-    const applyZoom = (newZoom, focalX, focalY) => {
-        const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
-        if (!zoomContainerRef.current) { setZoomLevel(clamped); return; }
-        const rect = zoomContainerRef.current.getBoundingClientRect();
-        const cx = (focalX ?? rect.width / 2) - rect.left;
-        const cy = (focalY ?? rect.height / 2) - rect.top;
-        // Adjust pan so focal point stays fixed
-        setPanOffset(prev => {
-            const ratio = clamped / zoomLevel;
-            const newX = cx - ratio * (cx - prev.x);
-            const newY = cy - ratio * (cy - prev.y);
-            return clampPan(newX, newY, clamped);
-        });
-        setZoomLevel(clamped);
-        if (clamped === MIN_ZOOM) setPanOffset({ x: 0, y: 0 });
-    };
-
-    const handleZoomIn  = () => applyZoom(zoomLevel + 0.4);
-    const handleZoomOut = () => applyZoom(zoomLevel - 0.4);
-    const handleZoomReset = () => { setZoomLevel(1); setPanOffset({ x: 0, y: 0 }); };
-
-    // Pinch-to-zoom touch handler
-    const handleTouchStartZoom = (e) => {
-        if (isEditing) return;
-        if (e.touches.length === 2) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            lastPinchDistRef.current = Math.hypot(dx, dy);
-            e.preventDefault();
-        } else if (e.touches.length === 1 && zoomLevel > 1) {
-            isPanningRef.current = true;
-            panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, ox: panOffset.x, oy: panOffset.y };
-        }
-    };
-
-    const handleTouchMoveZoom = (e) => {
-        if (isEditing) return;
-        if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            const newDist = Math.hypot(dx, dy);
-            const ratio = newDist / lastPinchDistRef.current;
-            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-            applyZoom(zoomLevel * ratio, midX, midY);
-            lastPinchDistRef.current = newDist;
-            e.preventDefault();
-        } else if (e.touches.length === 1 && isPanningRef.current && zoomLevel > 1) {
-            const dx = e.touches[0].clientX - panStartRef.current.x;
-            const dy = e.touches[0].clientY - panStartRef.current.y;
-            const clamped = clampPan(panStartRef.current.ox + dx, panStartRef.current.oy + dy, zoomLevel);
-            setPanOffset(clamped);
-            e.preventDefault();
-        }
-    };
-
-    const handleTouchEndZoom = (e) => {
-        if (e.touches.length < 2) lastPinchDistRef.current = null;
-        if (e.touches.length === 0) isPanningRef.current = false;
     };
 
     // Handler de Arrastre visual (Mouse & Touch)
@@ -1707,41 +1609,11 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                 )}
 
                 {/* ── Canvas del plano ── */}
-                <div
+                <div 
                     ref={canvasParentRef}
-                    className="flex-1 overflow-hidden p-1 sm:p-2 flex items-center justify-center bg-[#f4f3f0] w-full relative"
+                    className="flex-1 overflow-hidden p-3 sm:p-4 flex items-center justify-center bg-[#f4f3f0] w-full"
                     onClick={() => setSelectedEditItemId(null)}
                 >
-                    {/* ── Botones Zoom flotantes (solo modo no-edición, siempre visible en móvil) ── */}
-                    {!isEditing && (
-                        <div
-                            className="absolute bottom-4 right-4 z-50 flex flex-col gap-2 items-center"
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <button
-                                onPointerDown={e => { e.stopPropagation(); handleZoomIn(); }}
-                                className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-lg border border-slate-200 text-slate-700 text-xl font-black flex items-center justify-center active:scale-90 transition-all hover:bg-white select-none"
-                                title="Acercar"
-                            >+</button>
-                            {zoomLevel > 1.05 && (
-                                <button
-                                    onPointerDown={e => { e.stopPropagation(); handleZoomReset(); }}
-                                    className="w-8 h-8 rounded-full bg-slate-700/80 backdrop-blur-sm shadow-md text-white text-[9px] font-black flex items-center justify-center active:scale-90 transition-all select-none"
-                                    title="Restablecer zoom"
-                                >⊙</button>
-                            )}
-                            <button
-                                onPointerDown={e => { e.stopPropagation(); handleZoomOut(); }}
-                                className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-lg border border-slate-200 text-slate-700 text-xl font-black flex items-center justify-center active:scale-90 transition-all hover:bg-white select-none"
-                                title="Alejar"
-                            >−</button>
-                            {zoomLevel > 1.05 && (
-                                <span className="text-[8px] font-black text-slate-500 bg-white/70 backdrop-blur-sm px-1.5 py-0.5 rounded-full shadow-sm select-none">
-                                    {Math.round(zoomLevel * 100)}%
-                                </span>
-                            )}
-                        </div>
-                    )}
                     <style dangerouslySetInnerHTML={{__html: `
                         .canvas-wrapper {
                             position: relative;
@@ -1764,6 +1636,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             overflow: hidden;
                             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
                             flex-shrink: 0;
+                            transition: border-color 300ms ease, border-style 300ms ease, box-shadow 300ms ease, ring 300ms ease;
                         }
                         @keyframes pulseBorder {
                             0% {
@@ -1779,15 +1652,6 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             animation: pulseBorder 1.2s infinite alternate !important;
                         }
                     `}} />
-                    {/* Zoom & Pan container */}
-                    <div
-                        ref={zoomContainerRef}
-                        className="w-full h-full flex items-center justify-center overflow-hidden"
-                        onTouchStart={handleTouchStartZoom}
-                        onTouchMove={handleTouchMoveZoom}
-                        onTouchEnd={handleTouchEndZoom}
-                        style={{ touchAction: isEditing ? 'none' : (zoomLevel > 1 ? 'none' : 'pan-x pan-y') }}
-                    >
                     <div 
                         className="canvas-wrapper"
                         style={{
@@ -1795,13 +1659,10 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             height: `${dimensions.height}px`,
                             opacity: isMeasured ? 1 : 0,
                             transition: 'opacity 150ms ease-in-out',
-                            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
-                            transformOrigin: 'center center',
-                            willChange: 'transform',
                         }}
                     >
                         <div 
-                            className={`floor-plan-canvas transition-all duration-300 ${isEditing ? 'border-dashed border-amber-400 ring-4 ring-amber-400/20' : ''}`}
+                            className={`floor-plan-canvas ${isEditing ? 'border-dashed border-amber-400 ring-4 ring-amber-400/20' : ''}`}
                             style={{
                                 transform: dimensions.isRotated 
                                     ? `scale(${dimensions.scale}) translate(0px, 1000px) rotate(-90deg)`
@@ -1826,17 +1687,11 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             {resolvedItems.map(renderItem)}
                         </div>
                     </div>
-                    </div>{/* end zoom container */}
                 </div>
 
                 {/* Indicación de uso */}
-                <p className="text-center text-[10px] text-slate-500 pb-2 select-none flex-shrink-0 bg-[#f4f3f0]">
-                    {isEditing
-                        ? 'Arrastra para mover · Pool Imperial'
-                        : zoomLevel > 1.05
-                            ? 'Desliza para moverte · Toca + / − para ajustar zoom'
-                            : 'Toca una mesa · Usa + para acercar · Pool Imperial'
-                    }
+                <p className="text-center text-[10px] text-slate-500 pb-2.5 select-none flex-shrink-0 bg-[#f4f3f0]">
+                    {isEditing ? 'Haz arrastre (drag) en cualquier elemento para moverlo de posición' : 'Toca una mesa para gestionar · Pool Imperial'}
                 </p>
             </div>
 
