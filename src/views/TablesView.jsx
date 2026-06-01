@@ -347,6 +347,31 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                             const table = tables.find(t => t.id === selectedTableId);
                             const session = activeSessions.find(s => s.table_id === selectedTableId);
                             if (!table) return null;
+
+                            const isTableAvailable = !session || session.status === 'CLOSED';
+
+                            if (isTableAvailable) {
+                                // Si está libre, ocultamos el contenedor flotante y su fondo
+                                // para que no se superpongan dos fondos oscuros.
+                                // Solo se verá el portal del Wizard de Apertura.
+                                return (
+                                    <div className="hidden">
+                                        <TableCard 
+                                            table={table} 
+                                            session={session} 
+                                            initialOpenMode={table.type === 'NORMAL' ? 'CONSUMPTION' : 'SHOW_MODE'}
+                                            onClose={() => setSelectedTableId(null)}
+                                            onStartTransfer={() => {
+                                                setTransferSourceTableId(selectedTableId);
+                                                setSelectedTableId(null);
+                                                showToast("Selecciona la mesa de destino en el plano", "info");
+                                            }}
+                                        />
+                                    </div>
+                                );
+                            }
+
+                            // Si está ocupada, se muestra de forma estándar el Centro Operativo Flotante con su fondo
                             return (
                                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
                                     {/* Click fuera para cerrar */}
@@ -364,6 +389,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                             table={table} 
                                             session={session} 
                                             initialOpenMode={table.type === 'NORMAL' ? 'CONSUMPTION' : 'SHOW_MODE'}
+                                            onClose={() => setSelectedTableId(null)}
                                             onStartTransfer={() => {
                                                 setTransferSourceTableId(selectedTableId);
                                                 setSelectedTableId(null); // Cerrar panel para ver plano con claridad

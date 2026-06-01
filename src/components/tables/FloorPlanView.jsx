@@ -161,12 +161,12 @@ function StatusDot({ status }) {
     if (status === 'free') return null;
     return (
         <span
-            className={`absolute top-[8%] right-[8%] w-2.5 h-2.5 rounded-full z-20 border border-white
+            className={`absolute top-[8%] right-[8%] w-2.5 h-2.5 rounded-full z-20 border border-white transition-all
                 ${status === 'checkout' 
-                    ? 'bg-amber-500 animate-pulse' 
+                    ? 'bg-amber-500 animate-pulse shadow-[0_0_8px_#f59e0b] shadow-amber-500/50' 
                     : status === 'exceeded'
-                        ? 'bg-rose-500'
-                        : 'bg-emerald-500'}`}
+                        ? 'bg-rose-500 shadow-[0_0_8px_#ef4444] shadow-rose-500/50'
+                        : 'bg-sky-400 shadow-[0_0_8px_#38bdf8] shadow-sky-400/50'}`}
         />
     );
 }
@@ -197,7 +197,7 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
     // Si está ocupada o por cobrar, añadimos un borde de destaque claro
     const isOccupied = st === 'occupied';
     const borderStyle = isOccupied 
-        ? '3.5px solid #3b82f6' 
+        ? '3.5px solid #ef4444' 
         : st === 'checkout'
             ? '3.5px dashed #f59e0b'
             : st === 'exceeded'
@@ -232,7 +232,15 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
             ? 'rgba(217, 119, 6, 0.25)' // Amber/naranja cobro
             : st === 'exceeded'
                 ? 'rgba(153, 27, 27, 0.35)' // Crimson/rojo excedido
-                : 'rgba(59, 130, 246, 0.18)'; // Blue tint for occupied
+                : 'rgba(239, 68, 68, 0.15)'; // Red tint for occupied
+
+    const shadowStyle = st === 'free' ? {} : {
+        boxShadow: st === 'checkout' 
+            ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
+            : st === 'exceeded'
+                ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
+                : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
+    };
 
     return (
         <button
@@ -248,6 +256,7 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                 outlineOffset: '2px',
                 zIndex: isSelected ? 30 : undefined,
                 filter: 'drop-shadow(0px 3.5px 5px rgba(0,0,0,0.5))',
+                ...shadowStyle,
                 ...props.style,
             }}
             className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
@@ -302,9 +311,6 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                     </span>
                 )}
             </div>
-
-            {/* Punto de estado discreto */}
-            <StatusDot status={st} />
         </button>
     );
 }
@@ -324,7 +330,23 @@ function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props })
             ? 'rgba(217, 119, 6, 0.25)' // Amber
             : st === 'exceeded'
                 ? 'rgba(153, 27, 27, 0.35)' // Crimson
-                : 'rgba(59, 130, 246, 0.18)'; // Blue
+                : 'rgba(239, 68, 68, 0.15)'; // Red
+
+    const borderStyle = st === 'free' 
+        ? '2px solid transparent' 
+        : st === 'checkout'
+            ? '2.5px dashed #f59e0b'
+            : st === 'exceeded'
+                ? '2.5px dashed #ef4444'
+                : '2.5px solid #ef4444';
+
+    const shadowStyle = st === 'free' ? {} : {
+        boxShadow: st === 'checkout' 
+            ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
+            : st === 'exceeded'
+                ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
+                : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
+    };
 
     const imgSrc = '/mesas-normales.svg';
 
@@ -340,8 +362,10 @@ function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props })
                 outlineOffset: '2px',
                 zIndex: isSelected ? 30 : undefined,
                 background: 'transparent',
-                border: 'none',
+                border: borderStyle,
+                borderRadius: '8px',
                 filter: 'drop-shadow(0px 3.5px 5px rgba(0,0,0,0.5))',
+                ...shadowStyle,
                 ...props.style,
             }}
             className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
@@ -387,9 +411,6 @@ function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props })
                     </span>
                 )}
             </div>
-
-            {/* Punto de estado */}
-            <StatusDot status={st} />
         </button>
     );
 }
@@ -409,7 +430,23 @@ function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) 
             ? 'rgba(217, 119, 6, 0.25)' // Amber/naranja cobro
             : st === 'exceeded'
                 ? 'rgba(153, 27, 27, 0.35)' // Crimson/rojo excedido
-                : 'rgba(59, 130, 246, 0.18)'; // Blue tint for occupied
+                : 'rgba(239, 68, 68, 0.15)'; // Red tint for occupied
+
+    const borderStyle = st === 'free' 
+        ? '2px solid transparent' 
+        : st === 'checkout'
+            ? '2.5px dashed #f59e0b'
+            : st === 'exceeded'
+                ? '2.5px dashed #ef4444'
+                : '2.5px solid #ef4444';
+
+    const shadowStyle = st === 'free' ? {} : {
+        boxShadow: st === 'checkout' 
+            ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
+            : st === 'exceeded'
+                ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
+                : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
+    };
 
     const imgSrc = '/mesa-redonda.svg';
 
@@ -432,11 +469,13 @@ function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) 
             title={item.label}
         >
             <div
-                className="relative overflow-hidden flex items-center justify-center"
+                className="relative overflow-hidden flex items-center justify-center transition-all duration-300"
                 style={{
                     height: '100%',
                     aspectRatio: '1/1',
                     borderRadius: '50%',
+                    border: borderStyle,
+                    ...shadowStyle,
                 }}
             >
                 <img
@@ -458,7 +497,6 @@ function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) 
                 >
                     {item.label}
                 </span>
-                <StatusDot status={st} />
             </div>
         </button>
     );
@@ -479,7 +517,23 @@ function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
             ? 'rgba(217, 119, 6, 0.3)'
             : st === 'exceeded'
                 ? 'rgba(239, 68, 68, 0.4)'
-                : 'rgba(59, 130, 246, 0.25)'; // Blue tint for occupied
+                : 'rgba(239, 68, 68, 0.2)'; // Red tint for occupied
+
+    const borderStyle = st === 'free' 
+        ? '2px solid transparent' 
+        : st === 'checkout'
+            ? '2.5px dashed #f59e0b'
+            : st === 'exceeded'
+                ? '2.5px dashed #ef4444'
+                : '2.5px solid #ef4444';
+
+    const shadowStyle = st === 'free' ? {} : {
+        boxShadow: st === 'checkout' 
+            ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
+            : st === 'exceeded'
+                ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
+                : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
+    };
 
     const imgSrc = '/bancos.svg';
 
@@ -501,11 +555,13 @@ function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
             title={item.label}
         >
             <div
-                className="relative overflow-hidden flex items-center justify-center"
+                className="relative overflow-hidden flex items-center justify-center transition-all duration-300"
                 style={{
                     height: '90%',
                     aspectRatio: '1/1',
                     borderRadius: '50%',
+                    border: borderStyle,
+                    ...shadowStyle,
                 }}
             >
                 <img
@@ -527,7 +583,6 @@ function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                 >
                     {item.label}
                 </span>
-                <StatusDot status={st} />
             </div>
         </button>
     );
@@ -705,16 +760,37 @@ function ZoneBackgrounds() {
 
 function Legend() {
     return (
-        <div className="flex items-center gap-4 flex-wrap select-none">
+        <div className="flex items-center gap-4 flex-wrap select-none bg-slate-900/5 px-4 py-2.5 rounded-2xl border border-slate-900/5">
             {[
-                { bg: '#f8fafc', border: '#d97706', label: 'Stool Libre' },
-                { bg: '#2d6a4f', border: '#4b5563', label: 'Pool Libre' },
-                { bg: '#3b82f6', border: '#1d4ed8', label: 'Ocupada' },
-                { bg: '#f59e0b', border: '#b45309', label: 'Por cobrar' },
-            ].map(({ bg, border, label }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                    <div className="w-3.5 h-3.5 rounded" style={{ background: bg, border: `1.5px solid ${border}` }} />
-                    <span className="text-[11px] font-semibold text-slate-600">{label}</span>
+                { 
+                    bg: 'rgba(239, 68, 68, 0.15)', 
+                    border: '1.5px solid #ef4444', 
+                    shadow: '0 0 6px rgba(239, 68, 68, 0.5)', 
+                    label: 'Ocupada / Jugando' 
+                },
+                { 
+                    bg: 'rgba(245, 158, 11, 0.15)', 
+                    border: '1.5px dashed #f59e0b', 
+                    shadow: '0 0 6px rgba(245, 158, 11, 0.5)', 
+                    label: 'Por cobrar / Pre-cuenta' 
+                },
+                { 
+                    bg: 'rgba(244, 63, 94, 0.2)', 
+                    border: '1.5px dashed #f43f5e', 
+                    shadow: '0 0 6px rgba(244, 63, 94, 0.6)', 
+                    label: 'Tiempo Excedido' 
+                },
+            ].map(({ bg, border, shadow, label }) => (
+                <div key={label} className="flex items-center gap-2">
+                    <div 
+                        className="w-3.5 h-3.5 rounded" 
+                        style={{ 
+                            background: bg, 
+                            border: border,
+                            boxShadow: shadow
+                        }} 
+                    />
+                    <span className="text-[11px] font-bold text-slate-600">{label}</span>
                 </div>
             ))}
         </div>

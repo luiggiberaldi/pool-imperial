@@ -184,6 +184,17 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                 paidCache[s.id] ? { ...s, paid_at: paidCache[s.id] } : s
             );
 
+            // Preservar sesiones optimistas o pendientes de sincronización en progreso
+            const pendingOptimistic = get().activeSessions.filter(s => 
+                String(s.id).startsWith('temp-') || s._pendingSync
+            );
+            pendingOptimistic.forEach(pending => {
+                const alreadyExists = mergedSessions.some(s => s.table_id === pending.table_id || s.id === pending.id);
+                if (!alreadyExists) {
+                    mergedSessions.push(pending);
+                }
+            });
+
             const finalTables = sortTables(tablesData);
             set({ tables: finalTables, activeSessions: mergedSessions });
             await tablesCache.setItem(scopedKey('tables'), finalTables);

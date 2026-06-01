@@ -27,7 +27,7 @@ function useStaffName(staffId) {
 
 
 
-export default function TableCard({ table, session, onStartTransfer, initialOpenMode }) {
+export default function TableCard({ table, session, onStartTransfer, initialOpenMode, onClose }) {
     const { config, openSession, closeSession, requestCheckout, cancelCheckoutRequest, updateSessionMetadata, updateSessionSeats, updateSessionTime, addPinaToSession, addHoursToSession, pauseSession, resumeSession } = useTablesStore();
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
@@ -700,7 +700,12 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
             handleStartPina={handleStartPina}
             // Open wizard
             showOpenModal={showOpenModal}
-            setShowOpenModal={setShowOpenModal}
+            setShowOpenModal={(val) => {
+                setShowOpenModal(val);
+                if (val === false && isAvailable && onClose) {
+                    onClose();
+                }
+            }}
             wizardStep={wizardStep}
             setWizardStep={setWizardStep}
             sessionSeats={sessionSeats}

@@ -31,6 +31,13 @@ CREATE TABLE IF NOT EXISTS public.cloud_backups (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.device_backups (
+    device_id TEXT PRIMARY KEY,
+    product_id TEXT NOT NULL,
+    backup_data JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS public.account_devices (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     email TEXT NOT NULL,
@@ -77,7 +84,12 @@ CREATE TABLE IF NOT EXISTS public.table_sessions (
     hours_paid NUMERIC DEFAULT 0,
     extended_times INTEGER DEFAULT 0,
     seats JSONB DEFAULT '[]',
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    game_mode TEXT NOT NULL DEFAULT 'NORMAL',
+    opened_by TEXT,
+    guest_count INTEGER DEFAULT 0,
+    total_cost_usd NUMERIC DEFAULT 0,
+    payment_method TEXT
 );
 
 -- ── 4. Órdenes y Consumo en Mesas ───────────────────────────────────────────
@@ -143,17 +155,20 @@ CREATE TABLE IF NOT EXISTS public.staff_users (
 CREATE TABLE IF NOT EXISTS public.staff_debts (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     staff_id UUID NOT NULL REFERENCES public.staff_users(id) ON DELETE CASCADE,
-    amount NUMERIC NOT NULL DEFAULT 0, -- Deuda en COP
-    description TEXT,
-    status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'PAID'
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    concept TEXT NOT NULL,
+    amount_usd NUMERIC NOT NULL DEFAULT 0,
+    remaining_usd NUMERIC NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending', -- 'pending' or 'paid'
+    note TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.staff_debt_payments (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     debt_id UUID NOT NULL REFERENCES public.staff_debts(id) ON DELETE CASCADE,
-    amount NUMERIC NOT NULL DEFAULT 0, -- Abono en COP
+    amount_usd NUMERIC NOT NULL DEFAULT 0, -- Abono en USD
+    note TEXT DEFAULT '',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE
 );
