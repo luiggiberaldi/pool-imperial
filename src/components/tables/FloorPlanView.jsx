@@ -46,28 +46,19 @@ function resolveTable(item, tables) {
     
     // 1. Coincidencia exacta
     let found = tables.find(t => t.name === item.refName);
-    if (found) {
-        console.log(`[FloorPlan] Coincidencia exacta: ${item.refName} -> ${found.name}`);
-        return found;
-    }
+    if (found) return found;
     
     // 2. Coincidencia exacta insensible a mayúsculas y espacios
     const cleanRef = item.refName.trim().toLowerCase();
     found = tables.find(t => t.name.trim().toLowerCase() === cleanRef);
-    if (found) {
-        console.log(`[FloorPlan] Coincidencia case-insensitive: ${item.refName} -> ${found.name}`);
-        return found;
-    }
+    if (found) return found;
 
     // 3. Coincidencia para mesas de billar (POOL) por número (ej. "Pool 1" o "Mesa Pool 1")
     if (item.type === 'pool_table') {
         const itemDigits = item.refName.match(/\d+/)?.[0];
         if (itemDigits) {
             found = tables.find(t => t.type === 'POOL' && t.name.match(/\d+/)?.[0] === itemDigits);
-            if (found) {
-                console.log(`[FloorPlan] Coincidencia Pool por dígito (${itemDigits}): ${item.refName} -> ${found.name}`);
-                return found;
-            }
+            if (found) return found;
         }
     }
 
@@ -83,10 +74,7 @@ function resolveTable(item, tables) {
                 // Evitar cruce con taburetes de barra (B1, B2)
                 return !nameLower.includes('b') && !nameLower.includes('banco') && !nameLower.includes('barra');
             });
-            if (found) {
-                console.log(`[FloorPlan] Coincidencia Mesa Normal por dígito (${itemDigits}): ${item.refName} -> ${found.name}`);
-                return found;
-            }
+            if (found) return found;
         }
     }
 
@@ -101,10 +89,7 @@ function resolveTable(item, tables) {
                 const nameLower = t.name.toLowerCase();
                 return nameLower.includes('b') || nameLower.includes('banco') || nameLower.includes('barra');
             });
-            if (found) {
-                console.log(`[FloorPlan] Coincidencia Barra/Banco por dígito (${itemDigits}): ${item.refName} -> ${found.name}`);
-                return found;
-            }
+            if (found) return found;
         }
     }
 
@@ -113,13 +98,9 @@ function resolveTable(item, tables) {
     if (itemDigits) {
         const expectedType = item.type === 'pool_table' ? 'POOL' : 'NORMAL';
         found = tables.find(t => t.type === expectedType && t.name.match(/\d+/)?.[0] === itemDigits);
-        if (found) {
-            console.log(`[FloorPlan] Coincidencia genérica por tipo y dígito (${itemDigits}): ${item.refName} -> ${found.name}`);
-            return found;
-        }
+        if (found) return found;
     }
 
-    console.warn(`[FloorPlan] No se pudo resolver la mesa para refName: "${item.refName}"`);
     return null;
 }
 
@@ -259,7 +240,7 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                 ...shadowStyle,
                 ...props.style,
             }}
-            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
+            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center touch-target-expand ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             {/* The high-fidelity pool table SVG */}
@@ -368,7 +349,7 @@ function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props })
                 ...shadowStyle,
                 ...props.style,
             }}
-            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
+            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center touch-target-expand ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             {/* The high-fidelity dining table SVG */}
@@ -465,7 +446,7 @@ function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) 
                 filter: 'drop-shadow(0px 3.5px 5px rgba(0,0,0,0.5))',
                 ...props.style,
             }}
-            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
+            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer touch-target-expand ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             <div
@@ -551,7 +532,7 @@ function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                 border: 'none',
                 ...props.style,
             }}
-            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
+            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer touch-target-expand ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             <div
@@ -1249,6 +1230,91 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     const [dimensions, setDimensions] = useState({ width: 1000, height: 562.5, scale: 1, isRotated: false });
     const [isMeasured, setIsMeasured] = useState(false);
 
+    // Zoom & Pan states for Mobile & Touch optimization
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+    const zoomContainerRef = useRef(null);
+    const lastPinchDistRef = useRef(null);
+    const isPanningRef     = useRef(false);
+    const panStartRef      = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+
+    const MIN_ZOOM = 1;
+    const MAX_ZOOM = 4;
+
+    // Safe bounds clamp for panning
+    const clampPan = (x, y, scaleVal) => {
+        if (scaleVal <= 1) return { x: 0, y: 0 };
+        const maxW = (scaleVal - 1) * dimensions.width / 2;
+        const maxH = (scaleVal - 1) * dimensions.height / 2;
+        return {
+            x: Math.max(-maxW, Math.min(maxW, x)),
+            y: Math.max(-maxH, Math.min(maxH, y))
+        };
+    };
+
+    const applyZoom = (newZoom, centerX, centerY) => {
+        const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+        setPanOffset(prev => {
+            if (clamped === MIN_ZOOM) return { x: 0, y: 0 };
+            const ratio = (clamped - zoomLevel) / zoomLevel;
+            // default to center if no coords
+            const cx = centerX !== undefined ? centerX - (canvasParentRef.current?.getBoundingClientRect().left || 0) : dimensions.width / 2;
+            const cy = centerY !== undefined ? centerY - (canvasParentRef.current?.getBoundingClientRect().top || 0) : dimensions.height / 2;
+            
+            const newX = prev.x - ratio * (cx - prev.x);
+            const newY = prev.y - ratio * (cy - prev.y);
+            return clampPan(newX, newY, clamped);
+        });
+        setZoomLevel(clamped);
+        if (clamped === MIN_ZOOM) setPanOffset({ x: 0, y: 0 });
+    };
+
+    const handleZoomIn  = () => applyZoom(zoomLevel + 0.4);
+    const handleZoomOut = () => applyZoom(zoomLevel - 0.4);
+    const handleZoomReset = () => { setZoomLevel(1); setPanOffset({ x: 0, y: 0 }); };
+
+    // Pinch-to-zoom touch handler
+    const handleTouchStartZoom = (e) => {
+        if (isEditing) return;
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            lastPinchDistRef.current = Math.hypot(dx, dy);
+            e.preventDefault();
+        } else if (e.touches.length === 1) {
+            isPanningRef.current = true;
+            panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, ox: panOffset.x, oy: panOffset.y };
+        }
+    };
+
+    const handleTouchMoveZoom = (e) => {
+        if (isEditing) return;
+        if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const newDist = Math.hypot(dx, dy);
+            const ratio = newDist / lastPinchDistRef.current;
+            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            applyZoom(zoomLevel * ratio, midX, midY);
+            lastPinchDistRef.current = newDist;
+            e.preventDefault();
+        } else if (e.touches.length === 1 && isPanningRef.current) {
+            const dx = e.touches[0].clientX - panStartRef.current.x;
+            const dy = e.touches[0].clientY - panStartRef.current.y;
+            const clamped = clampPan(panStartRef.current.ox + dx, panStartRef.current.oy + dy, zoomLevel);
+            setPanOffset(clamped);
+            if (zoomLevel > 1.01) {
+                e.preventDefault();
+            }
+        }
+    };
+
+    const handleTouchEndZoom = (e) => {
+        if (e.touches.length < 2) lastPinchDistRef.current = null;
+        if (e.touches.length === 0) isPanningRef.current = false;
+    };
+
     useEffect(() => {
         if (!canvasParentRef.current) return;
         const resizeObserver = new ResizeObserver((entries) => {
@@ -1611,9 +1677,39 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                 {/* ── Canvas del plano ── */}
                 <div 
                     ref={canvasParentRef}
-                    className="flex-1 overflow-hidden p-3 sm:p-4 flex items-center justify-center bg-[#f4f3f0] w-full"
+                    className="flex-1 overflow-hidden p-3 sm:p-4 flex items-center justify-center bg-[#f4f3f0] w-full relative"
                     onClick={() => setSelectedEditItemId(null)}
                 >
+                    {/* ── Botones Zoom flotantes (solo modo no-edición) ── */}
+                    {!isEditing && (
+                        <div
+                            className="absolute bottom-4 right-4 z-50 flex flex-col gap-2 items-center"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <button
+                                onPointerDown={e => { e.stopPropagation(); handleZoomIn(); }}
+                                className="w-12 h-12 rounded-full bg-white/95 backdrop-blur-sm shadow-xl border border-slate-200 text-slate-800 text-2xl font-black flex items-center justify-center active:scale-90 transition-all hover:bg-white select-none"
+                                title="Acercar"
+                            >+</button>
+                            {zoomLevel > 1.05 && (
+                                <button
+                                    onPointerDown={e => { e.stopPropagation(); handleZoomReset(); }}
+                                    className="w-10 h-10 rounded-full bg-slate-800/90 backdrop-blur-sm shadow-md text-white text-xs font-bold flex items-center justify-center active:scale-90 transition-all select-none"
+                                    title="Restablecer zoom"
+                                >⊙</button>
+                            )}
+                            <button
+                                onPointerDown={e => { e.stopPropagation(); handleZoomOut(); }}
+                                className="w-12 h-12 rounded-full bg-white/95 backdrop-blur-sm shadow-xl border border-slate-200 text-slate-800 text-2xl font-black flex items-center justify-center active:scale-90 transition-all hover:bg-white select-none"
+                                title="Alejar"
+                            >−</button>
+                            {zoomLevel > 1.05 && (
+                                <span className="text-[9px] font-black text-slate-500 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-full shadow-sm select-none font-mono">
+                                    {Math.round(zoomLevel * 100)}%
+                                </span>
+                            )}
+                        </div>
+                    )}
                     <style dangerouslySetInnerHTML={{__html: `
                         .canvas-wrapper {
                             position: relative;
@@ -1651,47 +1747,78 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                         .checkout-pulsing {
                             animation: pulseBorder 1.2s infinite alternate !important;
                         }
+                        .touch-target-expand {
+                            position: relative;
+                        }
+                        .touch-target-expand::after {
+                            content: '';
+                            position: absolute;
+                            top: -12px;
+                            left: -12px;
+                            right: -12px;
+                            bottom: -12px;
+                            cursor: pointer;
+                            z-index: 5;
+                        }
                     `}} />
-                    <div 
-                        className="canvas-wrapper"
-                        style={{
-                            width: `${dimensions.width}px`,
-                            height: `${dimensions.height}px`,
-                            opacity: isMeasured ? 1 : 0,
-                            transition: 'opacity 150ms ease-in-out',
-                        }}
+                    {/* Zoom & Pan container */}
+                    <div
+                        ref={zoomContainerRef}
+                        className="w-full h-full flex items-center justify-center overflow-hidden"
+                        onTouchStart={handleTouchStartZoom}
+                        onTouchMove={handleTouchMoveZoom}
+                        onTouchEnd={handleTouchEndZoom}
+                        style={{ touchAction: isEditing ? 'none' : (zoomLevel > 1 ? 'none' : 'pan-x pan-y') }}
                     >
                         <div 
-                            className={`floor-plan-canvas ${isEditing ? 'border-dashed border-amber-400 ring-4 ring-amber-400/20' : ''}`}
+                            className="canvas-wrapper"
                             style={{
-                                transform: dimensions.isRotated 
-                                    ? `scale(${dimensions.scale}) translate(0px, 1000px) rotate(-90deg)`
-                                    : `scale(${dimensions.scale})`,
-                                transformOrigin: 'top left',
+                                width: `${dimensions.width}px`,
+                                height: `${dimensions.height}px`,
+                                opacity: isMeasured ? 1 : 0,
+                                transition: 'opacity 150ms ease-in-out',
+                                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
+                                transformOrigin: 'center center',
+                                willChange: 'transform',
                             }}
                         >
-                            {/* Cuadrícula sutil */}
-                            <div
-                                className="absolute inset-0 transition-opacity duration-300"
+                            <div 
+                                className={`floor-plan-canvas ${isEditing ? 'border-dashed border-amber-400 ring-4 ring-amber-400/20' : ''}`}
                                 style={{
-                                    opacity: isEditing ? 0.07 : 0.03,
-                                    backgroundImage: `
-                                        linear-gradient(to right, rgba(255,255,255,0.2) 1px, transparent 1px),
-                                        linear-gradient(to bottom, rgba(255,255,255,0.2) 1px, transparent 1px)
-                                    `,
-                                    backgroundSize: isEditing ? '20px 20px' : '40px 40px',
+                                    transform: dimensions.isRotated 
+                                        ? `scale(${dimensions.scale}) translate(0px, 1000px) rotate(-90deg)`
+                                        : `scale(${dimensions.scale})`,
+                                    transformOrigin: 'top left',
                                 }}
-                            />
+                            >
+                                {/* Cuadrícula sutil */}
+                                <div
+                                    className="absolute inset-0 transition-opacity duration-300"
+                                    style={{
+                                        opacity: isEditing ? 0.07 : 0.03,
+                                        backgroundImage: `
+                                            linear-gradient(to right, rgba(255,255,255,0.2) 1px, transparent 1px),
+                                            linear-gradient(to bottom, rgba(255,255,255,0.2) 1px, transparent 1px)
+                                        `,
+                                        backgroundSize: isEditing ? '20px 20px' : '40px 40px',
+                                    }}
+                                />
 
-                            {/* Todos los elementos del plano */}
-                            {resolvedItems.map(renderItem)}
+                                {/* Todos los elementos del plano */}
+                                {resolvedItems.map(renderItem)}
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Indicación de uso */}
                 <p className="text-center text-[10px] text-slate-500 pb-2.5 select-none flex-shrink-0 bg-[#f4f3f0]">
-                    {isEditing ? 'Haz arrastre (drag) en cualquier elemento para moverlo de posición' : 'Toca una mesa para gestionar · Pool Imperial'}
+                    {isEditing
+                        ? 'Arrastra para mover · Pool Imperial'
+                        : zoomLevel > 1.05
+                            ? 'Arrastra con 1 dedo para moverte · Toca +/- para ajustar zoom'
+                            : 'Toca una mesa para gestionar · Pellizca o usa + para acercar'
+                    }
                 </p>
             </div>
 

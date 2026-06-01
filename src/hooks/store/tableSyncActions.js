@@ -101,11 +101,19 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                     const { error } = await supabaseCloud.from('table_sessions').insert(action.payload);
                     if (!error) success = true;
                 } else if (action.type === 'UPDATE_SESSION') {
-                    const { error } = await supabaseCloud.from('table_sessions').update(action.payload).eq('id', action.sessionId);
-                    if (!error) success = true;
+                    if (String(action.sessionId).startsWith('temp-')) {
+                        success = true;
+                    } else {
+                        const { error } = await supabaseCloud.from('table_sessions').update(action.payload).eq('id', action.sessionId);
+                        if (!error) success = true;
+                    }
                 } else if (action.type === 'CLOSE_SESSION') {
-                    const { error } = await supabaseCloud.from('table_sessions').update(action.payload).eq('id', action.sessionId);
-                    if (!error) success = true;
+                    if (String(action.sessionId).startsWith('temp-')) {
+                        success = true;
+                    } else {
+                        const { error } = await supabaseCloud.from('table_sessions').update(action.payload).eq('id', action.sessionId);
+                        if (!error) success = true;
+                    }
                 }
                 if (!success) remainingQueue.push(action);
             } catch (e) {
