@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue } from 'react';
 import { FinancialEngine } from '../core/FinancialEngine';
 import { storageService } from '../utils/storageService';
+import { processSaleTransaction } from '../utils/checkoutProcessor';
 import { useSounds } from '../hooks/useSounds';
 import { useVoiceSearch } from '../hooks/useVoiceSearch';
 import { useTablesStore } from '../hooks/store/useTablesStore';
@@ -425,7 +426,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             });
                         }
                         const cleanIvaRate = Number(ivaRate) || 0;
-                        const ivaAmount = cleanIvaRate > 0 ? Math.round((cartTotalUsd + tdcSurcharge) * (cleanIvaRate / 100)) : 0;
+                        const ivaAmount = cleanIvaRate > 0 ? Math.round(cartTotalUsd * (cleanIvaRate / 100)) : 0;
                         const finalTotal = cartTotalUsd + tdcSurcharge + ivaAmount;
 
                         const opts = {
@@ -541,14 +542,16 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                         const _totalDisc = disc && disc.value > 0 ? (disc.type === 'percentage' ? _sub * (disc.value / 100) : Math.min(disc.value, _sub)) : 0;
                         const totalDiscAmt = _totalDisc + _itemDiscAmt;
                         const subtotalAfterDiscounts = baseTotal - totalDiscAmt;
-                        const serviceChargeAmt = includeServiceCharge ? Math.round(subtotalAfterDiscounts * 0.10) : 0;
+                        const svcPercent = typeof includeServiceCharge === 'number' ? includeServiceCharge : (includeServiceCharge ? 10 : 0);
+                        const serviceChargeAmt = svcPercent > 0 ? Math.round(subtotalAfterDiscounts * (svcPercent / 100)) : 0;
                         const finalGrandTotal = subtotalAfterDiscounts + serviceChargeAmt;
 
                         setTableCheckoutData(prev => ({
                             ...prev,
                             discountData: { active: totalDiscAmt > 0, amountUsd: totalDiscAmt, amountBs: 0, type: disc?.type || 'percentage', value: disc?.value || 0 },
                             grandTotal: finalGrandTotal,
-                            includeServiceCharge: !!includeServiceCharge,
+                            includeServiceCharge: svcPercent > 0,
+                            serviceChargePercent: svcPercent,
                             ...(seatId ? { seatId } : {}),
                             ...(seatDisplayInfo ? { seatDisplayInfo } : { seatDisplayInfo: null }),
                         }));

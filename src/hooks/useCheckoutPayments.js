@@ -20,18 +20,24 @@ function detectPaymentAnomaly({ cartTotalUsd, totalPaidUsd }) {
     return null;
 }
 
-export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta = null, tdcSurchargePercent = 5, ivaRate = 19, tableContext = null }) {
+export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta = null, tdcSurchargePercent: initialSurchargePercent = 5, ivaRate = 19, tableContext = null }) {
     const [barValues, setBarValues] = useState({});
     const [changeUsdGiven, setChangeUsdGiven] = useState('');
     const [changeBsGiven, setChangeBsGiven] = useState(''); // Se mantiene por firma pero siempre es vacío
     const [confirmFiar, setConfirmFiar] = useState(false);
     const [overpayAlertData, setOverpayAlertData] = useState(null);
+    const [tdcSurchargePercent, setTdcSurchargePercent] = useState(initialSurchargePercent);
+    const [applyTdcSurcharge, setApplyTdcSurcharge] = useState(false);
+    const [tdcSurcharge, setTdcSurcharge] = useState(0);
     const submittingRef = useRef(false);
 
     // Calcular la base imponible del IVA excluyendo el servicio voluntario si existe
     const baseParaIva = useMemo(() => {
         if (tableContext?.includeServiceCharge) {
-            return Math.round(cartTotalUsd / 1.10);
+            const svcPercent = tableContext?.serviceChargePercent ?? 10;
+            if (svcPercent > 0) {
+                return Math.round(cartTotalUsd / (1 + (svcPercent / 100)));
+            }
         }
         return cartTotalUsd;
     }, [cartTotalUsd, tableContext]);
@@ -40,17 +46,6 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     const ivaAmount = useMemo(() => {
         return ivaRate > 0 ? Math.round(baseParaIva * (ivaRate / 100)) : 0;
     }, [baseParaIva, ivaRate]);
-
-    // Calcular el monto base pagado con TDC para aplicar el recargo
-    const tdcAmount = useMemo(() => {
-        const val = parseFloat(barValues['tdc']) || 0;
-        return Math.round(val);
-    }, [barValues]);
-
-    // Recargo calculado directamente sobre el monto base ingresado
-    const tdcSurcharge = useMemo(() => {
-        return tdcAmount > 0 ? Math.round(tdcAmount * (tdcSurchargePercent / 100)) : 0;
-    }, [tdcAmount, tdcSurchargePercent]);
 
     const adjustedTotal = useMemo(() => {
         return cartTotalUsd + ivaAmount + tdcSurcharge;
@@ -62,13 +57,10 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         const amounts = paymentMethods.map(m => {
             const val = parseFloat(barValues[m.id]) || 0;
             const amt = Math.round(val);
-            if (m.id === 'tdc') {
-                return amt + tdcSurcharge;
-            }
             return amt;
         });
         return sumR(amounts);
-    }, [barValues, paymentMethods, tdcSurcharge]);
+    }, [barValues, paymentMethods]);
 
     const totalPaidBs = 0; // muerta la moneda Bs
 
@@ -92,12 +84,50 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     const remainingRef = useRef({ usd: remainingUsd });
     remainingRef.current = { usd: remainingUsd };
 
+    const toggleTdcSurcharge = useCallback(() => {
+        triggerHaptic && triggerHaptic();
+        if (applyTdcSurcharge) {
+            // Remove surcharge
+            const currentTdcVal = parseFloat(barValues['tdc']) || 0;
+            const newTdcVal = Math.max(0, Math.round(currentTdcVal - tdcSurcharge));
+            setBarValues(prev => ({ ...prev, tdc: newTdcVal > 0 ? newTdcVal.toString() : '' }));
+            setTdcSurcharge(0);
+            setApplyTdcSurcharge(false);
+        } else {
+            // Add surcharge
+            const currentTdcVal = parseFloat(barValues['tdc']) || 0;
+            if (currentTdcVal > 0) {
+                const surcharge = Math.round(currentTdcVal * (tdcSurchargePercent / 100));
+                const newTdcVal = Math.round(currentTdcVal + surcharge);
+                setTdcSurcharge(surcharge);
+                setBarValues(prev => ({ ...prev, tdc: newTdcVal.toString() }));
+                setApplyTdcSurcharge(true);
+            }
+        }
+    }, [applyTdcSurcharge, barValues, tdcSurcharge, tdcSurchargePercent, triggerHaptic]);
+
+    const handleSurchargePercentChange = useCallback((newPercent) => {
+        setTdcSurchargePercent(newPercent);
+        if (applyTdcSurcharge) {
+            const currentTdcVal = parseFloat(barValues['tdc']) || 0;
+            const netAmount = Math.max(0, Math.round(currentTdcVal - tdcSurcharge));
+            const newSurcharge = Math.round(netAmount * (newPercent / 100));
+            const newTdcVal = Math.round(netAmount + newSurcharge);
+            setTdcSurcharge(newSurcharge);
+            setBarValues(prev => ({ ...prev, tdc: newTdcVal.toString() }));
+        }
+    }, [applyTdcSurcharge, barValues, tdcSurcharge]);
+
     const handleBarChange = useCallback((methodId, value) => {
         let v = value.replace(',', '.');
         if (!/^[0-9.]*$/.test(v)) return;
         const dots = v.match(/\./g);
         if (dots && dots.length > 1) return;
         setBarValues(prev => ({ ...prev, [methodId]: v }));
+        if (methodId === 'tdc') {
+            setApplyTdcSurcharge(false);
+            setTdcSurcharge(0);
+        }
     }, []);
 
     const fillBar = useCallback((methodId, _currency, splitRemainingUsd = null) => {
@@ -105,12 +135,9 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         const curRemaining = remainingRef.current;
         let targetCOP = splitRemainingUsd != null ? splitRemainingUsd : curRemaining.usd;
         if (targetCOP > 0) {
-            if (methodId === 'tdc') {
-                targetCOP = Math.round(targetCOP * (1 + tdcSurchargePercent / 100));
-            }
             setBarValues(prev => ({ ...prev, [methodId]: Math.round(targetCOP).toString() }));
         }
-    }, [triggerHaptic, tdcSurchargePercent]);
+    }, [triggerHaptic]);
 
     const _doConfirm = useCallback(async () => {
         if (submittingRef.current) return;
@@ -167,6 +194,9 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         confirmFiar, setConfirmFiar,
         overpayAlertData, setOverpayAlertData, confirmOverpay,
         tdcSurcharge, adjustedTotal, ivaAmount,
+        applyTdcSurcharge, setApplyTdcSurcharge,
+        tdcSurchargePercent, setTdcSurchargePercent,
+        toggleTdcSurcharge, handleSurchargePercentChange,
     };
 }
 

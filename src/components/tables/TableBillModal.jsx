@@ -47,6 +47,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const [sharedDivisionType, setSharedDivisionType] = useState('equal');
     const [customSharedAmounts, setCustomSharedAmounts] = useState({});
     const [includeServiceCharge, setIncludeServiceCharge] = useState(true); // Checked by default in Colombia
+    const [serviceChargePercent, setServiceChargePercent] = useState(10);
 
     // Seats mode
     const seats = session?.seats || [];
@@ -97,9 +98,9 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
         : 0;
     const finalTotal = subtotalAfterItems - discountAmountUsd;
     
-    // Colombian optional service charge (Suggested tip 10%)
+    // Colombian optional service charge (Suggested tip)
     const baseTotal = hasSeats && seatBreakdown ? (seatBreakdown.grandTotal - discountAmountUsd) : finalTotal;
-    const serviceChargeAmount = includeServiceCharge ? Math.round(baseTotal * 0.10) : 0;
+    const serviceChargeAmount = includeServiceCharge ? Math.round(baseTotal * (serviceChargePercent / 100)) : 0;
     const finalTotalWithService = baseTotal + serviceChargeAmount;
 
 
@@ -168,7 +169,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             customSharedAmounts={customSharedAmounts} setCustomSharedAmounts={setCustomSharedAmounts}
                             customDivisionMismatch={customDivisionMismatch}
                             onProceedToPayment={onProceedToPayment} discount={discount} itemDiscounts={itemDiscounts}
-                            includeServiceCharge={includeServiceCharge}
+                            includeServiceCharge={includeServiceCharge ? serviceChargePercent : 0}
                         />
                     )}
 
@@ -198,26 +199,44 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                         </div>
                     )}
 
-                    {/* Servicio Opcional 10% Toggle (Sugerencia de propina) */}
+                    {/* Servicio Opcional Toggle (Sugerencia de propina) */}
                     <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex items-center justify-between select-none">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-950/40 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                                 <span className="font-extrabold text-sm">%</span>
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Servicio Voluntario (10%)</p>
+                                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Servicio Voluntario</span>
                                 <p className="text-[10px] text-slate-400 mt-0.5">Propina sugerida para el personal</p>
                             </div>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input 
-                                type="checkbox" 
-                                checked={includeServiceCharge} 
-                                onChange={(e) => setIncludeServiceCharge(e.target.checked)}
-                                className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-500"></div>
-                        </label>
+                        <div className="flex items-center gap-3">
+                            {includeServiceCharge && (
+                                <div className="flex items-center bg-white dark:bg-slate-850 px-2.5 py-1.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 w-16 shadow-sm focus-within:border-emerald-500 transition-all select-none">
+                                    <input 
+                                        type="number" 
+                                        min="0"
+                                        max="100"
+                                        value={serviceChargePercent} 
+                                        onChange={(e) => {
+                                            const v = parseInt(e.target.value);
+                                            setServiceChargePercent(isNaN(v) ? 0 : Math.max(0, Math.min(100, v)));
+                                        }}
+                                        className="w-full text-center text-sm font-black bg-transparent text-slate-800 dark:text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                    <span className="text-xs font-black text-slate-400 select-none">%</span>
+                                </div>
+                            )}
+                            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input 
+                                    type="checkbox" 
+                                    checked={includeServiceCharge} 
+                                    onChange={(e) => setIncludeServiceCharge(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-500"></div>
+                            </label>
+                        </div>
                     </div>
 
                     {/* Total */}
@@ -231,7 +250,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                 <p className="text-[10px] text-white/60 mt-0.5">
                                     {seatBreakdown.seats.filter(s => !s.seat.paid).length} persona(s) activa(s)
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
-                                    {includeServiceCharge ? ` + Propina (10%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeServiceCharge ? ` + Propina (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
                                 </p>
                             )}
                             {!hasSeats && isMixed && (
@@ -239,7 +258,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     Piñas {formatCOP(fullBreakdown.pinaCost)} + Tiempo {formatCOP(fullBreakdown.hourCost)}{adjustedConsumption > 0 ? ` + Consumos ${formatCOP(adjustedConsumption)}` : ''}
                                     {(roundsOffset > 0 || hoursOffset > 0) ? ` − Pagado ${formatCOP(roundsOffset * (config.pricePina || 0) + hoursOffset * (config.pricePerHour || 0))}` : ''}
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
-                                    {includeServiceCharge ? ` + Propina (10%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeServiceCharge ? ` + Propina (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
                                 </p>
                             )}
                             {!hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0 || includeServiceCharge) && (
@@ -248,7 +267,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     {timeCost > 0 && adjustedConsumption > 0 ? ' + ' : ''}
                                     {adjustedConsumption > 0 ? `Consumos ${formatCOP(adjustedConsumption)}` : ''}
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
-                                    {includeServiceCharge ? ` + Propina (10%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeServiceCharge ? ` + Propina (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
                                 </p>
                             )}
                         </div>
@@ -281,7 +300,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             )}
                             <button
                                 disabled={customDivisionMismatch}
-                                onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge)}
+                                onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge ? serviceChargePercent : 0)}
                                 className={`flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-orange-500/25 ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
                                 style={{ background: customDivisionMismatch ? '#94a3b8' : 'linear-gradient(135deg, #F97316, #EA580C)' }}
                             >
@@ -299,10 +318,10 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     <button
                                         key={seat.id}
                                         disabled={customDivisionMismatch}
-                                        onClick={() => onProceedToPayment(discount, itemDiscounts, seat.id, sb?.subtotal, includeServiceCharge)}
+                                        onClick={() => onProceedToPayment(discount, itemDiscounts, seat.id, sb?.subtotal, includeServiceCharge ? serviceChargePercent : 0)}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-700/40 hover:bg-sky-100 dark:hover:bg-sky-900/30 active:scale-95 transition-all ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     >
-                                        {seat.label || `P${seats.indexOf(seat) + 1}`} · {sb ? formatCOP(includeServiceCharge ? sb.subtotal + Math.round(sb.subtotal * 0.10) : sb.subtotal) : '$ 0'}
+                                        {seat.label || `P${seats.indexOf(seat) + 1}`} · {sb ? formatCOP(includeServiceCharge ? sb.subtotal + Math.round(sb.subtotal * (serviceChargePercent / 100)) : sb.subtotal) : '$ 0'}
                                     </button>
                                 );
                             })}
@@ -328,7 +347,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                 </button>
                             )}
                             <button
-                                onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge)}
+                                onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge ? serviceChargePercent : 0)}
                                 className="flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-orange-500/25"
                                 style={{ background: 'linear-gradient(135deg, #F97316, #EA580C)' }}
                             >

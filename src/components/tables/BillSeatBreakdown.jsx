@@ -29,7 +29,7 @@ export function BillSeatBreakdown({
                                 <span className="text-sm font-black text-slate-800 dark:text-white">{label}</span>
                                 {seat.paid && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">PAGADO</span>}
                             </div>
-                            <span className="text-base font-black text-slate-800 dark:text-white">{formatCOP(includeServiceCharge ? sb.subtotal + Math.round(sb.subtotal * 0.10) : sb.subtotal)}</span>
+                            <span className="text-base font-black text-slate-800 dark:text-white">{formatCOP(includeServiceCharge > 0 ? sb.subtotal + Math.round(sb.subtotal * (includeServiceCharge / 100)) : sb.subtotal)}</span>
                         </div>
                         <div className="px-4 py-2 space-y-1 text-xs">
                             {/* Cargos de tiempo individuales */}
@@ -78,10 +78,10 @@ export function BillSeatBreakdown({
                             {sb.timeCost.total === 0 && sb.consumption === 0 && sb.sharedPortion === 0 && !seat.paid && (
                                 <p className="text-slate-400 py-1">Sin cargos individuales</p>
                             )}
-                            {includeServiceCharge && !seat.paid && sb.subtotal > 0 && (
+                            {includeServiceCharge > 0 && !seat.paid && sb.subtotal > 0 && (
                                 <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold pt-1 border-t border-slate-100 dark:border-slate-800">
-                                    <span>Servicio Voluntario (10%)</span>
-                                    <span>{formatCOP(Math.round(sb.subtotal * 0.10))}</span>
+                                    <span>Servicio Voluntario ({includeServiceCharge}%)</span>
+                                    <span>{formatCOP(Math.round(sb.subtotal * (includeServiceCharge / 100)))}</span>
                                 </div>
                             )}
                         </div>
@@ -93,7 +93,7 @@ export function BillSeatBreakdown({
                                     className={`w-full py-2 rounded-xl text-xs font-black text-white flex items-center justify-center gap-1.5 active:scale-95 transition-all ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     style={{ background: customDivisionMismatch ? '#94a3b8' : 'linear-gradient(135deg, #F97316, #EA580C)' }}
                                 >
-                                    Cobrar {label} — {formatCOP(includeServiceCharge ? sb.subtotal + Math.round(sb.subtotal * 0.10) : sb.subtotal)}
+                                    Cobrar {label} — {formatCOP(includeServiceCharge > 0 ? sb.subtotal + Math.round(sb.subtotal * (includeServiceCharge / 100)) : sb.subtotal)}
                                 </button>
                             </div>
                         )}

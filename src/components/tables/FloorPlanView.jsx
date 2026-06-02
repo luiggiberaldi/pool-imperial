@@ -262,32 +262,32 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, stat
                 className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-0.5 px-1 text-center bg-transparent transition-colors duration-200"
                 style={isCanvasRotated ? { transform: 'rotate(90deg)', writingMode: 'horizontal-tb' } : { writingMode: isPortrait && item.h > 28 ? 'vertical-rl' : 'horizontal-tb' }}
             >
-                <span className="font-extrabold text-white leading-none text-[10px] sm:text-[11.5px] tracking-wide drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
+                <span className="font-extrabold text-white leading-none text-[13px] sm:text-[14.5px] tracking-wide drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                     {item.label}
                 </span>
                 {(status === 'occupied' || status === 'exceeded') && session?.started_at && (
                     <LiveTimer
                         startedAt={session.started_at}
-                        className="font-mono font-extrabold text-white text-[8px] sm:text-[10px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]"
+                        className="font-mono font-extrabold text-white text-[11px] sm:text-[13px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]"
                     />
                 )}
                 {(status === 'occupied' || status === 'exceeded') && session?.client_name && (
-                    <span className="text-white font-bold text-[7.5px] sm:text-[8px] truncate max-w-full drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
+                    <span className="text-white font-bold text-[10.5px] sm:text-[11px] truncate max-w-full drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                         {session.client_name}
                     </span>
                 )}
                 {status === 'checkout' && (
-                    <span className="font-black text-amber-300 text-[7.5px] sm:text-[8px] uppercase tracking-wider drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
+                    <span className="font-black text-amber-300 text-[10.5px] sm:text-[11px] uppercase tracking-wider drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                         COBRAR
                     </span>
                 )}
                 {status === 'exceeded' && (
-                    <span className="font-black text-rose-300 text-[7.5px] sm:text-[8px] uppercase tracking-wider animate-pulse drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
+                    <span className="font-black text-rose-300 text-[10.5px] sm:text-[11px] uppercase tracking-wider animate-pulse drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                         EXCEDIDO
                     </span>
                 )}
                 {status === 'free' && (
-                    <span className="text-white/55 text-[7px] uppercase tracking-wider font-extrabold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">
+                    <span className="text-white/55 text-[10px] uppercase tracking-wider font-extrabold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">
                         libre
                     </span>
                 )}
@@ -488,7 +488,7 @@ const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, st
                 <span
                     className="absolute z-20 leading-none text-center font-black text-white drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]"
                     style={{
-                        fontSize: item.label.length > 2 ? '7.5px' : '9px',
+                        fontSize: '10.5px',
                         transform: isCanvasRotated ? 'rotate(90deg)' : undefined,
                     }}
                 >
@@ -582,7 +582,7 @@ const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, status
                 <span
                     className="absolute z-20 leading-none text-center font-black text-white drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]"
                     style={{
-                        fontSize: item.label.length > 2 ? '6px' : '7.5px',
+                        fontSize: '9.5px',
                         transform: isCanvasRotated ? 'rotate(90deg)' : undefined,
                     }}
                 >

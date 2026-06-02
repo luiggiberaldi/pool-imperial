@@ -224,13 +224,14 @@ export function useSalesCheckout({
         const discountAmt = tableCheckoutData.discountData?.active ? round2(tableCheckoutData.discountData.amountUsd || 0) : 0;
         const subtotalDespuesDescuentos = Math.max(0, subtotalLimpio - discountAmt);
 
-        // 2. Inyectar Servicio Voluntario (10%) si está activo
-        if (includeServiceCharge) {
-            const serviceChargePrice = Math.round(subtotalDespuesDescuentos * 0.10);
+        // 2. Inyectar Servicio Voluntario si está activo
+        const svcPercent = tableCheckoutData.serviceChargePercent ?? (includeServiceCharge ? 10 : 0);
+        if (includeServiceCharge && svcPercent > 0) {
+            const serviceChargePrice = Math.round(subtotalDespuesDescuentos * (svcPercent / 100));
             if (serviceChargePrice > 0) {
                 syntheticCart.push({
                     id: crypto.randomUUID(),
-                    name: 'Servicio Voluntario (10%)',
+                    name: `Servicio Voluntario (${svcPercent}%)`,
                     priceUsdt: serviceChargePrice,
                     priceUsd: serviceChargePrice,
                     qty: 1,
@@ -262,8 +263,8 @@ export function useSalesCheckout({
         const recalcCartTotal = round2(syntheticCart.reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0));
         let effectiveCartTotal = round2(Math.max(0, recalcCartTotal - discountAmt));
 
-        // 4. Calcular el IVA exclusivo (se suma al total) sobre la base imponible (excluyendo el servicio voluntario)
-        const baseParaIva = round2(syntheticCart.filter(item => item.name !== 'Servicio Voluntario (10%)').reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0) - discountAmt);
+        // 4. Calcular el IVA exclusivo (se suma al total) sobre la base imponible (excluyendo el servicio voluntario y el recargo TDC)
+        const baseParaIva = round2(syntheticCart.filter(item => !item.name.startsWith('Servicio Voluntario') && !item.name.startsWith('Recargo TDC')).reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0) - discountAmt);
         const cleanIvaRate = Number(surchargeData?.ivaRate) || 0;
         const ivaAmount = cleanIvaRate > 0 ? Math.round(baseParaIva * (cleanIvaRate / 100)) : 0;
         
