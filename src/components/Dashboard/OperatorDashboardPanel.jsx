@@ -250,7 +250,7 @@ export default function OperatorDashboardPanel({ onNavigate }) {
                 <button
                     onClick={() => onNavigate?.('ventas')}
                     className="w-full rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all group"
-                    style={{ background: 'linear-gradient(135deg, #0EA5E9, #0284C7)', boxShadow: '0 6px 20px rgba(14,165,233,0.3)' }}>
+                    style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', boxShadow: '0 6px 20px rgba(217,119,6,0.3)' }}>
                     <div className="flex items-center gap-3">
                         <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center">
                             <ShoppingCart size={22} className="text-white" />
@@ -333,8 +333,8 @@ export default function OperatorDashboardPanel({ onNavigate }) {
                 const timeAgo = mins < 1 ? 'ahora mismo' : mins < 60 ? `hace ${mins} min` : `hace ${Math.floor(mins/60)}h`;
                 return (
                     <div className="bg-white border border-slate-100 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                        <div className="w-9 h-9 bg-teal-50 rounded-xl flex items-center justify-center shrink-0">
-                            <CheckCircle size={18} className="text-teal-500" />
+                        <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
+                            <CheckCircle size={18} className="text-amber-500" />
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Última venta</p>
@@ -343,7 +343,7 @@ export default function OperatorDashboardPanel({ onNavigate }) {
                             </p>
                         </div>
                         <div className="text-right shrink-0">
-                            <p className="text-sm font-black text-teal-600">${(lastSale.totalUsd || 0).toFixed(2)}</p>
+                            <p className="text-sm font-black text-amber-600">${(lastSale.totalUsd || 0).toFixed(2)}</p>
                             <p className="text-[10px] text-slate-400 font-medium">{timeAgo}</p>
                         </div>
                     </div>

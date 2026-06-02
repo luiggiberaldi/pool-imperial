@@ -17,7 +17,7 @@ function FilterPill({ label, active, onClick }) {
             onClick={onClick}
             className={`shrink-0 px-3 py-1 rounded-full text-xs font-bold transition-all active:scale-95 border ${
                 active
-                    ? 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-500/30'
+                    ? 'bg-[#D97706] text-white border-[#D97706] shadow-sm shadow-amber-500/30'
                     : 'bg-white dark:bg-white/5 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:border-slate-300'
             }`}
         >
@@ -221,7 +221,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                 <div className="flex items-center justify-between mb-2 gap-2">
                     <div>
                         <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-2 sm:gap-3">
-                            <Layers className="text-sky-500" size={22} />
+                            <Layers className="text-[#D97706]" size={22} />
                             Mesas de Pool
                         </h2>
                         <p className="text-xs sm:text-sm font-medium text-slate-500 mt-0.5">
@@ -426,7 +426,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                             id={`table-card-${table.id}`}
                                             className={`transition-all duration-300 ${
                                                 selectedTableId === table.id
-                                                    ? 'ring-2 ring-sky-500 ring-offset-2 dark:ring-offset-slate-900 rounded-3xl'
+                                                    ? 'ring-2 ring-[#D97706] ring-offset-2 dark:ring-offset-slate-900 rounded-3xl'
                                                     : ''
                                             }`}
                                         >
@@ -479,7 +479,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                     <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">
                                         {isTargetOccupied ? "FUSIONAR" : "MOVER"}
                                     </span>
-                                    <div className="w-8 h-8 bg-sky-500/10 rounded-full flex items-center justify-center text-sky-500 mt-1">
+                                    <div className="w-8 h-8 bg-amber-500/10 rounded-full flex items-center justify-center text-amber-500 mt-1">
                                         <ArrowRight size={16} />
                                     </div>
                                 </div>
@@ -512,8 +512,8 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                     </div>
                                 </div>
                             ) : (
-                                <div className="bg-sky-50 border border-sky-200 text-sky-800 p-4 rounded-xl flex items-start gap-3 dark:bg-sky-950/20 dark:border-sky-900/30 dark:text-sky-300">
-                                    <ArrowRight className="shrink-0 mt-0.5 text-sky-500" size={18} />
+                                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-3 dark:bg-amber-950/20 dark:border-amber-900/30 dark:text-amber-300">
+                                    <ArrowRight className="shrink-0 mt-0.5 text-amber-500" size={18} />
                                     <div>
                                         <h4 className="font-bold text-sm">Transferencia Completa (Destino Libre)</h4>
                                         <p className="text-xs opacity-90 mt-1 leading-relaxed">
@@ -544,7 +544,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                     className={`px-4 py-2.5 rounded-xl text-white font-black transition-all active:scale-95 shadow-md flex items-center justify-center gap-1.5 ${
                                         isTargetOccupied 
                                             ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20' 
-                                            : 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/20'
+                                            : 'bg-[#D97706] hover:bg-[#B45309] shadow-amber-500/20'
                                     }`}
                                 >
                                     {isMutating ? "Procesando..." : isTargetOccupied ? "Fusionar Cuentas" : "Confirmar Mover"}

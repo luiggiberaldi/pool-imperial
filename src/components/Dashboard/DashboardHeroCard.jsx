@@ -14,7 +14,7 @@ export function DashboardHeroCard({
     return (
         <>
         {/* ── HERO REVENUE CARD ── */}
-        <div className="relative rounded-[1.5rem] overflow-hidden" style={{ background: dashTab === 'hoy' ? 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 50%, #A78BFA 100%)' : 'linear-gradient(135deg, #0EA5E9 0%, #06B6D4 50%, #5EEAD4 100%)' }}>
+        <div className="relative rounded-[1.5rem] overflow-hidden" style={{ background: dashTab === 'hoy' ? 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 50%, #A78BFA 100%)' : 'linear-gradient(135deg, #F59E0B 0%, #D97706 50%, #B45309 100%)' }}>
             <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/10" />
             <div className="absolute -left-8 -bottom-8 w-36 h-36 rounded-full bg-white/5" />
             <div className="relative z-10 p-5">
@@ -70,12 +70,12 @@ export function DashboardHeroCard({
                 </div>
             </div>
             <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm relative overflow-hidden">
-                <div className="absolute -right-3 -top-3 w-14 h-14 bg-sky-50 rounded-full blur-xl" />
+                <div className="absolute -right-3 -top-3 w-14 h-14 bg-amber-50 rounded-full blur-xl" />
                 <div className="relative z-10">
-                    <div className="w-9 h-9 bg-sky-100 rounded-xl flex items-center justify-center mb-2.5"><ShoppingBag size={18} className="text-sky-600" strokeWidth={2.5} /></div>
+                    <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center mb-2.5"><ShoppingBag size={18} className="text-amber-600" strokeWidth={2.5} /></div>
                     <p className="text-xl font-black text-slate-800 leading-none"><AnimatedCounter value={displayItemsSold} /></p>
                     <p className="text-[10px] text-slate-400 mt-0.5">Artículos vendidos</p>
-                    <p className="text-[10px] text-sky-500 mt-1.5 font-bold uppercase tracking-wider">Hoy / Caja</p>
+                    <p className="text-[10px] text-amber-500 mt-1.5 font-bold uppercase tracking-wider">Hoy / Caja</p>
                 </div>
             </div>
         </div>

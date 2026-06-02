@@ -84,7 +84,7 @@ export default function TransactionRow({
                         {isCanceled && <span className="text-[9px] bg-red-100 text-red-500 px-1 rounded uppercase">Anulada</span>}
                     </p>
                     <p className="text-[11px] text-slate-500 flex items-center gap-1 flex-wrap">
-                        {(() => { const n = Number(s.saleNumber); return (Number.isInteger(n) && n > 0 && n < 90000) ? <><span className="text-[#0EA5E9] font-black">{`#${String(n).padStart(7, '0')}`}</span><span>·</span></> : null; })()}
+                        {(() => { const n = Number(s.saleNumber); return (Number.isInteger(n) && n > 0 && n < 90000) ? <><span className="text-[#D97706] font-black">{`#${String(n).padStart(7, '0')}`}</span><span>·</span></> : null; })()}
                         {s.tableName && <><span className="text-[9px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase">{s.tableName}</span><span>·</span></>}
                         <span>{dateLabel}</span> · <span>{d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span> · <span>{methodLabel}</span>
                     </p>

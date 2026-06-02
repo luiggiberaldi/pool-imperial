@@ -4,21 +4,21 @@
 
 @layer base {
   :root {
-    /* ── Pool Los Diaz — DESIGN TOKENS ── */
-    /* Paleta extraída del gradiente del logo (sky-blue → teal) */
+    /* ── Pool Imperial — DESIGN TOKENS ── */
+    /* Paleta extraída del color oro del logo y marco de bronce de las mesas */
 
-    /* Primary (sky-500 → sky-600) */
-    --color-primary-50:  240 249 255;
-    --color-primary-100: 224 242 254;
-    --color-primary-200: 186 230 253;
-    --color-primary-300: 125 211 252;
-    --color-primary-400:  56 189 248;
-    --color-primary-500:  14 165 233;  /* #0EA5E9 — color base */
-    --color-primary-600:   2 132 199;
-    --color-primary-700:   3 105 161;
-    --color-primary-800:   7  89 133;
-    --color-primary-900:  12  74 110;
-    --color-primary-950:   8  47  73;
+    /* Primary (Amber/Gold — Oro Imperial) */
+    --color-primary-50:  255 251 235;
+    --color-primary-100: 254 243 199;
+    --color-primary-200: 253 230 138;
+    --color-primary-300: 252 211  77;
+    --color-primary-400: 251 191  36;
+    --color-primary-500: 245 158  11;  /* #f59e0b — color base */
+    --color-primary-600: 217 119   6;
+    --color-primary-700: 180  83   9;
+    --color-primary-800: 146  64  14;
+    --color-primary-900: 120  53  15;
+    --color-primary-950:  69  26   3;
 
     /* Surface (Slate — neutros de fondo) */
     --color-surface-50:  248 250 252;
@@ -61,8 +61,8 @@
     --color-bg-light: var(--color-surface-50);
     --color-bg-dark:  var(--color-surface-900);
 
-    /* Gradiente del logo (sky → teal) — disponible como var CSS */
-    --gradient-brand: linear-gradient(135deg, #7DD3FC 0%, #5EEAD4 100%);
+    /* Gradiente del logo (Oro → Bronce) — disponible como var CSS */
+    --gradient-brand: linear-gradient(135deg, #f59e0b 0%, #b45309 100%);
   }
 }
 

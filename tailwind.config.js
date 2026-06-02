@@ -10,17 +10,17 @@ export default {
       colors: {
 
         // ─────────────────────────────────────────────────────
-        // 🎨 Pool Los Diaz — PALETA SEMÁNTICA OFICIAL
-        // Extraída del gradiente del logo (sky-blue → teal)
+        // 🎨 Pool Imperial — PALETA SEMÁNTICA OFICIAL
+        // Extraída del color oro del logo y marco de bronce de las mesas
         // ─────────────────────────────────────────────────────
 
         // 1. LA MARCA (Acción, Foco, Botones principales)
         primary: {
-          DEFAULT: '#0EA5E9', // sky-500 — color central del logo
-          hover:   '#0284C7', // sky-600 — hover states
-          light:   '#E0F2FE', // sky-100 — fondos suaves, badges
-          focus:   '#BAE6FD', // sky-200 — anillo de foco en inputs
-          dark:    '#0369A1', // sky-700 — pressed/active states
+          DEFAULT: '#d97706', // Amber-600 — dorado insignia del logo
+          hover:   '#b45309', // Amber-700 — hover states
+          light:   '#fef3c7', // Amber-100 — fondos suaves, badges
+          focus:   '#fde68a', // Amber-200 — anillo de foco en inputs
+          dark:    '#78350f', // Amber-900 — pressed/active states
         },
 
         // 2. FONDOS DE PANTALLA
@@ -55,7 +55,7 @@ export default {
         // 6. BORDES Y SEPARADORES
         border: {
           subtle: '#E2E8F0', // Slate-200 — líneas finas
-          focus:  '#0EA5E9', // sky-500 — borde activo en inputs
+          focus:  '#d97706', // Amber-600 — borde activo en inputs
         },
 
         // ─────────────────────────────────────────────────────
@@ -66,9 +66,9 @@ export default {
 
         // brand (viejo token de color primario)
         brand: {
-          light:   '#E0F2FE',
-          DEFAULT: '#0EA5E9',
-          dark:    '#0284C7',
+          light:   '#fef3c7',
+          DEFAULT: '#d97706',
+          dark:    '#b45309',
         },
 
         // background (viejo token de fondo)
@@ -77,44 +77,44 @@ export default {
           dark:  '#0F172A',
         },
 
-        // blue → sky (todo bg-blue-* se vuelve sky automáticamente)
+        // blue → amber (todo bg-blue-* se vuelve amber/gold automáticamente)
         blue: {
-          50:  '#F0F9FF',
-          100: '#E0F2FE',
-          200: '#BAE6FD',
-          300: '#7DD3FC',
-          400: '#38BDF8',
-          500: '#0EA5E9',
-          600: '#0284C7',
-          700: '#0369A1',
-          800: '#075985',
-          900: '#0C4A6E',
-          950: '#082F49',
+          50:  '#fffbeb',
+          100: '#fef3c7',
+          200: '#fde68a',
+          300: '#fcd34d',
+          400: '#fbbf24',
+          500: '#f59e0b',
+          600: '#d97706',
+          700: '#b45309',
+          800: '#92400e',
+          900: '#78350f',
+          950: '#451a03',
         },
 
-        // indigo → sky (compatibilidad con CloudAuthModal, spinner, etc)
+        // indigo → amber (compatibilidad con CloudAuthModal, spinner, etc)
         indigo: {
-          50:  '#F0F9FF',
-          100: '#E0F2FE',
-          200: '#BAE6FD',
-          300: '#7DD3FC',
-          400: '#38BDF8',
-          500: '#0EA5E9',
-          600: '#0284C7',
-          700: '#0369A1',
-          800: '#075985',
-          900: '#0C4A6E',
-          950: '#082F49',
+          50:  '#fffbeb',
+          100: '#fef3c7',
+          200: '#fde68a',
+          300: '#fcd34d',
+          400: '#fbbf24',
+          500: '#f59e0b',
+          600: '#d97706',
+          700: '#b45309',
+          800: '#92400e',
+          900: '#78350f',
+          950: '#451a03',
         },
 
-        // purple → sky (activos de nav, badges)
+        // purple → amber (activos de nav, badges)
         purple: {
-          50:  '#F0F9FF',
-          100: '#E0F2FE',
-          400: '#38BDF8',
-          500: '#0EA5E9',
-          600: '#0284C7',
-          700: '#0369A1',
+          50:  '#fffbeb',
+          100: '#fef3c7',
+          400: '#fbbf24',
+          500: '#f59e0b',
+          600: '#d97706',
+          700: '#b45309',
         },
 
         // slate (neutros — sin cambios, son la base del sistema)

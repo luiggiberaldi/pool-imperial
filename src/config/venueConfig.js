@@ -47,7 +47,7 @@ export const DEFAULT_PRICE_PINA        = 2;    // COP (ej: 2.000)
 export const DEFAULT_PRICE_PINA_BS     = 0;    // Bs (legacy compat)
 
 // ── PWA / SEO ──────────────────────────────────────────────
-export const PWA_THEME_COLOR       = '#0EA5E9';     // sky-500
+export const PWA_THEME_COLOR       = '#D97706';     // amber-600 — Oro Imperial
 export const PWA_BACKGROUND_COLOR  = '#F8FAFC';     // slate-50
 export const OG_LOCALE             = 'es_CO';
 

@@ -22,7 +22,7 @@ export function DashboardPaymentBreakdown({ salesPaymentBreakdown }) {
         return (
             <div key={method} className="mb-3">
                 <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-slate-600 font-bold text-xs flex items-center gap-1.5">{PayIcon && <PayIcon size={14} className="text-[#0EA5E9]" />}{label}</span>
+                    <span className="text-slate-600 font-bold text-xs flex items-center gap-1.5">{PayIcon && <PayIcon size={14} className="text-[#D97706]" />}{label}</span>
                     <div className="text-right flex items-center gap-2">
                         <div className="flex flex-col items-end">
                             <span className="font-black text-slate-800 text-sm">{displayAmount}</span>
@@ -31,7 +31,7 @@ export function DashboardPaymentBreakdown({ salesPaymentBreakdown }) {
                     </div>
                 </div>
                 <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-[#0EA5E9] to-[#5EEAD4] rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    <div className="h-full bg-gradient-to-r from-[#F59E0B] to-[#D97706] rounded-full transition-all" style={{ width: `${pct}%` }} />
                 </div>
             </div>
         );

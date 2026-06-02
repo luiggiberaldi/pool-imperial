@@ -37,9 +37,13 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products) {
 
     // Top productos
     const productMap = {};
+    const productIds = new Set((products || []).map(p => p.id));
+    const productNames = new Set((products || []).map(p => p.name.toLowerCase()));
+
     salesForStats.forEach(s => {
         s.items?.forEach(item => {
-            if (item.category === 'servicios') return;
+            const nameLower = item.name?.toLowerCase();
+            if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
             if (!productMap[item.name]) productMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
             productMap[item.name].qty += item.qty;
             productMap[item.name].revenue += (item.priceUsd || 0) * item.qty; // priceUsd ahora = COP

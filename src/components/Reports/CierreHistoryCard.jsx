@@ -16,9 +16,15 @@ export default function CierreHistoryCard({ cierre, products: _products }) {
         e.stopPropagation();
         
         const todayProductMap = {};
+        const prodList = _products || [];
+        const productIds = new Set(prodList.map(p => p.id));
+        const productNames = new Set(prodList.map(p => p.name.toLowerCase()));
+
         cierre.salesForStats.forEach(s => {
             if (s.items) {
                 s.items.forEach(item => {
+                    const nameLower = item.name?.toLowerCase();
+                    if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
                     if (!todayProductMap[item.name]) todayProductMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
                     todayProductMap[item.name].qty += item.qty;
                     todayProductMap[item.name].revenue += item.priceUsd * item.qty;

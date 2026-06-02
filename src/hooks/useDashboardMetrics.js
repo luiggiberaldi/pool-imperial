@@ -139,16 +139,20 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
 
     const topProducts = useMemo(() => {
         const map = {};
+        const productIds = new Set((products || []).map(p => p.id));
+        const productNames = new Set((products || []).map(p => p.name.toLowerCase()));
+
         sales.filter(s => !['COBRO_DEUDA','AJUSTE_ENTRADA','AJUSTE_SALIDA','VENTA_FIADA'].includes(s.tipo) && s.status !== 'ANULADA').forEach(s => {
             s.items?.forEach(item => {
-                if (item.category === 'servicios') return;
+                const nameLower = item.name?.toLowerCase();
+                if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
                 if (!map[item.name]) map[item.name] = { name: item.name, qty: 0, revenue: 0 };
                 map[item.name].qty += item.qty;
                 map[item.name].revenue += item.priceUsd * item.qty;
             });
         });
         return Object.values(map).sort((a, b) => b.qty - a.qty).slice(0, 5);
-    }, [sales]);
+    }, [sales, products]);
 
     const topStaff = useMemo(() => {
         const sinceDate = localStorage.getItem('ranking_meseros_since') || null;
@@ -180,16 +184,20 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
 
     const todayTopProducts = useMemo(() => {
         const map = {};
+        const productIds = new Set((products || []).map(p => p.id));
+        const productNames = new Set((products || []).map(p => p.name.toLowerCase()));
+
         todaySales.forEach(s => {
             s.items?.forEach(item => {
-                if (item.category === 'servicios') return;
+                const nameLower = item.name?.toLowerCase();
+                if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
                 if (!map[item.name]) map[item.name] = { name: item.name, qty: 0, revenue: 0 };
                 map[item.name].qty += item.qty;
                 map[item.name].revenue += item.priceUsd * item.qty;
             });
         });
         return Object.values(map).sort((a, b) => b.qty - a.qty).slice(0, 10);
-    }, [todaySales]);
+    }, [todaySales, products]);
 
     return {
         today, todaySales, todayCashFlow, todayApertura,

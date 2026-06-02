@@ -305,7 +305,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             {/* Pull-to-refresh indicator */}
             {(pullDistance > 0 || isRefreshing) && (
                 <div className="flex justify-center pb-3 transition-all" style={{ height: pullDistance > 0 ? pullDistance : 40 }}>
-                    <div className={`w-6 h-6 rounded-full border-2 border-slate-200 border-t-[#0EA5E9] ${isRefreshing || pullDistance > 60 ? 'animate-spin-slow' : ''}`}
+                    <div className={`w-6 h-6 rounded-full border-2 border-slate-200 border-t-[#D97706] ${isRefreshing || pullDistance > 60 ? 'animate-spin-slow' : ''}`}
                         style={{ opacity: Math.min(pullDistance / 60, 1), transform: `rotate(${pullDistance * 4}deg)` }} />
                 </div>
             )}
@@ -316,11 +316,11 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     <SyncStatus />
                     {usuarioActivo && (() => {
                         const r = usuarioActivo.role || usuarioActivo.rol;
-                        const c = r === 'ADMIN' ? {bg:'bg-sky-50',border:'border-sky-100/50',ping:'bg-sky-400',dot:'bg-sky-500',text:'text-sky-800',btn:'text-sky-500 hover:bg-sky-100 hover:text-sky-700'}
+                        const c = r === 'ADMIN' ? {bg:'bg-amber-50',border:'border-amber-100/50',ping:'bg-amber-400',dot:'bg-amber-500',text:'text-amber-800',btn:'text-amber-500 hover:bg-amber-100 hover:text-amber-700'}
                                 : r === 'MESERO' || r === 'BARRA' ? (r === 'BARRA'
                                     ? {bg:'bg-violet-50',border:'border-violet-100/50',ping:'bg-violet-400',dot:'bg-violet-500',text:'text-violet-800',btn:'text-violet-500 hover:bg-violet-100 hover:text-violet-700'}
                                     : {bg:'bg-orange-50',border:'border-orange-100/50',ping:'bg-orange-400',dot:'bg-orange-500',text:'text-orange-800',btn:'text-orange-500 hover:bg-orange-100 hover:text-orange-700'})
-                                : {bg:'bg-teal-50',border:'border-teal-100/50',ping:'bg-teal-400',dot:'bg-teal-500',text:'text-teal-800',btn:'text-teal-500 hover:bg-teal-100 hover:text-teal-700'};
+                                : {bg:'bg-amber-50',border:'border-amber-100/50',ping:'bg-amber-400',dot:'bg-amber-500',text:'text-amber-800',btn:'text-amber-500 hover:bg-amber-100 hover:text-amber-700'};
                         return (
                             <div className={`flex items-center gap-1.5 ${c.bg} ${c.border} border rounded-full pl-2 pr-1 sm:pl-3 sm:pr-1.5 py-1 sm:py-1.5 shadow-sm`}>
                                 <div className="relative flex h-2 w-2 ml-1 sm:ml-0">
@@ -385,7 +385,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     ) : (
                         <div className="p-2 space-y-1.5">
                             {notifications.map(n => {
-                                const colors = n.type === 'urgent' ? 'bg-red-50 border-red-100 text-red-600' : n.type === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-600' : 'bg-sky-50 border-sky-100 text-sky-600';
+                                const colors = n.type === 'urgent' ? 'bg-red-50 border-red-100 text-red-600' : n.type === 'warning' ? 'bg-amber-50 border-amber-100 text-amber-600' : 'bg-amber-50 border-amber-100 text-amber-600';
                                 const IconComp = n.icon === 'clock' ? Clock : n.icon === 'package' ? Package : n.icon === 'wallet' ? Wallet : Users;
                                 return (
                                     <button key={n.id} onClick={() => { if (n.action && onNavigate) { triggerHaptic?.(); setShowNotifPanel(false); if (n.navFilter) { localStorage.setItem(n.navFilter.key, n.navFilter.value); window.dispatchEvent(new Event(n.navFilter.key)); } onNavigate(n.action); } }}
@@ -449,7 +449,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     {isAdmin && (
                         <button onClick={() => { if (onNavigate) { triggerHaptic(); onNavigate('mesas'); } }}
                             className="flex-1 flex flex-col items-center gap-1.5 py-3.5 rounded-xl active:scale-95 transition-all"
-                            style={{ background: 'linear-gradient(135deg, #0EA5E9, #0284C7)', boxShadow: '0 4px 12px rgba(14,165,233,0.25)' }}>
+                            style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)', boxShadow: '0 4px 12px rgba(217,119,6,0.25)' }}>
                             <ListChecks size={22} className="text-white" />
                             <span className="text-[11px] font-black text-white">Mesas</span>
                         </button>
@@ -544,7 +544,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                     className="w-full rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all group mt-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                     <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 bg-blue-50 dark:bg-blue-900/30 rounded-xl flex items-center justify-center"><FileText size={20} className="text-blue-500" /></div>
+                        <div className="w-11 h-11 bg-amber-50 rounded-xl flex items-center justify-center"><FileText size={20} className="text-amber-500" /></div>
                         <div className="text-left">
                             <p className="text-sm font-black text-slate-700 dark:text-slate-200">Reporte de Turno</p>
                             <p className="text-[11px] text-slate-400">{todaySales.length} {todaySales.length === 1 ? 'venta' : 'ventas'} · {formatCop(todayTotalUsd)}</p>
@@ -636,7 +636,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                                     <span className={`text-[10px] font-black w-4 text-center shrink-0 ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : i === 2 ? 'text-orange-400' : 'text-slate-300'}`}>{i + 1}</span>
                                     <p className="text-xs font-bold text-slate-700 truncate">{p.name}</p>
                                 </div>
-                                <span className="text-xs font-black text-[#0EA5E9] shrink-0 pl-2">{p.qty} u</span>
+                                <span className="text-xs font-black text-[#D97706] shrink-0 pl-2">{p.qty} u</span>
                             </div>
                         ))}
                     </div>

@@ -59,7 +59,7 @@ function ChangePasswordScreen({ onPasswordChanged }) {
 
     return (
         <>
-            <div className="w-16 h-16 bg-gradient-to-br from-sky-500 to-teal-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-sky-500/20">
+            <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-700 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-amber-500/20">
                 <ShieldCheck size={30} className="text-white" />
             </div>
             <h1 className="text-2xl font-black text-slate-800 text-center mb-1">Nueva contraseña</h1>
@@ -82,7 +82,7 @@ function ChangePasswordScreen({ onPasswordChanged }) {
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             placeholder="Mínimo 6 caracteres"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-11 py-3.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 transition-all"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-11 py-3.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
                             autoFocus
                             disabled={!sessionReady || status === 'loading'}
                         />
@@ -117,7 +117,7 @@ function ChangePasswordScreen({ onPasswordChanged }) {
                             className={`w-full bg-slate-50 border rounded-2xl pl-11 pr-11 py-3.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all ${
                                 confirm && confirm !== password ? 'border-red-500/50 focus:ring-red-500/30'
                                 : confirm && confirm === password ? 'border-emerald-500/50 focus:ring-emerald-500/30'
-                                : 'border-slate-200 focus:ring-sky-500/50 focus:border-sky-500'
+                                : 'border-slate-200 focus:ring-amber-500/50 focus:border-amber-500'
                             }`}
                             disabled={!sessionReady || status === 'loading'}
                         />
@@ -146,7 +146,7 @@ function ChangePasswordScreen({ onPasswordChanged }) {
                 <button
                     type="submit"
                     disabled={!sessionReady || status === 'loading' || !password || password !== confirm}
-                    className="w-full py-3.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold rounded-2xl transition-all active:scale-95 shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 mt-2"
+                    className="w-full py-3.5 bg-[#D97706] hover:bg-[#B45309] disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold rounded-2xl transition-all active:scale-95 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 mt-2"
                 >
                     {status === 'loading' ? (
                         <><Loader2 size={16} className="animate-spin" /> Guardando...</>
@@ -210,7 +210,7 @@ function LoginAfterResetScreen({ onDone }) {
                             value={email}
                             onChange={e => setEmail(e.target.value)}
                             placeholder="tu@correo.com"
-                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 transition-all"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
                             autoFocus
                             disabled={status === 'loading'}
                         />
@@ -247,7 +247,7 @@ function LoginAfterResetScreen({ onDone }) {
                 <button
                     type="submit"
                     disabled={status === 'loading'}
-                    className="w-full py-3.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold rounded-2xl transition-all active:scale-95 shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 mt-2"
+                    className="w-full py-3.5 bg-[#D97706] hover:bg-[#B45309] disabled:bg-slate-100 disabled:text-slate-400 text-white font-bold rounded-2xl transition-all active:scale-95 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 mt-2"
                 >
                     {status === 'loading' ? (
                         <><Loader2 size={16} className="animate-spin" /> Iniciando sesión...</>
@@ -268,8 +268,8 @@ export default function ResetPasswordView({ onDone }) {
         <div className="fixed inset-0 z-[300] bg-white flex items-center justify-center p-6 font-sans">
             {/* Background glow */}
             <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <div className="absolute -top-32 -left-32 w-96 h-96 bg-sky-500/10 rounded-full blur-[100px]" />
-                <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-teal-400/10 rounded-full blur-[100px]" />
+                <div className="absolute -top-32 -left-32 w-96 h-96 bg-amber-500/10 rounded-full blur-[100px]" />
+                <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-amber-400/10 rounded-full blur-[100px]" />
             </div>
 
             <div className="relative w-full max-w-sm animate-in slide-in-from-bottom-6 duration-300">

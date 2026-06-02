@@ -14,9 +14,9 @@ import { supabaseCloud } from '../../config/supabaseCloud';
 
 // ─── Constantes de color del brand ──────────────────────────────────
 const C = {
-    primary:      '#0EA5E9', // sky-500
-    primaryHover: '#0284C7', // sky-600
-    primaryLight: '#E0F2FE', // sky-100
+    primary:      '#D97706', // amber-600 — dorado insignia
+    primaryHover: '#B45309', // amber-700 — hover
+    primaryLight: '#FEF3C7', // amber-100 — fondos suaves
     surface:      '#FFFFFF',
     surfaceSub:   '#F8FAFC',
     border:       '#E2E8F0',
@@ -183,11 +183,11 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                     const ok = await confirm({ title: 'Restaurar desde la nube', message: 'Se perderán los datos locales no sincronizados. ¿Continuar?', confirmText: 'Sí, restaurar', cancelText: 'Cancelar', variant: 'warning' });
                                     if (ok) handleDataConflictChoice('cloud');
                                 }}
-                                className="flex flex-col items-center gap-3 p-5 rounded-2xl border-2 border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-400 hover:bg-sky-100 active:scale-95 transition-all"
+                                className="flex flex-col items-center gap-3 p-5 rounded-2xl border-2 border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-400 hover:bg-amber-100 active:scale-95 transition-all"
                             >
                                 <Database size={32} />
                                 <span className="text-sm font-black text-center leading-tight">Restaurar Nube</span>
-                                <span className="text-[10px] text-sky-500 text-center font-medium">Baja los datos de tu cuenta</span>
+                                <span className="text-[10px] text-amber-500 text-center font-medium">Baja los datos de tu cuenta</span>
                             </button>
                             <button
                                 onClick={async () => {
@@ -229,15 +229,15 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                             {blockedDevices.map((d, i) => {
                                 const isCurrent = d.device_id === deviceLimitError.currentId;
                                 return (
-                                    <div key={d.device_id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border ${isCurrent ? 'bg-sky-50 border-sky-200' : 'bg-slate-50 border-slate-100'}`}>
+                                    <div key={d.device_id} className={`flex items-center justify-between gap-3 p-3 rounded-xl border ${isCurrent ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
                                         <div className="flex items-center gap-3 overflow-hidden">
-                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isCurrent ? 'bg-sky-100 text-sky-600' : 'bg-white text-slate-500 border border-slate-200'}`}>
+                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isCurrent ? 'bg-amber-100 text-amber-600' : 'bg-white text-slate-500 border border-slate-200'}`}>
                                                 <Smartphone size={18} />
                                             </div>
                                             <div className="min-w-0">
-                                                <p className={`text-sm font-bold truncate flex items-center gap-2 ${isCurrent ? 'text-sky-700' : 'text-slate-700'}`}>
+                                                <p className={`text-sm font-bold truncate flex items-center gap-2 ${isCurrent ? 'text-amber-700' : 'text-slate-700'}`}>
                                                     {d.device_alias || `Caja ${i + 1}`}
-                                                    {isCurrent && <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-black bg-sky-500 text-white shrink-0">Este equipo</span>}
+                                                    {isCurrent && <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-black bg-amber-500 text-white shrink-0">Este equipo</span>}
                                                 </p>
                                                 <p className="text-[10px] text-slate-400">Visto: {new Date(d.last_seen).toLocaleDateString('es-CO')}</p>
                                             </div>
@@ -352,9 +352,9 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-in fade-in duration-300">
             <div className="w-full max-w-sm bg-white rounded-[2rem] shadow-2xl border border-slate-100 overflow-hidden relative">
 
-                {/* Destellos decorativos del brand (sky/teal) */}
-                <div className="absolute top-0 right-0 -mr-12 -mt-12 w-40 h-40 rounded-full blur-3xl pointer-events-none" style={{ background: 'rgba(125,211,252,0.2)' }} />
-                <div className="absolute bottom-0 left-0 -ml-12 -mb-12 w-40 h-40 rounded-full blur-3xl pointer-events-none" style={{ background: 'rgba(94,234,212,0.15)' }} />
+                {/* Destellos decorativos del brand (oro/bronce) */}
+                <div className="absolute top-0 right-0 -mr-12 -mt-12 w-40 h-40 rounded-full blur-3xl pointer-events-none" style={{ background: 'rgba(251,191,36,0.15)' }} />
+                <div className="absolute bottom-0 left-0 -ml-12 -mb-12 w-40 h-40 rounded-full blur-3xl pointer-events-none" style={{ background: 'rgba(217,119,6,0.12)' }} />
 
                 {/* Botón cerrar */}
                 {!forceLogin && (
@@ -400,7 +400,7 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                 <button
                                     onClick={handleResetPasswordRequest} disabled={importStatus === 'loading'}
                                     className="w-full py-3.5 text-white text-sm font-black rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
-                                    style={{ background: `linear-gradient(135deg, ${C.primary}, #5EEAD4)` }}
+                                    style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryHover})` }}
                                 >
                                     {importStatus === 'loading' ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Enviar correo de recuperación'}
                                 </button>
@@ -416,7 +416,7 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Mail size={16} className="text-slate-400" /></div>
                                         <input
                                             type="email" value={inputEmail} onChange={e => setInputEmail(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
+                                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 outline-none transition-all"
                                             placeholder="Correo electrónico"
                                         />
                                     </div>
@@ -431,10 +431,10 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none"><Key size={16} className="text-slate-400" /></div>
                                         <input
                                             type={showPassword ? 'text' : 'password'} value={inputPassword} onChange={e => setInputPassword(e.target.value)}
-                                            className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 outline-none transition-all"
+                                            className="w-full pl-10 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 outline-none transition-all"
                                             placeholder="Contraseña"
                                         />
-                                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-sky-500 transition-colors">
+                                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-amber-500 transition-colors">
                                             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                                         </button>
                                     </div>
@@ -445,7 +445,7 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                 {/* Olvidé contraseña */}
                                 {isCloudLogin && (
                                     <div className="flex justify-end">
-                                        <button onClick={() => setIsRecoveringPassword(true)} className="text-[11px] font-bold text-sky-600 hover:underline">
+                                        <button onClick={() => setIsRecoveringPassword(true)} className="text-[11px] font-bold text-amber-600 hover:underline">
                                             ¿Olvidaste tu contraseña?
                                         </button>
                                     </div>
@@ -462,8 +462,8 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                 <button
                                     onClick={handleSaveCloudAccount}
                                     disabled={importStatus === 'loading'}
-                                    className="w-full py-3.5 text-white text-sm font-black rounded-xl transition-all shadow-lg shadow-sky-500/20 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
-                                    style={{ background: `linear-gradient(135deg, ${C.primary} 0%, #5EEAD4 100%)` }}
+                                    className="w-full py-3.5 text-white text-sm font-black rounded-xl transition-all shadow-lg shadow-amber-500/20 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70"
+                                    style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryHover} 100%)` }}
                                 >
                                     {importStatus === 'loading' ? (
                                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -511,7 +511,7 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
                                         </div>
                                         <button
                                             onClick={handleInstallPWA}
-                                            className="w-full py-3 bg-white border-2 border-dashed border-sky-300 hover:border-sky-400 hover:bg-sky-50 text-sky-600 text-sm font-black rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                            className="w-full py-3 bg-white border-2 border-dashed border-amber-300 hover:border-amber-400 hover:bg-amber-50 text-amber-600 text-sm font-black rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                                         >
                                             {deferredPrompt ? <Download size={16} /> : isIos ? <Share size={16} /> : <Download size={16} />}
                                             Instalar App en este dispositivo
@@ -519,17 +519,17 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
 
                                         {/* Instrucciones para iOS */}
                                         {showIosHint && (
-                                            <div className="mt-2 p-3 bg-sky-50 border border-sky-200 rounded-xl text-xs text-sky-700 font-medium space-y-1.5">
+                                            <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-medium space-y-1.5">
                                                 {isIos ? (
                                                     <>
-                                                        <p className="font-black text-sky-800">Cómo instalar en iPhone / iPad:</p>
+                                                        <p className="font-black text-amber-800">Cómo instalar en iPhone / iPad:</p>
                                                         <p>1. Toca el botón <span className="inline-flex items-center gap-1 font-black"><Share size={12} /> Compartir</span> en Safari</p>
                                                         <p>2. Selecciona <strong>"Agregar a pantalla de inicio"</strong></p>
                                                         <p>3. Toca <strong>"Agregar"</strong> para confirmar</p>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <p className="font-black text-sky-800">Cómo instalar en tu PC o Android:</p>
+                                                        <p className="font-black text-amber-800">Cómo instalar en tu PC o Android:</p>
                                                         <p>1. Abre el menú del navegador <strong>( ⋮ )</strong></p>
                                                         <p>2. Selecciona <strong>"Instalar aplicación"</strong> o <strong>"Agregar a pantalla de inicio"</strong></p>
                                                     </>

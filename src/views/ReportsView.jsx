@@ -49,8 +49,14 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
     // ── Aggregated product sales for "Por Artículo" tab ──
     const allProductsSold = useMemo(() => {
         const map = {};
+        const productIds = new Set((products || []).map(p => p.id));
+        const productNames = new Set((products || []).map(p => p.name.toLowerCase()));
+
         salesForStats.forEach(s => {
             s.items?.forEach(item => {
+                const nameLower = item.name?.toLowerCase();
+                if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
+
                 const key = item.name;
                 if (!map[key]) map[key] = { name: item.name, qty: 0, revenue: 0, isWeight: !!item.isWeight };
                 map[key].qty += item.qty;
@@ -68,7 +74,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         else if (articleSort === 'revenue') list.sort((a, b) => b.revenue - a.revenue);
         else list.sort((a, b) => a.name.localeCompare(b.name));
         return list;
-    }, [salesForStats, articleSearch, articleSort]);
+    }, [salesForStats, articleSearch, articleSort, products]);
 
     const confirmVoidSale = async () => {
         const sale = voidSaleTarget;

@@ -211,7 +211,7 @@ export default function App() {
   if (checkingSession) {
     return (
       <div className="h-[100dvh] w-full bg-[#F8FAFC] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-4 border-[#0EA5E9] border-t-transparent animate-spin" />
+        <div className="w-8 h-8 rounded-full border-4 border-[#D97706] border-t-transparent animate-spin" />
       </div>
     );
   }
@@ -268,7 +268,7 @@ export default function App() {
 
       {/* Golden Tester View Overlay */}
       {showTester && (
-        <Suspense fallback={<div className="fixed inset-0 z-[150] bg-[#F8FAFC] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-[#0EA5E9] border-t-transparent animate-spin" /></div>}>
+        <Suspense fallback={<div className="fixed inset-0 z-[150] bg-[#F8FAFC] flex items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-[#D97706] border-t-transparent animate-spin" /></div>}>
           <div className="fixed inset-0 z-[150] bg-[#F8FAFC]">
             <TesterView onBack={() => setShowTester(false)} />
           </div>
@@ -445,14 +445,14 @@ export default function App() {
           <div className="bg-[#1E293B] border border-slate-700 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <FlaskConical className="text-[#0EA5E9]" /> Panel Dev
+                <FlaskConical className="text-[#D97706]" /> Panel Dev
               </h2>
               <button onClick={() => setShowAdminPanel(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
 
             <button
               onClick={() => { triggerHaptic(); setShowTester(true); setShowAdminPanel(false); }}
-              className="w-full bg-[#0EA5E9] hover:bg-[#0284C7] text-white font-bold py-3 rounded-lg text-sm uppercase tracking-wider transition-colors"
+              className="w-full bg-[#D97706] hover:bg-[#B45309] text-white font-bold py-3 rounded-lg text-sm uppercase tracking-wider transition-colors"
             >
               🚀 Abrir Tester
             </button>
@@ -472,7 +472,7 @@ export default function App() {
 
 function TabButton({ icon, label, isActive, onClick, 'data-tour': dataTour }) {
   return (
-    <button data-tour={dataTour} onClick={onClick} className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl transition-all duration-300 ${isActive ? 'bg-[#0EA5E9] text-white shadow-md shadow-sky-500/30' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
+    <button data-tour={dataTour} onClick={onClick} className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl transition-all duration-300 ${isActive ? 'bg-[#D97706] text-white shadow-md shadow-amber-500/30' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
       {icon}
       {isActive && <span className="text-[9px] font-extrabold animate-in zoom-in duration-200">{label}</span>}
     </button>
