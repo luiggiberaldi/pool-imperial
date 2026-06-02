@@ -318,7 +318,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                         src="/logo.png" 
                         alt="Pool Imperial" 
                         onClick={onLogoClick} 
-                        style={{ height: '64px' }} 
+                        style={{ height: '100px' }} 
                         className="w-auto object-contain select-none drop-shadow-sm pointer-events-auto transition-transform active:scale-95 cursor-pointer" 
                         draggable={false} 
                     />

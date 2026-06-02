@@ -364,7 +364,7 @@ export default function App() {
                 icon={<tab.icon size={18} strokeWidth={effectiveTab === tab.id ? 3 : 2} />}
                 label={tab.label}
                 isActive={effectiveTab === tab.id}
-                onClick={() => { triggerHaptic(); setActiveTab(tab.id); onTabChange(tab.id); }}
+                onClick={() => { triggerHaptic(); setActiveTab(tab.id); }}
                 data-tour={`tab-${tab.id}`}
               />
             ))}
