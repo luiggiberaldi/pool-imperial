@@ -26,8 +26,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { useOfflineQueue } from './hooks/useOfflineQueue';
 import { useAutoBackup } from './hooks/useAutoBackup';
 import CommandPalette from './components/CommandPalette';
-import SpotlightTour from './components/SpotlightTour';
-import { useOnboardingTour } from './hooks/useOnboardingTour';
+
 import LoginScreen from './components/security/LoginScreen';
 import CloudAuthModal from './components/security/CloudAuthModal';
 import { useAuthStore } from './hooks/store/authStore';
@@ -161,12 +160,6 @@ export default function App() {
       () => localStorage.getItem('pda_terms_accepted_v1') === 'true'
   );
 
-  // ── Tour de Onboarding — debe ir DESPUÉS de useAuthStore ───────
-  const { activeTour, onTabChange, skipTour } = useOnboardingTour(
-      role || null,
-      isAuthenticated && termsAccepted
-  );
-
   const confirm = useConfirm();
 
   // ── Permisos de cajero (reactivo a cambios del cloud sync) ──
@@ -251,17 +244,6 @@ export default function App() {
             <span className="text-xs font-bold text-white">Sin conexión · Modo offline</span>
           </div>
         </div>
-      )}
-
-
-
-      {/* Tour Spotlight — Onboarding por rol y por pestaña */}
-      {activeTour && (
-         <SpotlightTour
-            steps={activeTour.steps}
-            onComplete={activeTour.onComplete}
-            onSkip={skipTour}
-         />
       )}
 
 

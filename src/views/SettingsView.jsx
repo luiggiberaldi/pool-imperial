@@ -24,51 +24,6 @@ import SettingsTabSistema from '../components/Settings/tabs/SettingsTabSistema';
 import SettingsTabMesas from '../components/Settings/tabs/SettingsTabMesas';
 import SettingsTabBitacora from '../components/Settings/tabs/SettingsTabBitacora';
 import { setImportGuard } from '../hooks/useCloudSync';
-import SpotlightTour from '../components/SpotlightTour';
-
-// ─── Tour steps por pestaña ────────────────────────────────────────────────────
-const SETTINGS_TAB_TOURS = {
-    mesas: {
-        key: 'pda_settings_tour_mesas',
-        steps: [
-            { target: null, title: 'Configuración de Mesas', text: 'Aquí configuras las tarifas y creas las mesas físicas de tu local.', emoji: '🎱' },
-            { target: '[data-tour="settings-mesas-rates"]', title: 'Tarifas de Juego', text: 'Define el precio por hora prepago y el precio fijo por partida ("La Piña"). Toca "Guardar Tarifas" cuando termines.' },
-            { target: '[data-tour="settings-mesas-add"]', title: 'Crear Mesas', text: 'Escribe el nombre de la mesa (ej. "Mesa 1"), elige si es Pool con tiempo o una mesa de Bar normal, y toca "+ Agregar". Repite para cada mesa de tu local.' },
-        ],
-    },
-    ventas: {
-        key: 'pda_settings_tour_ventas',
-        steps: [
-            { target: null, title: 'Configuración de Ventas', text: 'Gestiona los métodos de pago disponibles y los permisos del cajero para este negocio.', emoji: '💳' },
-            { target: '[data-tour="settings-payment-methods"]', title: 'Métodos de Pago', text: 'Activa o desactiva los métodos disponibles en el cobro: efectivo USD, Bs, Pago Móvil, Zelle, punto de venta y más.' },
-            { target: '[data-tour="settings-cajero-perms"]', title: 'Permisos del Cajero', text: 'Define si el cajero puede abrir y cerrar caja, aplicar descuentos y hasta qué porcentaje máximo.' },
-            { target: '[data-tour="settings-stock"]', title: 'Control de Stock', text: 'Activa "Stock Negativo" para permitir ventas aunque el inventario llegue a cero. Útil para productos bajo pedido.' },
-        ],
-    },
-    usuarios: {
-        key: 'pda_settings_tour_usuarios',
-        steps: [
-            { target: null, title: 'Gestión de Usuarios', text: 'Crea y administra el equipo de trabajo: administradores, cajeros y meseros. Cada rol tiene acceso restringido a sus funciones.', emoji: '👥' },
-            { target: '[data-tour="settings-user-list"]', title: 'Lista de Usuarios', text: 'Aquí ves todos los usuarios activos. Toca uno para editar su nombre, PIN o rol. Desactiva usuarios que ya no trabajen.' },
-            { target: '[data-tour="settings-auto-lock"]', title: 'Auto-Bloqueo', text: 'Configura en cuántos minutos de inactividad el sistema pide PIN nuevamente. Protege contra accesos no autorizados.' },
-        ],
-    },
-    bitacora: {
-        key: 'pda_settings_tour_bitacora',
-        steps: [
-            { target: null, title: 'Bitácora de Auditoría', text: 'Registro detallado de todas las acciones del sistema: ventas, ajustes, inicios de sesión y cambios de configuración.', emoji: '📋' },
-            { target: '[data-tour="settings-audit-log"]', title: 'Registro de Eventos', text: 'Cada acción queda registrada con fecha, hora y usuario responsable. Filtra por tipo de evento para encontrar lo que buscas.' },
-        ],
-    },
-    sistema: {
-        key: 'pda_settings_tour_sistema',
-        steps: [
-            { target: null, title: 'Configuración del Sistema', text: 'Respaldo de información, zona de peligro y herramientas de mantenimiento del sistema.', emoji: '⚙️' },
-            { target: '[data-tour="settings-backup"]', title: 'Exportar / Importar', text: 'Descarga una copia de todos tus datos en JSON. Úsala como respaldo o para migrar a otro dispositivo. Para restaurar, toca "Importar Backup" y selecciona el archivo .json.' },
-        ],
-    },
-};
-
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const TABS = [
     { id: 'mesas',     label: 'Mesas',     icon: Layers,       color: 'sky',    adminOnly: true },
@@ -130,34 +85,6 @@ export default function SettingsView({ onClose: _onClose, theme, toggleTheme, tr
     }, []);
     const [idCopied, setIdCopied] = useState(false);
 
-    // ── Tour de configuración ──────────────────────────────────────────────────
-    // activeTour: { steps, key } | null
-    const [activeTour, setActiveTour] = useState(null);
-    const activeTourRef = useRef(null);
-    activeTourRef.current = activeTour;
-
-    const dismissCurrentTour = () => {
-        const t = activeTourRef.current;
-        if (t) {
-            localStorage.setItem(t.key, 'true');
-            setActiveTour(null);
-        }
-    };
-
-    // Cuando cambia la pestaña activa:
-    //  1. Si había un tour activo → lo cierra marcándolo como visto
-    //  2. Si la nueva pestaña tiene tour pendiente → lo dispara tras 500ms
-    useEffect(() => {
-        dismissCurrentTour();
-        const tourConfig = SETTINGS_TAB_TOURS[activeTab];
-        if (!tourConfig) return;
-        if (localStorage.getItem(tourConfig.key) === 'true') return;
-        const t = setTimeout(() => {
-            setActiveTour({ steps: tourConfig.steps, key: tourConfig.key });
-        }, 500);
-        return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab]);
     const [isShareOpen, setIsShareOpen] = useState(false);
     const [shareCustomers, setShareCustomers] = useState([]);
     const [shareSales, setShareSales] = useState([]);
@@ -349,19 +276,6 @@ export default function SettingsView({ onClose: _onClose, theme, toggleTheme, tr
     // ─── RENDER ────────────────────────────────────────────────────────────────
     return (
         <>
-        {activeTour && (
-            <SpotlightTour
-                steps={activeTour.steps}
-                onComplete={() => {
-                    localStorage.setItem(activeTour.key, 'true');
-                    setActiveTour(null);
-                }}
-                onSkip={() => {
-                    localStorage.setItem(activeTour.key, 'true');
-                    setActiveTour(null);
-                }}
-            />
-        )}
         <div className="flex-1 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 overflow-hidden">
 
             {/* ── Header ── */}

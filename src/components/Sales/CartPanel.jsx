@@ -1,31 +1,7 @@
 import React, { useState } from 'react';
 import { ShoppingCart, Plus, Minus, X, CheckCircle, Package, Trash2, DollarSign, Percent } from 'lucide-react';
-import SpotlightTour from '../SpotlightTour';
 
-const CART_TOUR_KEY = 'pda_cart_tour_done';
 
-const CART_STEPS = [
-    {
-        target: '[data-tour="cart-items"]',
-        title: 'Cesta de Compra',
-        text: 'Aquí se listan los productos agregados. Toca la cantidad para editarla directamente, o usa + y − para ajustar.'
-    },
-    {
-        target: '[data-tour="cart-discount"]',
-        title: 'Añadir Descuento',
-        text: 'Aplica un descuento en porcentaje (%) o monto fijo ($) a toda la venta antes de cobrar.'
-    },
-    {
-        target: '[data-tour="cart-total"]',
-        title: 'Total de la Venta',
-        text: 'El total se muestra en pesos colombianos (COP). Se actualiza en tiempo real al agregar o quitar productos.'
-    },
-    {
-        target: '[data-tour="checkout-btn"]',
-        title: 'Procesar Cobro',
-        text: 'Cuando el carrito esté listo, toca aquí para ir a la pantalla de cobro donde podrás elegir los métodos de pago.'
-    },
-];
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -50,9 +26,6 @@ export default function CartPanel({
     const [editingQtyId, setEditingQtyId] = React.useState(null);
     const [tempQty, setTempQty] = React.useState('');
     const inputRef = React.useRef(null);
-    const [showCartTour, setShowCartTour] = useState(
-        () => localStorage.getItem(CART_TOUR_KEY) !== 'true'
-    );
 
     const handleQtyClick = (item) => {
         setEditingQtyId(item.id);
@@ -74,13 +47,6 @@ export default function CartPanel({
 
     return (
         <>
-        {showCartTour && (
-            <SpotlightTour
-                steps={CART_STEPS}
-                onComplete={() => { localStorage.setItem(CART_TOUR_KEY, 'true'); setShowCartTour(false); }}
-                onSkip={() => { localStorage.setItem(CART_TOUR_KEY, 'true'); setShowCartTour(false); }}
-            />
-        )}
         <div className="lg:flex-1 lg:min-h-0 flex flex-col bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm">
 
             {/* Header */}

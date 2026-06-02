@@ -2,43 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Camera, X, AlertTriangle, Package, CheckCircle, Clock, ShoppingBag, CreditCard, ArrowUpRight, Plus, Minus, ChevronUp, ChevronDown } from 'lucide-react';
 import { Modal } from '../Modal';
 import { useProductContext } from '../../context/ProductContext';
-import SpotlightTour from '../SpotlightTour';
 import { formatCop } from '../../utils/calculatorUtils';
-
-const PRODUCT_FORM_TOUR_KEY = 'pda_product_form_tour_done';
-
-const PRODUCT_FORM_STEPS = [
-    {
-        target: '[data-tour="pf-name"]',
-        title: 'Nombre del Producto',
-        text: 'Escribe el nombre tal como aparecerá en el punto de venta y en los tickets.'
-    },
-    {
-        target: '[data-tour="pf-cost"]',
-        title: 'Costo (COP)',
-        text: 'El precio al que compraste el producto en pesos. Úsalo para calcular tu margen de ganancia.'
-    },
-    {
-        target: '[data-tour="pf-lote"]',
-        title: 'Calculadora de Lote',
-        text: 'Si compras por bulto (ej: caja de 24), toca aquí para calcular el costo por unidad automáticamente.'
-    },
-    {
-        target: '[data-tour="pf-price"]',
-        title: 'Precio de Venta (COP)',
-        text: 'El precio al que le vendes al cliente en pesos colombianos.'
-    },
-    {
-        target: '[data-tour="pf-margin"]',
-        title: 'Margen de Ganancia',
-        text: 'Calculado automáticamente. En rojo = vendes a pérdida. Apunta a un margen positivo.'
-    },
-    {
-        target: '[data-tour="pf-stock"]',
-        title: 'Stock y Alerta Mínima',
-        text: 'Ingresa cuántas unidades tienes disponibles. La alerta mínima te avisa cuando el stock esté bajo.'
-    },
-];
 
 export default function ProductFormModal({
     isOpen,
@@ -77,10 +41,6 @@ export default function ProductFormModal({
     const [showSummary, setShowSummary] = useState(false);
     const [showMovements, setShowMovements] = useState(false);
 
-    const [showFormTour, setShowFormTour] = useState(
-        () => !isEditing && localStorage.getItem(PRODUCT_FORM_TOUR_KEY) !== 'true'
-    );
-    
     const [showLoteCalc, setShowLoteCalc] = useState(false);
     const [loteCost, setLoteCost] = useState('');
     const [loteUnits, setLoteUnits] = useState('');
@@ -149,19 +109,6 @@ export default function ProductFormModal({
 
     return (
         <>
-        {showFormTour && (
-            <SpotlightTour
-                steps={PRODUCT_FORM_STEPS}
-                onComplete={() => {
-                    localStorage.setItem(PRODUCT_FORM_TOUR_KEY, 'true');
-                    setShowFormTour(false);
-                }}
-                onSkip={() => {
-                    localStorage.setItem(PRODUCT_FORM_TOUR_KEY, 'true');
-                    setShowFormTour(false);
-                }}
-            />
-        )}
         <Modal
             isOpen={isOpen}
             onClose={onClose}

@@ -6,27 +6,8 @@ import { useCheckoutPayments, EPSILON } from '../../hooks/useCheckoutPayments';
 import CustomerPickerSection from './CustomerPickerSection';
 import CheckoutChangeBreakdown from './CheckoutChangeBreakdown';
 import { FiarConfirmModal, OverpayAlertModal } from './CheckoutConfirmModals';
-import SpotlightTour from '../SpotlightTour';
 
-const CHECKOUT_TOUR_KEY = 'pda_checkout_tour_done';
 
-const CHECKOUT_STEPS = [
-    {
-        target: '[data-tour="checkout-total"]',
-        title: 'Total a Pagar',
-        text: 'Este es el monto total de la venta en pesos colombianos (COP).'
-    },
-    {
-        target: '[data-tour="checkout-remaining"]',
-        title: 'Falta / Vuelto',
-        text: 'En naranja = falta por cobrar. En verde = hay vuelto. Al cubirse con exactitud, el botón de confirmar se activa.'
-    },
-    {
-        target: '[data-tour="checkout-confirm"]',
-        title: 'Confirmar Venta',
-        text: 'Una vez cubierto el total, puedes pulsar este botón para completar la venta.'
-    },
-];
 
 const sectionStyles = {
     COP: {
@@ -67,9 +48,6 @@ export default function CheckoutModal({
 }) {
     const [tdcSurchargePercent, setTdcSurchargePercent] = useState(5);
     const [ivaRate, setIvaRate] = useState(19);
-    const [showCheckoutTour, setShowCheckoutTour] = useState(
-        () => localStorage.getItem(CHECKOUT_TOUR_KEY) !== 'true'
-    );
     const [splitPeople, setSplitPeople] = useState(null);
     const [splitCustomInput, setSplitCustomInput] = useState('');
     const [activeMethodId, setActiveMethodId] = useState(null);
@@ -191,13 +169,6 @@ export default function CheckoutModal({
 
     return (
         <>
-        {showCheckoutTour && (
-            <SpotlightTour
-                steps={CHECKOUT_STEPS}
-                onComplete={() => { localStorage.setItem(CHECKOUT_TOUR_KEY) === 'true'; setShowCheckoutTour(false); }}
-                onSkip={() => { localStorage.setItem(CHECKOUT_TOUR_KEY) === 'true'; setShowCheckoutTour(false); }}
-            />
-        )}
         <div className="fixed inset-0 z-50 bg-white dark:bg-slate-950 flex flex-col overflow-hidden">
 
             {/* --- HEADER --- */}
