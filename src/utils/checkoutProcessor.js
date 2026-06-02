@@ -38,6 +38,7 @@ export async function processSaleTransaction({
     // Alias de compatibilidad (llamadores legacy pueden pasar cartTotalUsd)
     cartTotalUsd,
     cartSubtotalUsd,
+    ivaRate = 19,
 }) {
     // Compatibilidad con llamadores que aún usan el nombre legacy
     const totalCOP = cartTotalCOP ?? cartTotalUsd ?? 0;
@@ -79,8 +80,10 @@ export async function processSaleTransaction({
 
     const rpcCartItems = cartForRpc.map(i => ({
         id: i._originalId || i.id,
+        name: i.name || 'Producto',
         qty: i.qty,
         priceUsd: i.priceUsd,  // El RPC usa este campo — almacena precio COP
+        price_usd: i.priceUsd, // Adicional para retrocompatibilidad segura
         isCombo: i.isCombo || false,
         linkedProductId: i.linkedProductId || null,
         linkedQty: i.linkedQty || 1,
@@ -166,6 +169,8 @@ export async function processSaleTransaction({
 
     // ── CACHÉ LOCAL ──
     const currentUser = useAuthStore.getState().currentUser;
+    const computedIvaAmount = Math.round(totalCOP - (totalCOP / (1 + (ivaRate / 100))));
+
     const sale = {
         id: finalSaleId || crypto.randomUUID(),
         tipo: fiadoAmount > 0 ? 'VENTA_FIADA' : 'VENTA',
@@ -196,7 +201,9 @@ export async function processSaleTransaction({
         customerDocument: selectedCustomer?.documentId || null,
         customerPhone: selectedCustomer?.phone || null,
         fiadoUsd: fiadoAmount,           // heredado — COP
-        splitMeta: splitMeta || null
+        splitMeta: splitMeta || null,
+        ivaRate: Number(ivaRate) || 0,
+        ivaAmount: computedIvaAmount || 0,
     };
 
     const existingSales = await storageService.getItem(SALES_KEY, []);

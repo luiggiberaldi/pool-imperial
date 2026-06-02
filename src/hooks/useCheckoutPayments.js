@@ -20,7 +20,7 @@ function detectPaymentAnomaly({ cartTotalUsd, totalPaidUsd }) {
     return null;
 }
 
-export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta = null }) {
+export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta = null, tdcSurchargePercent = 5, ivaRate = 19, tableContext = null }) {
     const [barValues, setBarValues] = useState({});
     const [changeUsdGiven, setChangeUsdGiven] = useState('');
     const [changeBsGiven, setChangeBsGiven] = useState(''); // Se mantiene por firma pero siempre es vacío
@@ -28,34 +28,66 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     const [overpayAlertData, setOverpayAlertData] = useState(null);
     const submittingRef = useRef(false);
 
+    // Calcular la base imponible del IVA excluyendo el servicio voluntario si existe
+    const baseParaIva = useMemo(() => {
+        if (tableContext?.includeServiceCharge) {
+            return Math.round(cartTotalUsd / 1.10);
+        }
+        return cartTotalUsd;
+    }, [cartTotalUsd, tableContext]);
+
+    // IVA exclusivo (se suma al total)
+    const ivaAmount = useMemo(() => {
+        return ivaRate > 0 ? Math.round(baseParaIva * (ivaRate / 100)) : 0;
+    }, [baseParaIva, ivaRate]);
+
+    // Calcular el monto base pagado con TDC para aplicar el recargo
+    const tdcAmount = useMemo(() => {
+        const val = parseFloat(barValues['tdc']) || 0;
+        return Math.round(val);
+    }, [barValues]);
+
+    // Recargo calculado directamente sobre el monto base ingresado
+    const tdcSurcharge = useMemo(() => {
+        return tdcAmount > 0 ? Math.round(tdcAmount * (tdcSurchargePercent / 100)) : 0;
+    }, [tdcAmount, tdcSurchargePercent]);
+
+    const adjustedTotal = useMemo(() => {
+        return cartTotalUsd + ivaAmount + tdcSurcharge;
+    }, [cartTotalUsd, ivaAmount, tdcSurcharge]);
+
     // En Pool Imperial, cartTotalUsd almacena en realidad el total en COP.
     // Todos los inputs en barValues representan COP.
     const totalPaidUsd = useMemo(() => {
         const amounts = paymentMethods.map(m => {
             const val = parseFloat(barValues[m.id]) || 0;
-            return Math.round(val);
+            const amt = Math.round(val);
+            if (m.id === 'tdc') {
+                return amt + tdcSurcharge;
+            }
+            return amt;
         });
         return sumR(amounts);
-    }, [barValues, paymentMethods]);
+    }, [barValues, paymentMethods, tdcSurcharge]);
 
     const totalPaidBs = 0; // muerta la moneda Bs
 
     const proportionPaid = useMemo(() => {
-        if (cartTotalUsd <= EPSILON) return 0;
-        return totalPaidUsd / cartTotalUsd;
-    }, [totalPaidUsd, cartTotalUsd]);
+        if (adjustedTotal <= EPSILON) return 0;
+        return totalPaidUsd / adjustedTotal;
+    }, [totalPaidUsd, adjustedTotal]);
 
     const remainingUsd = useMemo(() => {
-        return Math.max(0, Math.round(cartTotalUsd - totalPaidUsd));
-    }, [cartTotalUsd, totalPaidUsd]);
+        return Math.max(0, Math.round(adjustedTotal - totalPaidUsd));
+    }, [adjustedTotal, totalPaidUsd]);
 
     const remainingBs = 0;
     const changeUsd = useMemo(() => {
-        return Math.max(0, Math.round(totalPaidUsd - cartTotalUsd));
-    }, [totalPaidUsd, cartTotalUsd]);
+        return Math.max(0, Math.round(totalPaidUsd - adjustedTotal));
+    }, [totalPaidUsd, adjustedTotal]);
     const changeBs = 0;
 
-    const isPaid = cartTotalUsd < EPSILON || totalPaidUsd >= (cartTotalUsd - EPSILON);
+    const isPaid = adjustedTotal < EPSILON || totalPaidUsd >= (adjustedTotal - EPSILON);
 
     const remainingRef = useRef({ usd: remainingUsd });
     remainingRef.current = { usd: remainingUsd };
@@ -71,11 +103,14 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     const fillBar = useCallback((methodId, _currency, splitRemainingUsd = null) => {
         triggerHaptic && triggerHaptic();
         const curRemaining = remainingRef.current;
-        const targetCOP = splitRemainingUsd != null ? splitRemainingUsd : curRemaining.usd;
+        let targetCOP = splitRemainingUsd != null ? splitRemainingUsd : curRemaining.usd;
         if (targetCOP > 0) {
+            if (methodId === 'tdc') {
+                targetCOP = Math.round(targetCOP * (1 + tdcSurchargePercent / 100));
+            }
             setBarValues(prev => ({ ...prev, [methodId]: Math.round(targetCOP).toString() }));
         }
-    }, [triggerHaptic]);
+    }, [triggerHaptic, tdcSurchargePercent]);
 
     const _doConfirm = useCallback(async () => {
         if (submittingRef.current) return;
@@ -103,20 +138,20 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
             await onConfirmSale(payments, {
                 changeUsdGiven: Math.min(manualChangeGiven, changeUsd),
                 changeBsGiven: 0,
-            }, splitMeta);
+            }, splitMeta, tdcSurchargePercent, tdcSurcharge, ivaRate);
         } finally {
             submittingRef.current = false;
         }
-    }, [barValues, paymentMethods, onConfirmSale, triggerHaptic, changeUsdGiven, changeUsd, splitMeta]);
+    }, [barValues, paymentMethods, onConfirmSale, triggerHaptic, changeUsdGiven, changeUsd, splitMeta, tdcSurchargePercent, tdcSurcharge, ivaRate]);
 
     const handleConfirm = useCallback(async () => {
-        const anomaly = detectPaymentAnomaly({ cartTotalUsd, totalPaidUsd });
+        const anomaly = detectPaymentAnomaly({ cartTotalUsd: adjustedTotal, totalPaidUsd });
         if (anomaly) {
             setOverpayAlertData(anomaly);
             return;
         }
         await _doConfirm();
-    }, [barValues, cartTotalUsd, totalPaidUsd, _doConfirm]);
+    }, [barValues, adjustedTotal, totalPaidUsd, _doConfirm]);
 
     const confirmOverpay = useCallback(async () => {
         setOverpayAlertData(null);
@@ -124,13 +159,14 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     }, [_doConfirm]);
 
     return {
-        barValues, totalPaidUsd, totalPaidBs,
+        barValues, setBarValues, totalPaidUsd, totalPaidBs,
         remainingUsd, remainingBs, changeUsd, changeBs,
         isPaid, handleBarChange, fillBar, handleConfirm,
         changeUsdGiven, setChangeUsdGiven,
         changeBsGiven, setChangeBsGiven,
         confirmFiar, setConfirmFiar,
         overpayAlertData, setOverpayAlertData, confirmOverpay,
+        tdcSurcharge, adjustedTotal, ivaAmount,
     };
 }
 

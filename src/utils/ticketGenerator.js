@@ -136,7 +136,7 @@ export async function generateTicketPDF(sale, _bcvRate) {
     doc.setFontSize(6.5);
     doc.setTextColor(...MUTED);
     doc.text('CANT', M, y);
-    doc.text('DESCRIPCIÓN', M + 10, y);
+    doc.text('DESCRIPCIÓN', M + 12, y);
     doc.text('IMPORTE', RIGHT, y, { align: 'right' });
     y += 5;
 
@@ -146,7 +146,7 @@ export async function generateTicketPDF(sale, _bcvRate) {
     if (sale.items && sale.items.length > 0) {
         sale.items.forEach(item => {
             const qty = item.isWeight ? item.qty.toFixed(2) : String(item.qty);
-            const unit = item.isWeight ? 'Kg' : 'u';
+            const unit = item.isWeight ? ' Kg' : ' u';
             const sub = (item.priceUsd || 0) * item.qty;
             const name = item.name.length > 20 ? item.name.substring(0, 20) + '…' : item.name;
 
@@ -154,7 +154,7 @@ export async function generateTicketPDF(sale, _bcvRate) {
             doc.setFontSize(7.5);
             doc.setTextColor(...INK);
             doc.text(`${qty}${unit}`, M, y);
-            doc.text(name, M + 10, y);
+            doc.text(name, M + 12, y);
             doc.setFont('helvetica', 'bold');
             doc.text(formatCOP(sub), RIGHT, y, { align: 'right' });
             y += 4;
@@ -162,7 +162,7 @@ export async function generateTicketPDF(sale, _bcvRate) {
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(6);
             doc.setTextColor(...MUTED);
-            doc.text(formatCOP(item.priceUsd) + ' c/u', M + 10, y);
+            doc.text(formatCOP(item.priceUsd) + ' c/u', M + 12, y);
             y += 6;
         });
     }
@@ -189,6 +189,21 @@ export async function generateTicketPDF(sale, _bcvRate) {
         doc.text(discountLabel, M, y);
         doc.text('-' + formatCOP(sale.discountAmountUsd), RIGHT, y, { align: 'right' });
         y += 7;
+    }
+
+    const hasIva = (sale.ivaRate || 0) > 0;
+    if (hasIva) {
+        const baseBeforeIva = (sale.totalCop || sale.totalUsd || 0) - (sale.ivaAmount || 0);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...BODY);
+        doc.text('Base Gravable:', M, y);
+        doc.text(formatCOP(baseBeforeIva), RIGHT, y, { align: 'right' });
+        y += 4.5;
+
+        doc.text(`IVA (${sale.ivaRate}%):`, M, y);
+        doc.text(formatCOP(sale.ivaAmount || 0), RIGHT, y, { align: 'right' });
+        y += 5.5;
     }
 
     doc.setTextColor(...BODY);
@@ -275,15 +290,6 @@ export async function generateTicketPDF(sale, _bcvRate) {
     doc.setTextColor(...INK);
     doc.text('¡Gracias por tu compra!', CX, y, { align: 'center' });
     y += 6;
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(5.5);
-    doc.setTextColor(...MUTED);
-    doc.text('Este documento no constituye factura', CX, y, { align: 'center' });
-    y += 3.5;
-    doc.text('fiscal. Es un comprobante de control', CX, y, { align: 'center' });
-    y += 3.5;
-    doc.text('interno sin validez tributaria.', CX, y, { align: 'center' });
 
     // ── DESCARGAR / COMPARTIR ──
     const filename = 'ticket_' + saleNum + '.pdf';

@@ -82,7 +82,6 @@ export function buildReceiptWhatsAppUrl(receipt) {
         sep,
         `¡Gracias por su compra!`,
         ``,
-        `_Este documento no constituye factura fiscal. Comprobante de control interno._`,
         `Pool Imperial - Sistema POS`,
     ].filter(Boolean).join('\n');
 

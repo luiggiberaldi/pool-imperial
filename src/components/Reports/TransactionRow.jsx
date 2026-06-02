@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { formatCop } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, toTitleCase, getPaymentIcon } from '../../config/paymentMethods';
 import { generateTicketPDF } from '../../utils/ticketGenerator';
-import { ChevronDown, ChevronUp, Send, Ban, Shuffle, Clock, Recycle, LockIcon, User, UserCheck } from 'lucide-react';
+import { ChevronDown, ChevronUp, Send, Ban, Shuffle, Clock, Recycle, LockIcon, User, UserCheck, Printer } from 'lucide-react';
 
 export default function TransactionRow({
     sale: s, isExpanded, onToggle, onVoidSale, onRecycleSale,

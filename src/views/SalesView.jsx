@@ -407,7 +407,56 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                     discountData={discountData} effectiveRate={1}
                     customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId}
                     paymentMethods={paymentMethods}
-                    onConfirmSale={(payments, change, splitMeta) => handleCheckoutWithCustomer(payments, change, selectedCustomerId, splitMeta)}
+                    onConfirmSale={(payments, change, splitMeta, tdcSurchargePercent, tdcSurcharge, ivaRate) => {
+                        triggerHaptic && triggerHaptic();
+                        const finalCart = [...cart];
+                        if (tdcSurcharge > 0) {
+                            finalCart.push({
+                                id: crypto.randomUUID(),
+                                name: `Recargo TDC (${tdcSurchargePercent}%)`,
+                                priceUsdt: tdcSurcharge,
+                                priceUsd: tdcSurcharge,
+                                qty: 1,
+                                costUsd: 0,
+                                costBs: 0,
+                                category: 'servicios',
+                                unit: 'servicio',
+                                stock: 9999
+                            });
+                        }
+                        const cleanIvaRate = Number(ivaRate) || 0;
+                        const ivaAmount = cleanIvaRate > 0 ? Math.round((cartTotalUsd + tdcSurcharge) * (cleanIvaRate / 100)) : 0;
+                        const finalTotal = cartTotalUsd + tdcSurcharge + ivaAmount;
+
+                        const opts = {
+                            cart: finalCart,
+                            cartTotalUsd: finalTotal,
+                            cartTotalBs: 0,
+                            cartSubtotalUsd: cartSubtotalUsd + tdcSurcharge + ivaAmount,
+                            payments, changeBreakdown: change,
+                            selectedCustomerId, customers, products, effectiveRate: 1, tasaCop: 1, copEnabled: true,
+                            discountData: discountData ? { ...discountData, amountBs: 0 } : null, useAutoRate: false, splitMeta,
+                            ivaRate: cleanIvaRate
+                        };
+                        processSaleTransaction(opts).then((result) => {
+                            if (!result.success) {
+                                showToast(result.error, result.error.includes('No se pueden') ? 'warning' : 'error');
+                                playError();
+                                return;
+                            }
+                            setProductsAfterCheckout(result.updatedProducts);
+                            if (result.updatedCustomers) setCustomers(result.updatedCustomers);
+                            setSalesData(prev => [result.sale, ...prev]);
+                            setShowReceipt(result.sale);
+                            playCheckout();
+                            setShowConfetti(true);
+                            notifyLowStock(result.updatedProducts);
+                            setCart([]);
+                            setShowCheckout(false);
+                            setSelectedCustomerId('');
+                            setCartSelectedIndex(-1);
+                        });
+                    }}
                     onCreateCustomer={handleCreateCustomer}
                     triggerHaptic={triggerHaptic}
                     currentFloatUsd={currentFloat.usd} />
@@ -441,7 +490,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
 
             {tableCheckoutData && !showTablePayment && (
                 <TableBillModal data={tableCheckoutData} onClose={() => { setTableCheckoutData(null); }}
-                    onProceedToPayment={(disc, itemDiscs, seatId, seatTotal) => {
+                    onProceedToPayment={(disc, itemDiscs, seatId, seatTotal, includeServiceCharge) => {
                         // Calculate discount amounts and attach to checkout data
                         const _itemDiscs = itemDiscs || {};
                         const _itemDiscAmt = (tableCheckoutData.currentItems || []).reduce((acc, item) => {
@@ -491,10 +540,15 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                         const _sub = baseTotal - _itemDiscAmt;
                         const _totalDisc = disc && disc.value > 0 ? (disc.type === 'percentage' ? _sub * (disc.value / 100) : Math.min(disc.value, _sub)) : 0;
                         const totalDiscAmt = _totalDisc + _itemDiscAmt;
+                        const subtotalAfterDiscounts = baseTotal - totalDiscAmt;
+                        const serviceChargeAmt = includeServiceCharge ? Math.round(subtotalAfterDiscounts * 0.10) : 0;
+                        const finalGrandTotal = subtotalAfterDiscounts + serviceChargeAmt;
+
                         setTableCheckoutData(prev => ({
                             ...prev,
                             discountData: { active: totalDiscAmt > 0, amountUsd: totalDiscAmt, amountBs: 0, type: disc?.type || 'percentage', value: disc?.value || 0 },
-                            grandTotal: baseTotal - totalDiscAmt,
+                            grandTotal: finalGrandTotal,
+                            includeServiceCharge: !!includeServiceCharge,
                             ...(seatId ? { seatId } : {}),
                             ...(seatDisplayInfo ? { seatDisplayInfo } : { seatDisplayInfo: null }),
                         }));
@@ -516,11 +570,12 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                     discountData={discData} effectiveRate={1}
                     customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId}
                     paymentMethods={paymentMethods}
-                    onConfirmSale={(payments, change, splitMeta) => {
+                    tableContext={tableCheckoutData}
+                    onConfirmSale={(payments, change, splitMeta, tdcSurchargePercent, tdcSurcharge, ivaRate) => {
                         const sessionId = tableCheckoutData.session?.id;
                         const tableName = tableCheckoutData.table?.name || 'Mesa';
                         const isSeatPayment = !!tableCheckoutData.seatId;
-                        handleTableCheckout(payments, change, selectedCustomerId, null, splitMeta).then((res) => {
+                        handleTableCheckout(payments, change, selectedCustomerId, null, splitMeta, { tdcSurchargePercent, tdcSurcharge, ivaRate }).then((res) => {
                             if (res && res.success === false) return; // checkout failed — don't show success dialog
                             setShowTablePayment(false);
                             // Solo mostrar diálogo liberar/mantener cuando es cobro completo o todos los asientos pagados
@@ -538,7 +593,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                         });
                     }}
                     onCreateCustomer={handleCreateCustomer} triggerHaptic={triggerHaptic}
-                    currentFloatUsd={currentFloat.usd} tableContext={tableCheckoutData} />
+                    currentFloatUsd={currentFloat.usd} />
                 );
             })()}
 

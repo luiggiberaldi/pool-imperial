@@ -11,6 +11,7 @@ export const FACTORY_PAYMENT_METHODS = [
     { id: 'daviplata',     label: 'Daviplata',              icon: '📲', Icon: Smartphone,  currency: 'COP', isFactory: true },
     { id: 'transferencia', label: 'Transferencia Bancaria',  icon: '🏦', Icon: Store,       currency: 'COP', isFactory: true },
     { id: 'datafono',      label: 'Datáfono',               icon: '💳', Icon: CreditCard,  currency: 'COP', isFactory: true },
+    { id: 'tdc',           label: 'Tarjeta de Crédito (TDC)', icon: '💳', Icon: CreditCard,  currency: 'COP', isFactory: true },
 ];
 
 // Alias para compatibilidad
@@ -180,6 +181,7 @@ export const PAYMENT_ICONS = {
     daviplata:     Smartphone,
     transferencia: Store,
     datafono:      CreditCard,
+    tdc:           CreditCard,
     fiado:         ShoppingCart,
 };
 

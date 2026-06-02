@@ -450,8 +450,8 @@ BEGIN
         v_user_id
     ) RETURNING id INTO v_sale_id;
 
-    -- Insertar ítems vendidos
-    FOR v_item IN SELECT * FROM jsonb_to_recordset(payload->'cart') AS x(id TEXT, qty NUMERIC, priceUsd NUMERIC) LOOP
+    -- Insertar ítems vendidos (usando el nombre enviado desde el cliente y protegiendo contra nulos o problemas de casing en price_usd)
+    FOR v_item IN SELECT * FROM jsonb_to_recordset(payload->'cart') AS x(id TEXT, qty NUMERIC, priceUsd NUMERIC, "priceUsd" NUMERIC, price_usd NUMERIC, name TEXT) LOOP
         INSERT INTO public.sale_items (
             sale_id,
             product_id,
@@ -463,9 +463,9 @@ BEGIN
         ) VALUES (
             v_sale_id,
             v_item.id,
-            (SELECT COALESCE(name, 'Producto') FROM public.sync_documents WHERE collection = 'store' AND doc_id = 'pool_imperial_products_v1' AND user_id = v_user_id AND data->'payload' @> jsonb_build_array(jsonb_build_object('id', v_item.id)) LIMIT 1),
+            COALESCE(v_item.name, 'Producto'),
             v_item.qty,
-            v_item.priceUsd,
+            COALESCE(v_item.price_usd, v_item.priceUsd, v_item."priceUsd", 0),
             0,
             false
         );

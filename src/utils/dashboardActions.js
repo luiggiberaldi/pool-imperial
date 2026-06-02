@@ -26,7 +26,6 @@ export function shareSaleWhatsApp(sale, saleCustomer, bcvRate) {
     }
     text += `\n===================================\n`;
     text += `*¡Gracias por su compra!*\n\n`;
-    text += `_Este documento no constituye factura fiscal. Comprobante de control interno._`;
 
     const encoded = encodeURIComponent(text);
 

@@ -34,7 +34,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
     const { currentUser } = useAuthStore();
-    const { products: allProducts } = useProductContext();
+    const { products: allProducts, effectiveRate: tasaUSD } = useProductContext();
     const canDiscount = currentUser?.role === 'ADMIN' || currentUser?.role === 'CAJERO';
 
     const [discount, setDiscount] = useState({ type: 'percentage', value: 0 });
@@ -46,6 +46,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     // División de compartido: 'equal' | 'custom'
     const [sharedDivisionType, setSharedDivisionType] = useState('equal');
     const [customSharedAmounts, setCustomSharedAmounts] = useState({});
+    const [includeServiceCharge, setIncludeServiceCharge] = useState(true); // Checked by default in Colombia
 
     // Seats mode
     const seats = session?.seats || [];
@@ -95,6 +96,11 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
         ? (discount.type === 'percentage' ? subtotalAfterItems * (discount.value / 100) : Math.min(discount.value, subtotalAfterItems))
         : 0;
     const finalTotal = subtotalAfterItems - discountAmountUsd;
+    
+    // Colombian optional service charge (Suggested tip 10%)
+    const baseTotal = hasSeats && seatBreakdown ? (seatBreakdown.grandTotal - discountAmountUsd) : finalTotal;
+    const serviceChargeAmount = includeServiceCharge ? Math.round(baseTotal * 0.10) : 0;
+    const finalTotalWithService = baseTotal + serviceChargeAmount;
 
 
     // Helper: piña count depends on game mode
@@ -162,6 +168,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             customSharedAmounts={customSharedAmounts} setCustomSharedAmounts={setCustomSharedAmounts}
                             customDivisionMismatch={customDivisionMismatch}
                             onProceedToPayment={onProceedToPayment} discount={discount} itemDiscounts={itemDiscounts}
+                            includeServiceCharge={includeServiceCharge}
                         />
                     )}
 
@@ -191,6 +198,28 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                         </div>
                     )}
 
+                    {/* Servicio Opcional 10% Toggle (Sugerencia de propina) */}
+                    <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex items-center justify-between select-none">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-950/40 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                <span className="font-extrabold text-sm">%</span>
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Servicio Voluntario (10%)</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">Propina sugerida para el personal</p>
+                            </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={includeServiceCharge} 
+                                onChange={(e) => setIncludeServiceCharge(e.target.checked)}
+                                className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+
                     {/* Total */}
                     <div
                         className="rounded-2xl p-4 flex items-center justify-between"
@@ -202,6 +231,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                 <p className="text-[10px] text-white/60 mt-0.5">
                                     {seatBreakdown.seats.filter(s => !s.seat.paid).length} persona(s) activa(s)
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
+                                    {includeServiceCharge ? ` + Propina (10%) ${formatCOP(serviceChargeAmount)}` : ''}
                                 </p>
                             )}
                             {!hasSeats && isMixed && (
@@ -209,20 +239,22 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     Piñas {formatCOP(fullBreakdown.pinaCost)} + Tiempo {formatCOP(fullBreakdown.hourCost)}{adjustedConsumption > 0 ? ` + Consumos ${formatCOP(adjustedConsumption)}` : ''}
                                     {(roundsOffset > 0 || hoursOffset > 0) ? ` − Pagado ${formatCOP(roundsOffset * (config.pricePina || 0) + hoursOffset * (config.pricePerHour || 0))}` : ''}
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
+                                    {includeServiceCharge ? ` + Propina (10%) ${formatCOP(serviceChargeAmount)}` : ''}
                                 </p>
                             )}
-                            {!hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0) && (
+                            {!hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0 || includeServiceCharge) && (
                                 <p className="text-[10px] text-white/60 mt-0.5">
                                     {timeCost > 0 ? `Tiempo ${formatCOP(timeCost)}` : ''}
                                     {timeCost > 0 && adjustedConsumption > 0 ? ' + ' : ''}
                                     {adjustedConsumption > 0 ? `Consumos ${formatCOP(adjustedConsumption)}` : ''}
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
+                                    {includeServiceCharge ? ` + Propina (10%) ${formatCOP(serviceChargeAmount)}` : ''}
                                 </p>
                             )}
                         </div>
                         <div className="text-right">
                             <p className="text-2xl font-black text-white">
-                                {formatCOP(hasSeats && seatBreakdown ? (seatBreakdown.grandTotal - discountAmountUsd) : finalTotal)}
+                                {formatCOP(finalTotalWithService)}
                             </p>
                         </div>
                     </div>
@@ -249,7 +281,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             )}
                             <button
                                 disabled={customDivisionMismatch}
-                                onClick={() => onProceedToPayment(discount, itemDiscounts)}
+                                onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge)}
                                 className={`flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-orange-500/25 ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
                                 style={{ background: customDivisionMismatch ? '#94a3b8' : 'linear-gradient(135deg, #F97316, #EA580C)' }}
                             >
@@ -267,10 +299,10 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     <button
                                         key={seat.id}
                                         disabled={customDivisionMismatch}
-                                        onClick={() => onProceedToPayment(discount, itemDiscounts, seat.id)}
+                                        onClick={() => onProceedToPayment(discount, itemDiscounts, seat.id, sb?.subtotal, includeServiceCharge)}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-700/40 hover:bg-sky-100 dark:hover:bg-sky-900/30 active:scale-95 transition-all ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     >
-                                        {seat.label || `P${seats.indexOf(seat) + 1}`} · {sb ? formatCOP(sb.subtotal) : '$ 0'}
+                                        {seat.label || `P${seats.indexOf(seat) + 1}`} · {sb ? formatCOP(includeServiceCharge ? sb.subtotal + Math.round(sb.subtotal * 0.10) : sb.subtotal) : '$ 0'}
                                     </button>
                                 );
                             })}
@@ -296,11 +328,11 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                 </button>
                             )}
                             <button
-                                onClick={() => onProceedToPayment(discount, itemDiscounts)}
+                                onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge)}
                                 className="flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-orange-500/25"
                                 style={{ background: 'linear-gradient(135deg, #F97316, #EA580C)' }}
                             >
-                                Cobrar {formatCOP(finalTotal)}
+                                Cobrar {formatCOP(finalTotalWithService)}
                                 <ChevronRight size={16} />
                             </button>
                         </div>

@@ -64,6 +64,20 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                             ))}
                         </div>
 
+                        {/* Desglose de IVA para el mercado colombiano */}
+                        {receipt.ivaRate > 0 && (
+                            <div className="mt-4 pt-3.5 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 space-y-1.5 select-none">
+                                <div className="flex justify-between">
+                                    <span>Subtotal Base (excl. IVA):</span>
+                                    <span className="font-bold text-slate-600 dark:text-slate-400">{formatCop(receipt.totalUsd - receipt.ivaAmount)}</span>
+                                </div>
+                                <div className="flex justify-between font-black text-slate-700 dark:text-slate-300">
+                                    <span>IVA ({receipt.ivaRate}%):</span>
+                                    <span>{formatCop(receipt.ivaAmount)}</span>
+                                </div>
+                            </div>
+                        )}
+
                         {receipt.payments && receipt.payments.length > 0 && (
                             <div className="mt-4 pt-4 border-t border-slate-200 text-sm">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Pagos Recibidos</p>

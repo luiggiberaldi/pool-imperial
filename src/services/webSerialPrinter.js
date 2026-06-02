@@ -528,6 +528,13 @@ export async function printReceiptEscPos(sale, bcvRate) {
 
     p.line('=', W);
 
+    if (sale.ivaRate > 0) {
+        const base = sale.totalUsd - (sale.ivaAmount || 0);
+        p.smallFont(true).row('Base Gravable:', formatCOP(base), WS);
+        p.smallFont(true).row(`IVA (${sale.ivaRate}%):`, formatCOP(sale.ivaAmount || 0), WS);
+        p.smallFont(false).line('-', W);
+    }
+
     // Totales
     p.align(1).bigText(true).bold(true);
     p.text(formatCOP(sale.totalUsd || 0)).newline();

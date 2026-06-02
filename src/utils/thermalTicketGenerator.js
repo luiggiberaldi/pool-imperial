@@ -63,18 +63,19 @@ function _printThermalHTML(sale, _bcvRate) {
     // Generar filas de productos (todos en COP)
     const itemsHtml = (sale.items || []).map(item => {
         const qty = item.isWeight ? item.qty.toFixed(2) : String(item.qty);
-        const unit = item.isWeight ? 'Kg' : 'u';
+        const unit = item.isWeight ? ' Kg' : ' u';
         const sub = item.priceUsd * item.qty; // priceUsd almacena COP
-        const name = item.name.length > 22 ? item.name.substring(0, 22) + '...' : item.name;
+        const name = item.name;
+        const displayName = name.length > 26 ? name.substring(0, 26) + '...' : name;
         return `
             <tr>
-                <td style="text-align:left;font-size:${fBase};padding:2px 0;">${qty}${unit}</td>
-                <td style="text-align:left;font-size:${fBase};padding:2px 0;line-height:1.2;">${name}</td>
-                <td style="text-align:right;font-size:${fBase};font-weight:bold;padding:2px 0;">${formatCOP(sub)}</td>
+                <td style="text-align:left;font-size:${fBase};padding:2px 0;vertical-align:top;word-wrap:break-word;">${qty}${unit}</td>
+                <td style="text-align:left;font-size:${fBase};padding:2px 0 2px 6px;line-height:1.2;vertical-align:top;word-wrap:break-word;">${displayName}</td>
+                <td style="text-align:right;font-size:${fBase};font-weight:bold;padding:2px 0;vertical-align:top;word-wrap:break-word;">${formatCOP(sub)}</td>
             </tr>
             <tr>
                 <td></td>
-                <td colspan="2" style="font-size:${fTiny};color:#555;padding:0 0 4px;">${formatCOP(item.priceUsd)} c/u</td>
+                <td colspan="2" style="font-size:${fTiny};color:#555;padding:0 0 4px 6px;vertical-align:top;">${formatCOP(item.priceUsd)} c/u</td>
             </tr>`;
     }).join('');
 
@@ -97,6 +98,36 @@ function _printThermalHTML(sale, _bcvRate) {
             </tr></table>
         </div>` : '';
 
+    // Generar bloque de totales con desglose de IVA (inclusivo)
+    const hasIva = (sale.ivaRate || 0) > 0;
+    const baseBeforeIva = sale.totalUsd - (sale.ivaAmount || 0);
+
+    const totalsBreakdownHtml = `
+        <table style="width:100%; font-size:${fSmall}; margin-bottom:6px; border-collapse:collapse;">
+            ${sale.discountAmountUsd > 0 ? `
+            <tr>
+                <td style="text-align:left; padding:2px 0; color:#555;">Subtotal Carrito:</td>
+                <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(sale.cartSubtotalUsd || (sale.totalUsd + sale.discountAmountUsd))}</td>
+            </tr>
+            <tr>
+                <td style="text-align:left; padding:2px 0; color:#dc3545;">${sale.discountType === 'percentage' ? `Descuento (${sale.discountValue}%):` : 'Descuento:'}</td>
+                <td style="text-align:right; padding:2px 0; color:#dc3545; font-weight:bold;">-${formatCOP(sale.discountAmountUsd)}</td>
+            </tr>
+            ` : ''}
+            
+            ${hasIva ? `
+            <tr>
+                <td style="text-align:left; padding:2px 0; color:#555;">Base Gravable:</td>
+                <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(baseBeforeIva)}</td>
+            </tr>
+            <tr>
+                <td style="text-align:left; padding:2px 0; color:#555;">IVA (${sale.ivaRate}%):</td>
+                <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(sale.ivaAmount || 0)}</td>
+            </tr>
+            ` : ''}
+        </table>
+    `;
+
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -116,7 +147,7 @@ function _printThermalHTML(sale, _bcvRate) {
         padding: 4mm 2mm;
         color: #000;
         background: #fff;
-        font-weight: 900;
+        font-weight: 600;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -180,34 +211,25 @@ function _printThermalHTML(sale, _bcvRate) {
 
     <hr class="dash">
 
-    <!-- Productos Header -->
-    <table style="margin-bottom:4px;">
-        <tr style="font-size:${fTiny};color:#000;font-weight:bold;">
-            <td style="text-align:left;">CANT</td>
-            <td style="text-align:left;">DESCRIPCION</td>
-            <td style="text-align:right;">IMPORTE</td>
-        </tr>
-    </table>
-
     <!-- Productos -->
-    <table>${itemsHtml}</table>
+    <table style="width:100%; border-collapse:collapse; margin-bottom:4px; table-layout:fixed;">
+        <thead>
+            <tr style="font-size:${fTiny};color:#000;font-weight:bold;border-bottom:1px dashed #555;">
+                <th style="text-align:left;width:18%;padding:2px 0;font-weight:bold;">CANT</th>
+                <th style="text-align:left;width:54%;padding:2px 0 2px 6px;font-weight:bold;">DESCRIPCION</th>
+                <th style="text-align:right;width:28%;padding:2px 0;font-weight:bold;">IMPORTE</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${itemsHtml}
+        </tbody>
+    </table>
 
     <hr class="dash">
 
     <!-- Total -->
     <div style="margin:8px 0;">
-        ${sale.discountAmountUsd > 0 ? `
-        <table style="margin-bottom:6px; font-size:${fTiny}; border-bottom: 1px dashed #ccc; padding-bottom: 4px;">
-            <tr>
-                <td style="text-align:left; color:#000; font-weight:bold;">SUBTOTAL:</td>
-                <td style="text-align:right; color:#000; font-weight:bold;">${formatCOP(sale.cartSubtotalUsd || (sale.totalUsd + sale.discountAmountUsd))}</td>
-            </tr>
-            <tr>
-                <td style="text-align:left; color:#dc3545; font-weight:bold;">${sale.discountType === 'percentage' ? `DESCUENTO (${sale.discountValue}%):` : 'DESCUENTO:'}</td>
-                <td style="text-align:right; color:#dc3545; font-weight:bold;">-${formatCOP(sale.discountAmountUsd)}</td>
-            </tr>
-        </table>
-        ` : ''}
+        ${totalsBreakdownHtml}
         <div class="center bold" style="font-size:${fSmall};color:#000;margin-bottom:4px;">TOTAL A PAGAR</div>
         <div class="total-usd">${formatCOP(sale.totalUsd || 0)}</div>
     </div>
@@ -226,7 +248,6 @@ function _printThermalHTML(sale, _bcvRate) {
 
     <!-- Pie -->
     <div class="center bold" style="font-size:${fBase};margin:8px 0 4px;">Gracias por tu compra!</div>
-    <div class="center" style="font-size:${fDisclaimer};color:#000;margin-top:4px;line-height:1.4;">Este documento no constituye factura fiscal.<br>Comprobante de control interno sin validez tributaria.</div>
 </body>
 </html>`;
 

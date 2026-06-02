@@ -65,6 +65,8 @@ export default function CheckoutModal({
     currentFloatUsd = 0,
     tableContext = null,
 }) {
+    const [tdcSurchargePercent, setTdcSurchargePercent] = useState(5);
+    const [ivaRate, setIvaRate] = useState(19);
     const [showCheckoutTour, setShowCheckoutTour] = useState(
         () => localStorage.getItem(CHECKOUT_TOUR_KEY) !== 'true'
     );
@@ -75,13 +77,28 @@ export default function CheckoutModal({
     const splitMeta = splitPeople ? { people: splitPeople, perPerson: [] } : null;
 
     const {
-        barValues, totalPaidUsd,
+        barValues, setBarValues, totalPaidUsd,
         remainingUsd, changeUsd,
         isPaid, handleBarChange, fillBar, handleConfirm,
         changeUsdGiven, setChangeUsdGiven,
         confirmFiar, setConfirmFiar,
         overpayAlertData, setOverpayAlertData, confirmOverpay,
-    } = useCheckoutPayments({ paymentMethods, effectiveRate: 1, tasaCop: 1, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta });
+        tdcSurcharge, adjustedTotal, ivaAmount
+    } = useCheckoutPayments({ paymentMethods, effectiveRate: 1, tasaCop: 1, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta, tdcSurchargePercent, ivaRate, tableContext });
+
+    const handleSurchargePercentChange = (newPercent) => {
+        const oldPercent = tdcSurchargePercent;
+        setTdcSurchargePercent(newPercent);
+        const currentTdcVal = parseFloat(barValues['tdc']) || 0;
+        if (currentTdcVal > 0) {
+            const baseAmount = currentTdcVal / (1 + (oldPercent / 100));
+            const newTdcVal = Math.round(baseAmount * (1 + (newPercent / 100)));
+            setBarValues(prev => ({
+                ...prev,
+                tdc: newTdcVal.toString()
+            }));
+        }
+    };
 
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
     const activePaymentMethods = paymentMethods.filter(m => m.isEnabled !== false);
@@ -93,8 +110,8 @@ export default function CheckoutModal({
         return (
             <div key={method.id} className="mb-3 last:mb-0">
                 <div className="flex items-center gap-2 mb-1 ml-0.5">
-                    {(() => { const MIcon = method.Icon || PAYMENT_ICONS[method.id] || ICON_COMPONENTS[method.icon]; return MIcon ? <MIcon size={16} className={hasValue ? '' : 'text-slate-400'} /> : <span className="text-base">{method.icon}</span>; })()}
-                    <span className={`text-[11px] font-bold uppercase tracking-wide ${hasValue ? styles.title : 'text-slate-400 dark:text-slate-500'}`}>
+                    {(() => { const MIcon = method.Icon || PAYMENT_ICONS[method.id] || ICON_COMPONENTS[method.icon]; return MIcon ? <MIcon size={16} className={hasValue ? styles.titleIcon : 'text-slate-700 dark:text-slate-400'} /> : <span className="text-base">{method.icon}</span>; })()}
+                    <span className={`text-[11px] font-black uppercase tracking-wide ${hasValue ? styles.title : 'text-slate-700 dark:text-slate-300'}`}>
                         {method.label}
                     </span>
                 </div>
@@ -126,6 +143,48 @@ export default function CheckoutModal({
                         <Zap size={14} fill="currentColor" /> Total
                     </button>
                 </div>
+                {method.id === 'tdc' && hasValue && (
+                    <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-950 px-3.5 py-3 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 animate-in fade-in slide-in-from-top-2 duration-250 select-none shadow-sm">
+                        <div className="flex items-center justify-between flex-1">
+                            <span className="text-xs font-black text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                💳 Recargo de Tarjeta (TDC)
+                            </span>
+                            {tdcSurcharge > 0 && (
+                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-lg border border-emerald-100 dark:border-emerald-900/20">
+                                    +{formatCOP(tdcSurcharge)}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                            <button
+                                onClick={() => handleSurchargePercentChange(Math.max(0, tdcSurchargePercent - 1))}
+                                className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:scale-105 active:scale-95 flex items-center justify-center text-sm font-black text-slate-700 dark:text-slate-300 transition-all border border-slate-200/40 dark:border-slate-700/40 shadow-sm"
+                            >
+                                -
+                            </button>
+                            <div className="flex items-center justify-center bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200/40 dark:border-slate-700/40 shadow-inner">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={tdcSurchargePercent}
+                                    onChange={(e) => {
+                                        const v = parseInt(e.target.value);
+                                        handleSurchargePercentChange(isNaN(v) ? 0 : Math.max(0, Math.min(100, v)));
+                                    }}
+                                    className="w-6 text-center text-xs font-black bg-transparent text-slate-800 dark:text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <span className="text-xs font-black text-slate-400 dark:text-slate-500">%</span>
+                            </div>
+                            <button
+                                onClick={() => handleSurchargePercentChange(Math.min(100, tdcSurchargePercent + 1))}
+                                className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:scale-105 active:scale-95 flex items-center justify-center text-sm font-black text-slate-700 dark:text-slate-300 transition-all border border-slate-200/40 dark:border-slate-700/40 shadow-sm"
+                            >
+                                +
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     };
@@ -266,26 +325,47 @@ export default function CheckoutModal({
 
                 {/* -- TOTAL -- */}
                 <div data-tour="checkout-total" className="px-4 py-4 bg-gradient-to-b from-slate-50 to-white dark:from-slate-900 dark:to-slate-950">
-                    {discountData?.active && (
-                        <div className="flex flex-col items-center justify-center space-y-1 mb-3 pb-3 border-b border-slate-200/50 dark:border-slate-800/50">
-                            <div className="flex items-center gap-2 text-sm font-bold text-slate-500 dark:text-slate-400">
-                                <span>Subtotal:</span>
-                                <span>{formatCOP(cartSubtotalUsd)}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm font-black text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-3 py-1 rounded-lg">
-                                <span>Descuento ({discountData.type === 'percentage' ? `${discountData.value}%` : 'Fijo'}):</span>
-                                <span>-${formatCOP(discountData.amountUsd)}</span>
-                            </div>
+                    {(discountData?.active || tdcSurcharge > 0) && (
+                        <div className="flex flex-col items-center justify-center space-y-1.5 mb-3 pb-3 border-b border-slate-200/50 dark:border-slate-800/50">
+                            {discountData?.active && (
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+                                    <span>Subtotal:</span>
+                                    <span>{formatCOP(cartSubtotalUsd)}</span>
+                                    <span className="text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded ml-1">
+                                        -{formatCOP(discountData.amountUsd)} ({discountData.type === 'percentage' ? `${discountData.value}%` : 'Fijo'})
+                                    </span>
+                                </div>
+                            )}
+                            {tdcSurcharge > 0 && (
+                                <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1 rounded-xl">
+                                    <span>Recargo TDC ({tdcSurchargePercent}%):</span>
+                                    <span>+{formatCOP(tdcSurcharge)}</span>
+                                </div>
+                            )}
                         </div>
                     )}
-                    <p className={`text-[11px] font-bold uppercase tracking-widest text-center mb-1 ${discountData?.active ? 'text-emerald-500' : 'text-slate-400'}`}>
-                        {discountData?.active ? 'Total Final' : 'Total a Pagar'}
+                    <p className={`text-[11px] font-bold uppercase tracking-widest text-center mb-1 ${discountData?.active || tdcSurcharge > 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                        {discountData?.active || tdcSurcharge > 0 ? 'Total Final' : 'Total a Pagar'}
                     </p>
                     <div className="text-center">
-                        <span className={`text-4xl sm:text-5xl font-black ${discountData?.active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
-                            {formatCOP(cartTotalUsd)}
+                        <span className={`text-4xl sm:text-5xl font-black ${discountData?.active || tdcSurcharge > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
+                            {formatCOP(adjustedTotal)}
                         </span>
                     </div>
+
+                    {/* Desglose reactivo de IVA */}
+                    {ivaRate > 0 && (() => {
+                        const baseParaIva = tableContext?.includeServiceCharge ? Math.round(cartTotalUsd / 1.10) : cartTotalUsd;
+                        return (
+                            <div className="flex flex-col items-center justify-center space-y-0.5 mt-2.5 pt-2.5 border-t border-slate-200/40 dark:border-slate-800/40">
+                                <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                                    <span>Base Gravable: {formatCOP(baseParaIva)}</span>
+                                    <span className="text-slate-300 dark:text-slate-700">•</span>
+                                    <span className="text-blue-500">IVA ({ivaRate}%): {formatCOP(ivaAmount)}</span>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* -- DIVIDIR CUENTA (Calculadora visual) -- */}
@@ -344,6 +424,43 @@ export default function CheckoutModal({
                             </div>
                         );
                     })()}
+                </div>
+
+                {/* -- IVA CONFIG (Impuesto ajustable) -- */}
+                <div className="mx-3 mb-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 rounded-2xl p-3 flex items-center justify-between select-none">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 bg-blue-100 dark:bg-blue-950/40 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400">
+                            <span className="font-extrabold text-sm">%</span>
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Impuesto IVA ({ivaRate}%)</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Desglosado en el ticket de venta</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200/50 dark:border-slate-700/50">
+                        {[0, 8, 19].map(pct => (
+                            <button
+                                key={pct}
+                                onClick={() => setIvaRate(pct)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-black transition-all ${ivaRate === pct ? 'bg-white dark:bg-slate-600 text-slate-700 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
+                            >
+                                {pct}%
+                            </button>
+                        ))}
+                        <div className="flex items-center w-10 border-l border-slate-200 dark:border-slate-700 pl-1.5 ml-0.5">
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={ivaRate}
+                                onChange={e => {
+                                    const v = parseInt(e.target.value);
+                                    setIvaRate(isNaN(v) ? 0 : Math.max(0, Math.min(100, v)));
+                                }}
+                                className="w-full text-center text-[10px] font-black bg-transparent text-slate-700 dark:text-white focus:outline-none"
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* -- SECCIÓN MÉTODOS DE PAGO -- */}

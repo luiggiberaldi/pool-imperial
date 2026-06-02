@@ -71,7 +71,7 @@ export function useSalesCheckout({
         setCartSelectedIndex(-1);
     }, [cart, cartTotalUsd, cartSubtotalUsd, discountData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, playCheckout, setShowConfetti, notifyLowStock, setCart, setShowCheckout, setSelectedCustomerId, setCartSelectedIndex, playError, triggerHaptic]);
 
-    const handleTableCheckout = useCallback(async (payments, changeBreakdown, selectedCustomerId, shouldRelease = null, splitMeta = null) => {
+    const handleTableCheckout = useCallback(async (payments, changeBreakdown, selectedCustomerId, shouldRelease = null, splitMeta = null, surchargeData = null) => {
         if (!tableCheckoutData) return;
         triggerHaptic && triggerHaptic();
 
@@ -81,6 +81,8 @@ export function useSalesCheckout({
         const session = freshSession || snapshotSession;
         const seats = session?.seats || [];
         const config = useTablesStore.getState().config;
+        const includeServiceCharge = !!tableCheckoutData.includeServiceCharge;
+        const ivaRate = surchargeData ? (Number(surchargeData.ivaRate) || 0) : 19;
         const paidHoursOffsets = useTablesStore.getState().paidHoursOffsets || {};
         const paidRoundsOffsets = useTablesStore.getState().paidRoundsOffsets || {};
         const hoursOff = paidHoursOffsets[session?.id] || 0;
@@ -217,30 +219,77 @@ export function useSalesCheckout({
             }
         }
 
-        const recalcCartTotal = round2(syntheticCart.reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0));
+        // 1. Calcular subtotal limpio (sin propina ni recargo TDC)
+        const subtotalLimpio = round2(syntheticCart.reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0));
         const discountAmt = tableCheckoutData.discountData?.active ? round2(tableCheckoutData.discountData.amountUsd || 0) : 0;
+        const subtotalDespuesDescuentos = Math.max(0, subtotalLimpio - discountAmt);
+
+        // 2. Inyectar Servicio Voluntario (10%) si está activo
+        if (includeServiceCharge) {
+            const serviceChargePrice = Math.round(subtotalDespuesDescuentos * 0.10);
+            if (serviceChargePrice > 0) {
+                syntheticCart.push({
+                    id: crypto.randomUUID(),
+                    name: 'Servicio Voluntario (10%)',
+                    priceUsdt: serviceChargePrice,
+                    priceUsd: serviceChargePrice,
+                    qty: 1,
+                    costUsd: 0,
+                    costBs: 0,
+                    category: 'servicios',
+                    unit: 'servicio',
+                    stock: 9999
+                });
+            }
+        }
+
+        // 3. Inyectar Recargo TDC si está presente en surchargeData
+        if (surchargeData && surchargeData.tdcSurcharge > 0) {
+            syntheticCart.push({
+                id: crypto.randomUUID(),
+                name: `Recargo TDC (${surchargeData.tdcSurchargePercent}%)`,
+                priceUsdt: surchargeData.tdcSurcharge,
+                priceUsd: surchargeData.tdcSurcharge,
+                qty: 1,
+                costUsd: 0,
+                costBs: 0,
+                category: 'servicios',
+                unit: 'servicio',
+                stock: 9999
+            });
+        }
+
+        const recalcCartTotal = round2(syntheticCart.reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0));
         let effectiveCartTotal = round2(Math.max(0, recalcCartTotal - discountAmt));
+
+        // 4. Calcular el IVA exclusivo (se suma al total) sobre la base imponible (excluyendo el servicio voluntario)
+        const baseParaIva = round2(syntheticCart.filter(item => item.name !== 'Servicio Voluntario (10%)').reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0) - discountAmt);
+        const cleanIvaRate = Number(surchargeData?.ivaRate) || 0;
+        const ivaAmount = cleanIvaRate > 0 ? Math.round(baseParaIva * (cleanIvaRate / 100)) : 0;
+        
+        let finalTotalWithIva = effectiveCartTotal + ivaAmount;
 
         const _totalPaidCheck = sumR(payments.map(p => p.amountUsd));
         const _shownTotal = round2(tableCheckoutData.grandTotal || 0);
 
-        if (effectiveCartTotal > _totalPaidCheck && _totalPaidCheck >= _shownTotal - EPSILON) {
-            effectiveCartTotal = round2(_totalPaidCheck);
+        if (finalTotalWithIva > _totalPaidCheck && _totalPaidCheck >= _shownTotal - EPSILON) {
+            finalTotalWithIva = round2(_totalPaidCheck);
         }
-        if (effectiveCartTotal > _totalPaidCheck && Math.abs(effectiveCartTotal - _totalPaidCheck) <= 5) {
-            effectiveCartTotal = round2(_totalPaidCheck);
+        if (finalTotalWithIva > _totalPaidCheck && Math.abs(finalTotalWithIva - _totalPaidCheck) <= 5) {
+            finalTotalWithIva = round2(_totalPaidCheck);
         }
 
         const opts = {
             cart: syntheticCart,
-            cartTotalUsd: effectiveCartTotal,
+            cartTotalUsd: finalTotalWithIva,
             cartTotalBs: 0,
-            cartSubtotalUsd: effectiveCartTotal,
+            cartSubtotalUsd: finalTotalWithIva,
             payments, changeBreakdown, selectedCustomerId, customers, products,
             effectiveRate: 1, tasaCop: 1, copEnabled: true,
             discountData: tableCheckoutData.discountData ? { ...tableCheckoutData.discountData, amountBs: 0 } : { active: false, amountUsd: 0, amountBs: 0, type: 'percentage', value: 0 },
             useAutoRate: false, splitMeta,
-            skipStockDeduction: true
+            skipStockDeduction: true,
+            ivaRate: cleanIvaRate
         };
 
         opts.tableName = seatId
