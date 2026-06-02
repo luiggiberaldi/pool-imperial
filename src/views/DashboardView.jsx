@@ -311,37 +311,79 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             )}
 
             {/* ── HEADER ── */}
-            <div className="flex items-center justify-between px-3 sm:px-5 pt-3 sm:pt-4 pb-2 sm:pb-4 transition-all z-10 relative min-h-[120px] sm:min-h-[160px]">
-                <div className="flex items-center justify-start gap-2 sm:gap-3 z-20">
-                    <SyncStatus />
-                    {usuarioActivo && (() => {
-                        const r = usuarioActivo.role || usuarioActivo.rol;
-                        const c = r === 'ADMIN' ? {bg:'bg-amber-50',border:'border-amber-100/50',ping:'bg-amber-400',dot:'bg-amber-500',text:'text-amber-800',btn:'text-amber-500 hover:bg-amber-100 hover:text-amber-700'}
-                                : r === 'MESERO' || r === 'BARRA' ? (r === 'BARRA'
-                                    ? {bg:'bg-violet-50',border:'border-violet-100/50',ping:'bg-violet-400',dot:'bg-violet-500',text:'text-violet-800',btn:'text-violet-500 hover:bg-violet-100 hover:text-violet-700'}
-                                    : {bg:'bg-orange-50',border:'border-orange-100/50',ping:'bg-orange-400',dot:'bg-orange-500',text:'text-orange-800',btn:'text-orange-500 hover:bg-orange-100 hover:text-orange-700'})
-                                : {bg:'bg-amber-50',border:'border-amber-100/50',ping:'bg-amber-400',dot:'bg-amber-500',text:'text-amber-800',btn:'text-amber-500 hover:bg-amber-100 hover:text-amber-700'};
-                        return (
-                            <div className={`flex items-center gap-1.5 ${c.bg} ${c.border} border rounded-full pl-2 pr-1 sm:pl-3 sm:pr-1.5 py-1 sm:py-1.5 shadow-sm`}>
-                                <div className="relative flex h-2 w-2 ml-1 sm:ml-0">
-                                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${c.ping}`}></span>
-                                    <span className={`relative inline-flex rounded-full h-2 w-2 ${c.dot}`}></span>
-                                </div>
-                                <span className={`hidden sm:block text-xs font-black sm:max-w-[120px] truncate ${c.text}`}>{usuarioActivo.name.split(' ')[0]}</span>
-                                <button onClick={() => { triggerHaptic?.(); authLogout(); }} className={`p-1.5 ml-0.5 transition-all rounded-full active:scale-90 ${c.btn}`}>
-                                    <LockIcon size={14} strokeWidth={2.5} />
-                                </button>
-                            </div>
-                        );
-                    })()}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between px-3 sm:px-5 pt-3 sm:pt-4 pb-2 sm:pb-4 transition-all z-10 relative min-h-auto sm:min-h-[160px]">
+                {/* Logo en móvil: centrado arriba */}
+                <div className="flex sm:hidden justify-center w-full mb-3">
+                    <img 
+                        src="/logo.png" 
+                        alt="Pool Imperial" 
+                        onClick={onLogoClick} 
+                        style={{ height: '64px' }} 
+                        className="w-auto object-contain select-none drop-shadow-sm pointer-events-auto transition-transform active:scale-95 cursor-pointer" 
+                        draggable={false} 
+                    />
                 </div>
+
+                {/* Controles de la izquierda (izquierda en desktop, toda la fila en móvil) */}
+                <div className="flex items-center justify-between sm:justify-start w-full sm:w-auto gap-2 sm:gap-3 z-20">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <SyncStatus />
+                        {usuarioActivo && (() => {
+                            const r = usuarioActivo.role || usuarioActivo.rol;
+                            const c = r === 'ADMIN' ? {bg:'bg-amber-50',border:'border-amber-100/50',ping:'bg-amber-400',dot:'bg-amber-500',text:'text-amber-800',btn:'text-amber-500 hover:bg-amber-100 hover:text-amber-700'}
+                                    : r === 'MESERO' || r === 'BARRA' ? (r === 'BARRA'
+                                        ? {bg:'bg-violet-50',border:'border-violet-100/50',ping:'bg-violet-400',dot:'bg-violet-500',text:'text-violet-800',btn:'text-violet-500 hover:bg-violet-100 hover:text-violet-700'}
+                                        : {bg:'bg-orange-50',border:'border-orange-100/50',ping:'bg-orange-400',dot:'bg-orange-500',text:'text-orange-800',btn:'text-orange-500 hover:bg-orange-100 hover:text-orange-700'})
+                                    : {bg:'bg-amber-50',border:'border-amber-100/50',ping:'bg-amber-400',dot:'bg-amber-500',text:'text-amber-800',btn:'text-amber-500 hover:bg-amber-100 hover:text-amber-700'};
+                            return (
+                                <div className={`flex items-center gap-1.5 ${c.bg} ${c.border} border rounded-full pl-2 pr-1 sm:pl-3 sm:pr-1.5 py-1 sm:py-1.5 shadow-sm`}>
+                                    <div className="relative flex h-2 w-2 ml-1 sm:ml-0">
+                                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${c.ping}`}></span>
+                                        <span className={`relative inline-flex rounded-full h-2 w-2 ${c.dot}`}></span>
+                                    </div>
+                                    <span className={`hidden sm:block text-xs font-black sm:max-w-[120px] truncate ${c.text}`}>{usuarioActivo.name.split(' ')[0]}</span>
+                                    <button onClick={() => { triggerHaptic?.(); authLogout(); }} className={`p-1.5 ml-0.5 transition-all rounded-full active:scale-90 ${c.btn}`}>
+                                        <LockIcon size={14} strokeWidth={2.5} />
+                                    </button>
+                                </div>
+                            );
+                        })()}
+                    </div>
+
+                    {/* Botones de acción en móvil (alineados a la derecha de la fila) */}
+                    <div className="flex sm:hidden items-center gap-2">
+                        {/* Bell notification icon */}
+                        <div className="relative">
+                            <button onClick={() => { triggerHaptic?.(); setShowNotifPanel(!showNotifPanel); }}
+                                className={`p-2 flex items-center justify-center rounded-full shadow-sm border transition-all active:scale-95 ${totalCount > 0 ? 'bg-amber-50 border-amber-100 text-amber-600 hover:bg-amber-100' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                                <Bell size={16} strokeWidth={2.5} />
+                                {totalCount > 0 && (
+                                    <span className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-black text-white px-1 ${urgentCount > 0 ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}>
+                                        {totalCount}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                        {isAdmin && (
+                            <button onClick={async () => {
+                                const ok = await confirm({ title: 'Cerrar sesión', message: 'Se cerrará tu acceso a la nube.', confirmText: 'Cerrar sesión', cancelText: 'Cancelar', variant: 'logout' });
+                                if (!ok) return;
+                                await supabaseCloud.auth.signOut();
+                                window.location.reload();
+                            }} className="p-2 flex items-center bg-rose-50 border border-rose-100 text-rose-500 rounded-full shadow-sm hover:bg-rose-100 hover:text-rose-600 active:scale-95 transition-all">
+                                <LogOut size={16} strokeWidth={2.5} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Logo en Desktop: absoluto y centrado */}
                 <div className="hidden sm:flex absolute z-0 pointer-events-none inset-x-0 top-2 justify-center">
                     <img src="/logo.png" alt="Pool Imperial" onClick={onLogoClick} style={{ height: '139px' }} className="w-auto object-contain select-none drop-shadow-sm pointer-events-auto transition-transform hover:scale-105 duration-300 cursor-pointer" draggable={false} />
                 </div>
-                <div className="flex sm:hidden absolute z-0 pointer-events-none inset-x-0 top-1 justify-center">
-                    <img src="/logo.png" alt="Pool Imperial" onClick={onLogoClick} style={{ height: '105px' }} className="w-auto object-contain select-none drop-shadow-sm pointer-events-auto transition-transform hover:scale-105 duration-75" draggable={false} />
-                </div>
-                <div className="flex items-center justify-end gap-2 z-20">
+
+                {/* Botones de acción en Desktop */}
+                <div className="hidden sm:flex items-center justify-end gap-2 z-20">
                     {/* Bell notification icon */}
                     <div className="relative">
                         <button onClick={() => { triggerHaptic?.(); setShowNotifPanel(!showNotifPanel); }}

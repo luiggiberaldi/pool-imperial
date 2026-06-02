@@ -1260,6 +1260,21 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     // Zoom & Pan states for Mobile & Touch optimization
     const [zoomLevel, setZoomLevel] = useState(1);
     const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+
+    const zoomLevelRef = useRef(1);
+    const panOffsetRef = useRef({ x: 0, y: 0 });
+    const canvasWrapperRef = useRef(null);
+
+    const isEditingRef = useRef(isEditing);
+    useEffect(() => {
+        isEditingRef.current = isEditing;
+    }, [isEditing]);
+
+    const dimensionsRef = useRef(dimensions);
+    useEffect(() => {
+        dimensionsRef.current = dimensions;
+    }, [dimensions]);
+
     const zoomContainerRef = useRef(null);
     const lastPinchDistRef = useRef(null);
     const isPanningRef     = useRef(false);
@@ -1268,45 +1283,77 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     const MIN_ZOOM = 1;
     const MAX_ZOOM = 4;
 
+    const updateTransformDOM = useCallback((zoom, pan) => {
+        if (canvasWrapperRef.current) {
+            canvasWrapperRef.current.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
+            canvasWrapperRef.current.style.willChange = 'transform';
+        }
+    }, []);
+
     // Safe bounds clamp for panning
-    const clampPan = (x, y, scaleVal) => {
+    const clampPan = useCallback((x, y, scaleVal) => {
         if (scaleVal <= 1) return { x: 0, y: 0 };
-        const maxW = (scaleVal - 1) * dimensions.width / 2;
-        const maxH = (scaleVal - 1) * dimensions.height / 2;
+        const dims = dimensionsRef.current;
+        const maxW = (scaleVal - 1) * dims.width / 2;
+        const maxH = (scaleVal - 1) * dims.height / 2;
         return {
             x: Math.max(-maxW, Math.min(maxW, x)),
             y: Math.max(-maxH, Math.min(maxH, y))
         };
-    };
+    }, []);
 
-    const applyZoom = (newZoom, centerX, centerY) => {
+    const applyZoom = useCallback((newZoom, centerX, centerY) => {
         const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
-        setPanOffset(prev => {
-            if (clamped === MIN_ZOOM) return { x: 0, y: 0 };
-            const ratio = (clamped - zoomLevel) / zoomLevel;
-            // default to center if no coords
-            const cx = centerX !== undefined ? centerX - (canvasParentRef.current?.getBoundingClientRect().left || 0) : dimensions.width / 2;
-            const cy = centerY !== undefined ? centerY - (canvasParentRef.current?.getBoundingClientRect().top || 0) : dimensions.height / 2;
+        const prevZoom = zoomLevelRef.current;
+        const prevPan = panOffsetRef.current;
+        const dims = dimensionsRef.current;
+        
+        let nextPan = { x: 0, y: 0 };
+        if (clamped > MIN_ZOOM) {
+            const ratio = (clamped - prevZoom) / prevZoom;
+            const cx = centerX !== undefined 
+                ? centerX - (canvasParentRef.current?.getBoundingClientRect().left || 0) 
+                : dims.width / 2;
+            const cy = centerY !== undefined 
+                ? centerY - (canvasParentRef.current?.getBoundingClientRect().top || 0) 
+                : dims.height / 2;
             
-            const newX = prev.x - ratio * (cx - prev.x);
-            const newY = prev.y - ratio * (cy - prev.y);
-            return clampPan(newX, newY, clamped);
-        });
-        setZoomLevel(clamped);
-        if (clamped === MIN_ZOOM) setPanOffset({ x: 0, y: 0 });
+            const newX = prevPan.x - ratio * (cx - prevPan.x);
+            const newY = prevPan.y - ratio * (cy - prevPan.y);
+            nextPan = clampPan(newX, newY, clamped);
+        }
+
+        zoomLevelRef.current = clamped;
+        panOffsetRef.current = nextPan;
+        
+        updateTransformDOM(clamped, nextPan);
+    }, [clampPan, updateTransformDOM]);
+
+    const handleZoomIn  = () => {
+        applyZoom(zoomLevelRef.current + 0.4);
+        setZoomLevel(zoomLevelRef.current);
+        setPanOffset(panOffsetRef.current);
+    };
+    const handleZoomOut = () => {
+        applyZoom(zoomLevelRef.current - 0.4);
+        setZoomLevel(zoomLevelRef.current);
+        setPanOffset(panOffsetRef.current);
+    };
+    const handleZoomReset = () => {
+        zoomLevelRef.current = 1;
+        panOffsetRef.current = { x: 0, y: 0 };
+        updateTransformDOM(1, { x: 0, y: 0 });
+        setZoomLevel(1);
+        setPanOffset({ x: 0, y: 0 });
     };
 
-    const handleZoomIn  = () => applyZoom(zoomLevel + 0.4);
-    const handleZoomOut = () => applyZoom(zoomLevel - 0.4);
-    const handleZoomReset = () => { setZoomLevel(1); setPanOffset({ x: 0, y: 0 }); };
-
-    // Pinch-to-zoom touch handlers using imperative listeners with passive: false to prevent browser preventDefault issues
+    // Pinch-to-zoom and drag/pan handlers with stable listener subscription
     useEffect(() => {
         const container = zoomContainerRef.current;
         if (!container) return;
 
         const handleTouchStart = (e) => {
-            if (isEditing) return;
+            if (isEditingRef.current) return;
             if (e.touches.length === 2) {
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -1314,12 +1361,17 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                 e.preventDefault();
             } else if (e.touches.length === 1) {
                 isPanningRef.current = true;
-                panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, ox: panOffset.x, oy: panOffset.y };
+                panStartRef.current = { 
+                    x: e.touches[0].clientX, 
+                    y: e.touches[0].clientY, 
+                    ox: panOffsetRef.current.x, 
+                    oy: panOffsetRef.current.y 
+                };
             }
         };
 
         const handleTouchMove = (e) => {
-            if (isEditing) return;
+            if (isEditingRef.current) return;
             if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -1327,15 +1379,20 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                 const ratio = newDist / lastPinchDistRef.current;
                 const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
                 const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                applyZoom(zoomLevel * ratio, midX, midY);
+                applyZoom(zoomLevelRef.current * ratio, midX, midY);
                 lastPinchDistRef.current = newDist;
                 e.preventDefault();
             } else if (e.touches.length === 1 && isPanningRef.current) {
                 const dx = e.touches[0].clientX - panStartRef.current.x;
                 const dy = e.touches[0].clientY - panStartRef.current.y;
-                const clamped = clampPan(panStartRef.current.ox + dx, panStartRef.current.oy + dy, zoomLevel);
-                setPanOffset(clamped);
-                if (zoomLevel > 1.01) {
+                const clamped = clampPan(
+                    panStartRef.current.ox + dx, 
+                    panStartRef.current.oy + dy, 
+                    zoomLevelRef.current
+                );
+                panOffsetRef.current = clamped;
+                updateTransformDOM(zoomLevelRef.current, clamped);
+                if (zoomLevelRef.current > 1.01) {
                     e.preventDefault();
                 }
             }
@@ -1343,19 +1400,103 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
 
         const handleTouchEnd = (e) => {
             if (e.touches.length < 2) lastPinchDistRef.current = null;
-            if (e.touches.length === 0) isPanningRef.current = false;
+            if (e.touches.length === 0) {
+                isPanningRef.current = false;
+                setZoomLevel(zoomLevelRef.current);
+                setPanOffset(panOffsetRef.current);
+            }
         };
 
+        // Desktop Mouse Drag to Pan
+        const handleMouseDown = (e) => {
+            if (isEditingRef.current) return;
+            if (e.button !== 0 || zoomLevelRef.current <= 1.01) return;
+            isPanningRef.current = true;
+            panStartRef.current = {
+                x: e.clientX,
+                y: e.clientY,
+                ox: panOffsetRef.current.x,
+                oy: panOffsetRef.current.y
+            };
+            container.style.cursor = 'grabbing';
+            e.preventDefault();
+        };
+
+        const handleMouseMove = (e) => {
+            if (isEditingRef.current || !isPanningRef.current) return;
+            const dx = e.clientX - panStartRef.current.x;
+            const dy = e.clientY - panStartRef.current.y;
+            const clamped = clampPan(
+                panStartRef.current.ox + dx,
+                panStartRef.current.oy + dy,
+                zoomLevelRef.current
+            );
+            panOffsetRef.current = clamped;
+            updateTransformDOM(zoomLevelRef.current, clamped);
+            e.preventDefault();
+        };
+
+        const handleMouseUp = () => {
+            if (isPanningRef.current) {
+                isPanningRef.current = false;
+                container.style.cursor = zoomLevelRef.current > 1.01 ? 'grab' : 'default';
+                setZoomLevel(zoomLevelRef.current);
+                setPanOffset(panOffsetRef.current);
+            }
+        };
+
+        const handleMouseLeave = () => {
+            if (isPanningRef.current) {
+                isPanningRef.current = false;
+                container.style.cursor = zoomLevelRef.current > 1.01 ? 'grab' : 'default';
+                setZoomLevel(zoomLevelRef.current);
+                setPanOffset(panOffsetRef.current);
+            }
+        };
+
+        // Desktop Mouse Wheel to Zoom
+        const handleWheel = (e) => {
+            if (isEditingRef.current) return;
+            e.preventDefault();
+            const zoomFactor = 1.1;
+            const direction = e.deltaY < 0 ? 1 : -1;
+            const nextZoom = direction > 0 
+                ? zoomLevelRef.current * zoomFactor 
+                : zoomLevelRef.current / zoomFactor;
+            
+            applyZoom(nextZoom, e.clientX, e.clientY);
+            container.style.cursor = zoomLevelRef.current > 1.01 ? 'grab' : 'default';
+            setZoomLevel(zoomLevelRef.current);
+            setPanOffset(panOffsetRef.current);
+        };
+
+        // Touch Listeners
         container.addEventListener('touchstart', handleTouchStart, { passive: false });
         container.addEventListener('touchmove', handleTouchMove, { passive: false });
         container.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        // Mouse Drag Listeners
+        container.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        container.addEventListener('mouseleave', handleMouseLeave);
+
+        // Wheel Zoom Listener
+        container.addEventListener('wheel', handleWheel, { passive: false });
 
         return () => {
             container.removeEventListener('touchstart', handleTouchStart);
             container.removeEventListener('touchmove', handleTouchMove);
             container.removeEventListener('touchend', handleTouchEnd);
+
+            container.removeEventListener('mousedown', handleMouseDown);
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+            container.removeEventListener('mouseleave', handleMouseLeave);
+
+            container.removeEventListener('wheel', handleWheel);
         };
-    }, [isEditing, zoomLevel, panOffset, dimensions]);
+    }, [clampPan, applyZoom, updateTransformDOM]);
 
     useEffect(() => {
         if (!canvasParentRef.current) return;
@@ -1895,9 +2036,13 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                     <div
                         ref={zoomContainerRef}
                         className="w-full h-full flex items-center justify-center overflow-hidden"
-                        style={{ touchAction: isEditing ? 'none' : (zoomLevel > 1 ? 'none' : 'pan-x pan-y') }}
+                        style={{ 
+                            touchAction: isEditing ? 'none' : (zoomLevel > 1 ? 'none' : 'pan-x pan-y'),
+                            cursor: isEditing ? 'default' : (zoomLevel > 1.01 ? 'grab' : 'default')
+                        }}
                     >
                         <div 
+                            ref={canvasWrapperRef}
                             className="canvas-wrapper"
                             style={{
                                 width: `${dimensions.width}px`,
