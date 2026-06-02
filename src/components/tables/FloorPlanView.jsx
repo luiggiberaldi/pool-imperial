@@ -18,11 +18,12 @@
  * - Los tipos de elemento están separados y son fácilmente extendibles.
  */
 
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { FLOOR_ITEMS } from '../../data/floorPlanData';
 import { calculateElapsedTime } from '../../utils/tableBillingEngine';
 import { showToast } from '../Toast';
+import { useSharedTick } from '../../hooks/useSharedTick';
 
 
 
@@ -105,14 +106,13 @@ function resolveTable(item, tables) {
 }
 
 /** Devuelve el estado semántico de una sesión: 'free' | 'occupied' | 'checkout' | 'exceeded' */
-function statusOf(session) {
+function statusOf(session, now) {
     if (!session) return 'free';
     if (session.status === 'CHECKOUT') return 'checkout';
     
     // Validar si es un prepago excedido en tiempo real
     if (session.game_mode === 'NORMAL' && session.hours_paid > 0) {
         const started = new Date(session.started_at).getTime();
-        const now = Date.now();
         const elapsedMinutes = (now - started) / 60000;
         const limitMinutes = session.hours_paid * 60;
         if (elapsedMinutes > limitMinutes) {
@@ -129,11 +129,8 @@ function statusOf(session) {
 
 /** Timer en vivo que actualiza cada segundo. */
 function LiveTimer({ startedAt, className = '' }) {
-    const [elapsed, setElapsed] = useState(() => calculateElapsedTime(startedAt));
-    useEffect(() => {
-        const iv = setInterval(() => setElapsed(calculateElapsedTime(startedAt)), 1000);
-        return () => clearInterval(iv);
-    }, [startedAt]);
+    const tick = useSharedTick();
+    const elapsed = useMemo(() => calculateElapsedTime(startedAt), [startedAt, tick]);
     return <span className={className}>{fmtTimer(elapsed)}</span>;
 }
 
@@ -161,13 +158,7 @@ function StatusDot({ status }) {
  * Render: fieltro realístico cargando la imagen mesa-pool.svg, con soporte de rotación portrait
  * y capas de estado e información en tiempo real.
  */
-/**
- * PoolTableEl — Mesa de billar.
- * Render: fieltro realístico cargando la imagen mesa-pool.svg, con soporte de rotación portrait
- * y capas de estado e información en tiempo real.
- */
-function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
-    const st = statusOf(session);
+const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, status, isSelected, isCanvasRotated, onItemClick, ...props }) {
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
     
@@ -176,12 +167,12 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
     const isPortrait = imgDir === 'vertical';
 
     // Si está ocupada o por cobrar, añadimos un borde de destaque claro
-    const isOccupied = st === 'occupied';
+    const isOccupied = status === 'occupied';
     const borderStyle = isOccupied 
         ? '3.5px solid #ef4444' 
-        : st === 'checkout'
+        : status === 'checkout'
             ? '3.5px dashed #f59e0b'
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? '3.5px dashed #ef4444'
                 : '2.5px solid transparent'; // Borde transparente cuando está libre
 
@@ -207,25 +198,34 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
     };
 
     // State tint overlay on top of the table image
-    const overlayBg = st === 'free'
+    const overlayBg = status === 'free'
         ? 'rgba(0, 0, 0, 0)'
-        : st === 'checkout'
+        : status === 'checkout'
             ? 'rgba(217, 119, 6, 0.25)' // Amber/naranja cobro
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? 'rgba(153, 27, 27, 0.35)' // Crimson/rojo excedido
                 : 'rgba(239, 68, 68, 0.15)'; // Red tint for occupied
 
-    const shadowStyle = st === 'free' ? {} : {
-        boxShadow: st === 'checkout' 
+    const shadowStyle = status === 'free' ? {} : {
+        boxShadow: status === 'checkout' 
             ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
                 : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
+    };
+
+    const handleClick = (e) => {
+        if (onItemClick) {
+            onItemClick(table, session);
+        } else if (props.onClick) {
+            props.onClick(e);
+        }
     };
 
     return (
         <button
             {...props}
+            onClick={handleClick}
             style={{
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
@@ -240,7 +240,7 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                 ...shadowStyle,
                 ...props.style,
             }}
-            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center touch-target-expand ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
+            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center touch-target-expand ${status === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             {/* The high-fidelity pool table SVG */}
@@ -265,28 +265,28 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                 <span className="font-extrabold text-white leading-none text-[10px] sm:text-[11.5px] tracking-wide drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                     {item.label}
                 </span>
-                {(st === 'occupied' || st === 'exceeded') && session?.started_at && (
+                {(status === 'occupied' || status === 'exceeded') && session?.started_at && (
                     <LiveTimer
                         startedAt={session.started_at}
                         className="font-mono font-extrabold text-white text-[8px] sm:text-[10px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]"
                     />
                 )}
-                {(st === 'occupied' || st === 'exceeded') && session?.client_name && (
+                {(status === 'occupied' || status === 'exceeded') && session?.client_name && (
                     <span className="text-white font-bold text-[7.5px] sm:text-[8px] truncate max-w-full drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                         {session.client_name}
                     </span>
                 )}
-                {st === 'checkout' && (
+                {status === 'checkout' && (
                     <span className="font-black text-amber-300 text-[7.5px] sm:text-[8px] uppercase tracking-wider drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                         COBRAR
                     </span>
                 )}
-                {st === 'exceeded' && (
+                {status === 'exceeded' && (
                     <span className="font-black text-rose-300 text-[7.5px] sm:text-[8px] uppercase tracking-wider animate-pulse drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                         EXCEDIDO
                     </span>
                 )}
-                {st === 'free' && (
+                {status === 'free' && (
                     <span className="text-white/55 text-[7px] uppercase tracking-wider font-extrabold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">
                         libre
                     </span>
@@ -294,46 +294,54 @@ function PoolTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
             </div>
         </button>
     );
-}
+})
 
 /**
  * DiningTableEl — Mesa comedor/social (M1, M2, M3).
  * Render top-view: 4 sillas simplificadas en los costados + superficie de mesa plana.
  */
-function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props }) {
-    const st = statusOf(session);
+const DiningTableEl = React.memo(function DiningTableEl({ item, table, session, status, isSelected, isCanvasRotated, onItemClick, ...props }) {
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
 
-    const overlayBg = st === 'free'
+    const overlayBg = status === 'free'
         ? 'rgba(0, 0, 0, 0)'
-        : st === 'checkout'
+        : status === 'checkout'
             ? 'rgba(217, 119, 6, 0.25)' // Amber
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? 'rgba(153, 27, 27, 0.35)' // Crimson
                 : 'rgba(239, 68, 68, 0.15)'; // Red
 
-    const borderStyle = st === 'free' 
+    const borderStyle = status === 'free' 
         ? '2px solid transparent' 
-        : st === 'checkout'
+        : status === 'checkout'
             ? '2.5px dashed #f59e0b'
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? '2.5px dashed #ef4444'
                 : '2.5px solid #ef4444';
 
-    const shadowStyle = st === 'free' ? {} : {
-        boxShadow: st === 'checkout' 
+    const shadowStyle = status === 'free' ? {} : {
+        boxShadow: status === 'checkout' 
             ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
                 : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
     };
 
     const imgSrc = '/mesas-normales.svg';
 
+    const handleClick = (e) => {
+        if (onItemClick) {
+            onItemClick(table, session);
+        } else if (props.onClick) {
+            props.onClick(e);
+        }
+    };
+
     return (
         <button
             {...props}
+            onClick={handleClick}
             style={{
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
@@ -349,7 +357,7 @@ function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props })
                 ...shadowStyle,
                 ...props.style,
             }}
-            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center touch-target-expand ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
+            className={`group transition-all duration-150 active:scale-[0.98] cursor-pointer overflow-hidden flex items-center justify-center touch-target-expand ${status === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             {/* The high-fidelity dining table SVG */}
@@ -376,17 +384,17 @@ function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props })
                 <span className="font-extrabold text-white leading-none text-[9.5px] sm:text-[11px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]">
                     {item.label}
                 </span>
-                {(st === 'occupied' || st === 'exceeded') && session?.client_name && (
+                {(status === 'occupied' || status === 'exceeded') && session?.client_name && (
                     <span className="text-white font-extrabold text-[7.5px] sm:text-[8px] truncate max-w-full drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]">
                         {session.client_name}
                     </span>
                 )}
-                {st === 'checkout' && (
+                {status === 'checkout' && (
                     <span className="font-black text-amber-300 text-[7.5px] sm:text-[8px] uppercase tracking-wider drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]">
                         COBRAR
                     </span>
                 )}
-                {st === 'exceeded' && (
+                {status === 'exceeded' && (
                     <span className="font-black text-rose-300 text-[7.5px] sm:text-[8px] uppercase tracking-wider animate-pulse drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]">
                         EXCEDIDO
                     </span>
@@ -394,46 +402,54 @@ function DiningTableEl({ item, session, isSelected, isCanvasRotated, ...props })
             </div>
         </button>
     );
-}
+});
 
 /**
  * RoundStoolEl — Taburete alto redondo / Mesa redonda (M4-M11).
  * Render: fieltro realístico cargando la imagen mesa-redonda.svg, con capas de estado e información en tiempo real.
  */
-function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
-    const st = statusOf(session);
+const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, status, isSelected, isCanvasRotated, onItemClick, ...props }) {
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
 
-    const overlayBg = st === 'free'
+    const overlayBg = status === 'free'
         ? 'rgba(0, 0, 0, 0)'
-        : st === 'checkout'
+        : status === 'checkout'
             ? 'rgba(217, 119, 6, 0.25)' // Amber/naranja cobro
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? 'rgba(153, 27, 27, 0.35)' // Crimson/rojo excedido
                 : 'rgba(239, 68, 68, 0.15)'; // Red tint for occupied
 
-    const borderStyle = st === 'free' 
+    const borderStyle = status === 'free' 
         ? '2px solid transparent' 
-        : st === 'checkout'
+        : status === 'checkout'
             ? '2.5px dashed #f59e0b'
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? '2.5px dashed #ef4444'
                 : '2.5px solid #ef4444';
 
-    const shadowStyle = st === 'free' ? {} : {
-        boxShadow: st === 'checkout' 
+    const shadowStyle = status === 'free' ? {} : {
+        boxShadow: status === 'checkout' 
             ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
                 : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
     };
 
     const imgSrc = '/mesa-redonda.svg';
 
+    const handleClick = (e) => {
+        if (onItemClick) {
+            onItemClick(table, session);
+        } else if (props.onClick) {
+            props.onClick(e);
+        }
+    };
+
     return (
         <button
             {...props}
+            onClick={handleClick}
             style={{
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
@@ -446,7 +462,7 @@ function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) 
                 filter: 'drop-shadow(0px 3.5px 5px rgba(0,0,0,0.5))',
                 ...props.style,
             }}
-            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer touch-target-expand ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
+            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer touch-target-expand ${status === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             <div
@@ -481,46 +497,54 @@ function RoundStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) 
             </div>
         </button>
     );
-}
+});
 
 /**
  * BarStoolEl — Taburete de barra (B1-B15).
  * Render: círculo compacto plano con etiqueta. Enforce aspect-ratio to keep it a perfect circle.
  */
-function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
-    const st = statusOf(session);
+const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, status, isSelected, isCanvasRotated, onItemClick, ...props }) {
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
 
-    const overlayBg = st === 'free'
+    const overlayBg = status === 'free'
         ? 'rgba(0, 0, 0, 0)'
-        : st === 'checkout'
+        : status === 'checkout'
             ? 'rgba(217, 119, 6, 0.3)'
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? 'rgba(239, 68, 68, 0.4)'
                 : 'rgba(239, 68, 68, 0.2)'; // Red tint for occupied
 
-    const borderStyle = st === 'free' 
+    const borderStyle = status === 'free' 
         ? '2px solid transparent' 
-        : st === 'checkout'
+        : status === 'checkout'
             ? '2.5px dashed #f59e0b'
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? '2.5px dashed #ef4444'
                 : '2.5px solid #ef4444';
 
-    const shadowStyle = st === 'free' ? {} : {
-        boxShadow: st === 'checkout' 
+    const shadowStyle = status === 'free' ? {} : {
+        boxShadow: status === 'checkout' 
             ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
-            : st === 'exceeded'
+            : status === 'exceeded'
                 ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
                 : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
     };
 
     const imgSrc = '/bancos.svg';
 
+    const handleClick = (e) => {
+        if (onItemClick) {
+            onItemClick(table, session);
+        } else if (props.onClick) {
+            props.onClick(e);
+        }
+    };
+
     return (
         <button
             {...props}
+            onClick={handleClick}
             style={{
                 position: 'absolute',
                 left: `${item.x}%`, top: `${item.y}%`,
@@ -532,7 +556,7 @@ function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
                 border: 'none',
                 ...props.style,
             }}
-            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer touch-target-expand ${st === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
+            className={`group flex items-center justify-center transition-all duration-150 active:scale-[0.98] cursor-pointer touch-target-expand ${status === 'checkout' ? 'checkout-pulsing' : ''} ${props.className || ''}`}
             title={item.label}
         >
             <div
@@ -567,13 +591,13 @@ function BarStoolEl({ item, session, isSelected, isCanvasRotated, ...props }) {
             </div>
         </button>
     );
-}
+});
 
 /**
  * BarCounterEl — Mostrador de barra (Barra 1 y Barra 2).
  * Render: bloque plano y sólido sin gradientes ni vetas.
  */
-function BarCounterEl({ item, isCanvasRotated, ...props }) {
+const BarCounterEl = React.memo(function BarCounterEl({ item, isCanvasRotated, ...props }) {
     // Use imgDir if explicitly set, fallback to actual aspect-ratio on 16:9 canvas
     const imgDir = item.imgDir || (item.w * 16 > item.h * 9 ? 'horizontal' : 'vertical');
     const isPortrait = imgDir === 'vertical';
@@ -633,13 +657,13 @@ function BarCounterEl({ item, isCanvasRotated, ...props }) {
             )}
         </div>
     );
-}
+});
 
 /**
  * EntryEl — Marcador de entrada al local.
  * Render: bloque limpio y técnico de entrada.
  */
-function EntryEl({ item, ...props }) {
+const EntryEl = React.memo(function EntryEl({ item, ...props }) {
     const rotation = item.r || 0;
     const isHorizontal = item.w > item.h;
     return (
@@ -698,12 +722,12 @@ function EntryEl({ item, ...props }) {
             </span>
         </div>
     );
-}
+});
 
 /**
  * LogoEl — Área de marca central simplificada.
  */
-function LogoEl({ item, isCanvasRotated, ...props }) {
+const LogoEl = React.memo(function LogoEl({ item, isCanvasRotated, ...props }) {
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
     return (
@@ -725,7 +749,7 @@ function LogoEl({ item, isCanvasRotated, ...props }) {
             />
         </div>
     );
-}
+});
 
 // ═══════════════════════════════════════════════════════
 // ZONA BACKGROUNDS — dummy (eliminada la representación visual)
@@ -1223,7 +1247,10 @@ function FloorPlanEditorPanel({ selectedItemId, items, setItems, onClose }) {
 // ═══════════════════════════════════════════════════════
 
 export default function FloorPlanView({ onTableSelect, selectedTableId, isEditing, onExitEditing }) {
-    const { tables, activeSessions } = useTablesStore();
+    const tables = useTablesStore(s => s.tables);
+    const activeSessions = useTablesStore(s => s.activeSessions);
+
+    const tick = useSharedTick();
 
     // Auto-scaling responsive logic
     const canvasParentRef = useRef(null);
@@ -1388,20 +1415,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         const saved = localStorage.getItem('custom_floor_plan_items');
         if (saved) {
             try {
-                const parsed = JSON.parse(saved);
-                // Migración: Forzar que el entry-1 esté debajo de M1 de forma predeterminada
-                return parsed.map(it => {
-                    if (it.id === 'entry-1') {
-                        return {
-                            ...it,
-                            x: 4.25,
-                            y: 96.5,
-                            w: 7.5,
-                            h: 3.5
-                        };
-                    }
-                    return it;
-                });
+                return JSON.parse(saved);
             } catch (e) {
                 console.error("Error loading custom floor plan layout", e);
             }
@@ -1533,9 +1547,91 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
 
     // Resuelve cada FloorItem dinámico con su mesa y sesión
     const resolvedItems = useMemo(() => {
+        // Pre-build O(1) maps for fast lookup
+        const tablesByName = new Map();
+        const poolTablesByDigit = new Map();
+        const diningTablesByDigit = new Map();
+        const barStoolsByDigit = new Map();
+        const genericNormalByDigit = new Map();
+        const genericPoolByDigit = new Map();
+
+        tables.forEach(t => {
+            const cleanName = t.name.trim().toLowerCase();
+            if (!tablesByName.has(cleanName)) {
+                tablesByName.set(cleanName, t);
+            }
+            
+            const digits = t.name.match(/\d+/)?.[0];
+            if (digits) {
+                if (t.type === 'POOL') {
+                    if (!poolTablesByDigit.has(digits)) poolTablesByDigit.set(digits, t);
+                    if (!genericPoolByDigit.has(digits)) genericPoolByDigit.set(digits, t);
+                } else if (t.type === 'NORMAL') {
+                    const nameLower = t.name.toLowerCase();
+                    const isBar = nameLower.includes('b') || nameLower.includes('banco') || nameLower.includes('barra');
+                    if (isBar) {
+                        if (!barStoolsByDigit.has(digits)) barStoolsByDigit.set(digits, t);
+                    } else {
+                        if (!diningTablesByDigit.has(digits)) diningTablesByDigit.set(digits, t);
+                    }
+                    if (!genericNormalByDigit.has(digits)) genericNormalByDigit.set(digits, t);
+                }
+            }
+        });
+
+        const sessionsByTableId = new Map();
+        activeSessions.forEach(s => {
+            sessionsByTableId.set(s.table_id, s);
+        });
+
+        const resolveTableFast = (item) => {
+            if (!item.refName) return null;
+            const cleanRef = item.refName.trim().toLowerCase();
+            
+            // 1 & 2. Exact or case-insensitive match
+            let found = tablesByName.get(cleanRef);
+            if (found) return found;
+
+            // 3. Pool table digit match
+            if (item.type === 'pool_table') {
+                const itemDigits = item.refName.match(/\d+/)?.[0];
+                if (itemDigits) {
+                    found = poolTablesByDigit.get(itemDigits);
+                    if (found) return found;
+                }
+            }
+
+            // 4. Dining table digit match
+            if (item.type === 'dining_table' || item.type === 'round_stool' || item.type === 'bar_table') {
+                const itemDigits = item.refName.match(/\d+/)?.[0];
+                if (itemDigits) {
+                    found = diningTablesByDigit.get(itemDigits);
+                    if (found) return found;
+                }
+            }
+
+            // 5. Bar stool digit match
+            if (item.type === 'bar_stool') {
+                const itemDigits = item.refName.match(/\d+/)?.[0];
+                if (itemDigits) {
+                    found = barStoolsByDigit.get(itemDigits);
+                    if (found) return found;
+                }
+            }
+
+            // 6. Generic fallback
+            const itemDigits = item.refName.match(/\d+/)?.[0];
+            if (itemDigits) {
+                found = item.type === 'pool_table' ? genericPoolByDigit.get(itemDigits) : genericNormalByDigit.get(itemDigits);
+                if (found) return found;
+            }
+
+            return null;
+        };
+
         return dynamicItems.map(item => {
-            const table = item.interactive ? resolveTable(item, tables) : null;
-            const session = table ? activeSessions.find(s => s.table_id === table.id) : null;
+            const table = item.interactive ? resolveTableFast(item) : null;
+            const session = table ? (sessionsByTableId.get(table.id) || null) : null;
             return { item, table, session };
         });
     }, [dynamicItems, tables, activeSessions]);
@@ -1555,12 +1651,12 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         };
     }, [resolvedItems]);
 
-    const handleClick = (table, session) => {
+    const handleClick = useCallback((table, session) => {
         if (table) onTableSelect?.(table, session);
-    };
+    }, [onTableSelect]);
 
     /** Renderiza el elemento correcto según tipo, inyectando listeners de edición si aplica. */
-    const renderItem = ({ item, table, session }) => {
+    const renderItem = useCallback(({ item, table, session, status }) => {
         const key   = item.id;
         const isSelected = table && selectedTableId === table.id;
         const isEditSelected = isEditing && selectedEditItemId === item.id;
@@ -1575,7 +1671,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
             onTouchStart: (e) => handleDragStart(e, item.id),
             style: { cursor: 'move' }
         } : {
-            onClick: () => handleClick(table, session)
+            onItemClick: handleClick
         };
 
         const editHighlight = isEditing ? {
@@ -1593,14 +1689,14 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         const isCanvasRotated = dimensions.isRotated;
         switch (item.type) {
             case 'pool_table':
-                return <PoolTableEl   key={key} item={item} session={session} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
+                return <PoolTableEl   key={key} item={item} table={table} session={session} status={status} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'dining_table':
-                return <DiningTableEl key={key} item={item} session={session} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
+                return <DiningTableEl key={key} item={item} table={table} session={session} status={status} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'round_stool':
             case 'bar_table':
-                return <RoundStoolEl  key={key} item={item} session={session} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
+                return <RoundStoolEl  key={key} item={item} table={table} session={session} status={status} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'bar_stool':
-                return <BarStoolEl    key={key} item={item} session={session} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
+                return <BarStoolEl    key={key} item={item} table={table} session={session} status={status} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'bar_counter':
                 return <BarCounterEl  key={key} item={item} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'entry':
@@ -1610,7 +1706,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
             default:
                 return null;
         }
-    };
+    }, [isEditing, selectedEditItemId, selectedTableId, handleClick, dimensions.isRotated]);
 
     return (
         <div className="flex flex-col lg:flex-row h-full bg-[#f4f3f0] overflow-hidden w-full select-none">
@@ -1810,7 +1906,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                                 transition: 'opacity 150ms ease-in-out',
                                 transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`,
                                 transformOrigin: 'center center',
-                                willChange: 'transform',
+                                willChange: (zoomLevel !== 1 || panOffset.x !== 0 || panOffset.y !== 0) ? 'transform' : 'auto',
                             }}
                         >
                             <div 
@@ -1836,7 +1932,10 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                                 />
 
                                 {/* Todos los elementos del plano */}
-                                {resolvedItems.map(renderItem)}
+                                {resolvedItems.map(({ item, table, session }) => {
+                                    const status = statusOf(session, tick);
+                                    return renderItem({ item, table, session, status });
+                                })}
                             </div>
                         </div>
                     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Move } from 'lucide-react';
 import { calculateElapsedTime, calculateSessionCost, calculateSessionCostBreakdown, calculateConsumptionBs } from '../../utils/tableBillingEngine';
 import { round2 } from '../../utils/dinero';
@@ -7,6 +7,7 @@ import { useAuthStore } from '../../hooks/store/authStore';
 import { useOrdersStore } from '../../hooks/store/useOrdersStore';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useCustomersStore } from '../../hooks/store/useCustomersStore';
+import { useSharedTick } from '../../hooks/useSharedTick';
 
 import { generatePartialSessionTicketPDF } from '../../utils/ticketGenerator';
 import { showToast } from '../Toast';
@@ -46,9 +47,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     // Bloqueo de mesa: si un mesero abrió la mesa, otros meseros no pueden interactuar
     const isLockedForMe = (currentUser?.role === 'MESERO' || currentUser?.role === 'BARRA') && isPlaying && session?.opened_by && session.opened_by !== currentUser?.id;
 
-    const [elapsed, setElapsed] = useState(() =>
-        isPlaying && session?.started_at ? calculateElapsedTime(session.started_at) : 0
-    );
+    const tick = useSharedTick();
     const [showOrderPanel, setShowOrderPanel] = useState(false);
 
     const [showCancelModal, setShowCancelModal] = useState(false);
@@ -149,37 +148,15 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const isPaused = pausedData?.isPaused ?? false;
     const pauseElapsed = pausedData?.elapsedAtPause ?? 0;
 
-    useEffect(() => {
-        let interval;
-        if (isPlaying && session?.started_at && !isPaused) {
-            // Use rAF for initial sync to avoid synchronous setState in effect
-            const raf = requestAnimationFrame(() => {
-                setElapsed(calculateElapsedTime(session.started_at));
-            });
-
-            // Re-calculate every second so the timer feels live for customers watching
-            interval = setInterval(() => {
-                setElapsed(calculateElapsedTime(session.started_at));
-            }, 1000);
-
-            return () => {
-                cancelAnimationFrame(raf);
-                clearInterval(interval);
-            };
-        } else if (isPaused) {
-            setElapsed(pauseElapsed);
-        } else {
-            const raf = requestAnimationFrame(() => {
-                setElapsed(0);
-            });
-            return () => cancelAnimationFrame(raf);
-        }
-    }, [isPlaying, session?.started_at, isPaused, pauseElapsed]);
+    const elapsed = useMemo(() => {
+        if (!isPlaying || !session?.started_at) return 0;
+        if (isPaused) return pauseElapsed;
+        return calculateElapsedTime(session.started_at);
+    }, [isPlaying, session?.started_at, isPaused, pauseElapsed, tick]);
 
     const handlePauseTimer = () => {
         if (!session) return;
         const currentElapsed = calculateElapsedTime(session.started_at);
-        setElapsed(currentElapsed);
         pauseSession(session.id, currentElapsed);
     };
 

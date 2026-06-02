@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSharedTick } from '../../hooks/useSharedTick';
 import { 
     Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Play, 
     ShoppingBag, CreditCard, Clock, Check, Plus, Trash2, CheckCircle2, ChevronRight
@@ -67,9 +68,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     // Bloqueo de mesa
     const isLockedForMe = (currentUser?.role === 'MESERO' || currentUser?.role === 'BARRA') && isPlaying && session?.opened_by && session.opened_by !== currentUser?.id;
 
-    const [elapsed, setElapsed] = useState(() =>
-        isPlaying && session?.started_at ? calculateElapsedTime(session.started_at) : 0
-    );
+    const tick = useSharedTick();
     const [isMutating, setIsMutating] = useState(false);
     const [showOrderPanel, setShowOrderPanel] = useState(false);
 
@@ -170,30 +169,11 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const isPaused = pausedData?.isPaused ?? false;
     const pauseElapsed = pausedData?.elapsedAtPause ?? 0;
 
-    useEffect(() => {
-        let interval;
-        if (isPlaying && session?.started_at && !isPaused) {
-            const raf = requestAnimationFrame(() => {
-                setElapsed(calculateElapsedTime(session.started_at));
-            });
-
-            interval = setInterval(() => {
-                setElapsed(calculateElapsedTime(session.started_at));
-            }, 1000);
-
-            return () => {
-                cancelAnimationFrame(raf);
-                clearInterval(interval);
-            };
-        } else if (isPaused) {
-            setElapsed(pauseElapsed);
-        } else {
-            const raf = requestAnimationFrame(() => {
-                setElapsed(0);
-            });
-            return () => cancelAnimationFrame(raf);
-        }
-    }, [isPlaying, session?.started_at, isPaused, pauseElapsed]);
+    const elapsed = useMemo(() => {
+        if (!isPlaying || !session?.started_at) return 0;
+        if (isPaused) return pauseElapsed;
+        return calculateElapsedTime(session.started_at);
+    }, [isPlaying, session?.started_at, isPaused, pauseElapsed, tick]);
 
     // Sincronización Remota Segura (Resiliencia Multi-dispositivo)
     useEffect(() => {
@@ -210,7 +190,6 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const handlePauseTimer = () => {
         if (!session) return;
         const currentElapsed = calculateElapsedTime(session.started_at);
-        setElapsed(currentElapsed);
         pauseSession(session.id, currentElapsed);
     };
 
