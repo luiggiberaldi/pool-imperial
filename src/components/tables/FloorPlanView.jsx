@@ -1273,47 +1273,62 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     const handleZoomOut = () => applyZoom(zoomLevel - 0.4);
     const handleZoomReset = () => { setZoomLevel(1); setPanOffset({ x: 0, y: 0 }); };
 
-    // Pinch-to-zoom touch handler
-    const handleTouchStartZoom = (e) => {
-        if (isEditing) return;
-        if (e.touches.length === 2) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            lastPinchDistRef.current = Math.hypot(dx, dy);
-            e.preventDefault();
-        } else if (e.touches.length === 1) {
-            isPanningRef.current = true;
-            panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, ox: panOffset.x, oy: panOffset.y };
-        }
-    };
+    // Pinch-to-zoom touch handlers using imperative listeners with passive: false to prevent browser preventDefault issues
+    useEffect(() => {
+        const container = zoomContainerRef.current;
+        if (!container) return;
 
-    const handleTouchMoveZoom = (e) => {
-        if (isEditing) return;
-        if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            const newDist = Math.hypot(dx, dy);
-            const ratio = newDist / lastPinchDistRef.current;
-            const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-            const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-            applyZoom(zoomLevel * ratio, midX, midY);
-            lastPinchDistRef.current = newDist;
-            e.preventDefault();
-        } else if (e.touches.length === 1 && isPanningRef.current) {
-            const dx = e.touches[0].clientX - panStartRef.current.x;
-            const dy = e.touches[0].clientY - panStartRef.current.y;
-            const clamped = clampPan(panStartRef.current.ox + dx, panStartRef.current.oy + dy, zoomLevel);
-            setPanOffset(clamped);
-            if (zoomLevel > 1.01) {
+        const handleTouchStart = (e) => {
+            if (isEditing) return;
+            if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                lastPinchDistRef.current = Math.hypot(dx, dy);
                 e.preventDefault();
+            } else if (e.touches.length === 1) {
+                isPanningRef.current = true;
+                panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, ox: panOffset.x, oy: panOffset.y };
             }
-        }
-    };
+        };
 
-    const handleTouchEndZoom = (e) => {
-        if (e.touches.length < 2) lastPinchDistRef.current = null;
-        if (e.touches.length === 0) isPanningRef.current = false;
-    };
+        const handleTouchMove = (e) => {
+            if (isEditing) return;
+            if (e.touches.length === 2 && lastPinchDistRef.current !== null) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const newDist = Math.hypot(dx, dy);
+                const ratio = newDist / lastPinchDistRef.current;
+                const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                applyZoom(zoomLevel * ratio, midX, midY);
+                lastPinchDistRef.current = newDist;
+                e.preventDefault();
+            } else if (e.touches.length === 1 && isPanningRef.current) {
+                const dx = e.touches[0].clientX - panStartRef.current.x;
+                const dy = e.touches[0].clientY - panStartRef.current.y;
+                const clamped = clampPan(panStartRef.current.ox + dx, panStartRef.current.oy + dy, zoomLevel);
+                setPanOffset(clamped);
+                if (zoomLevel > 1.01) {
+                    e.preventDefault();
+                }
+            }
+        };
+
+        const handleTouchEnd = (e) => {
+            if (e.touches.length < 2) lastPinchDistRef.current = null;
+            if (e.touches.length === 0) isPanningRef.current = false;
+        };
+
+        container.addEventListener('touchstart', handleTouchStart, { passive: false });
+        container.addEventListener('touchmove', handleTouchMove, { passive: false });
+        container.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        return () => {
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchmove', handleTouchMove);
+            container.removeEventListener('touchend', handleTouchEnd);
+        };
+    }, [isEditing, zoomLevel, panOffset, dimensions]);
 
     useEffect(() => {
         if (!canvasParentRef.current) return;
@@ -1772,14 +1787,18 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             outline: none;
                             box-shadow: none;
                         }
+                        .floor-plan-canvas img {
+                            image-rendering: -moz-crisp-edges;
+                            image-rendering: -webkit-optimize-contrast;
+                            image-rendering: pixelated;
+                            image-rendering: crisp-edges;
+                            -ms-interpolation-mode: nearest-neighbor;
+                        }
                     `}} />
                     {/* Zoom & Pan container */}
                     <div
                         ref={zoomContainerRef}
                         className="w-full h-full flex items-center justify-center overflow-hidden"
-                        onTouchStart={handleTouchStartZoom}
-                        onTouchMove={handleTouchMoveZoom}
-                        onTouchEnd={handleTouchEndZoom}
                         style={{ touchAction: isEditing ? 'none' : (zoomLevel > 1 ? 'none' : 'pan-x pan-y') }}
                     >
                         <div 

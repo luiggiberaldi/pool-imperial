@@ -206,3 +206,14 @@ body {
 .border-white\/8 {
   border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* ── PREVENT FLOOR PLAN BLURRINSS ON ZOOM ── */
+.floor-plan-canvas img,
+.canvas-wrapper img {
+  image-rendering: -moz-crisp-edges;         /* Firefox */
+  image-rendering: -webkit-optimize-contrast;  /* Safari/Chrome */
+  image-rendering: pixelated;                 /* Chrome/Edge/Opera */
+  image-rendering: crisp-edges;               /* Standard CSS */
+  -ms-interpolation-mode: nearest-neighbor;    /* IE/Legacy Edge */
+}
+
