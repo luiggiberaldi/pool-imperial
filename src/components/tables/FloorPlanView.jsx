@@ -128,10 +128,71 @@ function statusOf(session, now) {
 // ═══════════════════════════════════════════════════════
 
 /** Timer en vivo que actualiza cada segundo. */
-function LiveTimer({ startedAt, className = '' }) {
+function LiveTimer({ session, className = '' }) {
     const tick = useSharedTick();
-    const elapsed = useMemo(() => calculateElapsedTime(startedAt), [startedAt, tick]);
-    return <span className={className}>{fmtTimer(elapsed)}</span>;
+    const pausedData = useTablesStore(state => session ? state.pausedSessions[session.id] : null);
+    const isPaused = pausedData?.isPaused ?? false;
+
+    const elapsedSeconds = useMemo(() => {
+        if (!session?.started_at) return 0;
+        if (isPaused) return (pausedData?.elapsedAtPause || 0) * 60;
+        const start = new Date(session.started_at).getTime();
+        const now = Date.now();
+        return Math.max(0, Math.floor((now - start) / 1000));
+    }, [session?.started_at, isPaused, pausedData, tick]);
+
+    return <span className={className}>{fmtTimer(elapsedSeconds)}</span>;
+}
+
+/** Contador de cuenta regresiva en vivo para prepagos. */
+function LiveCountdownTimer({ session, className = '' }) {
+    const tick = useSharedTick();
+    const pausedData = useTablesStore(state => session ? state.pausedSessions[session.id] : null);
+    const isPaused = pausedData?.isPaused ?? false;
+    const hoursPaid = session?.hours_paid || 0;
+    
+    const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
+    const paidElapsedOffsets = useTablesStore(state => state.paidElapsedOffsets);
+    const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
+    const elapsedOffset = session ? (paidElapsedOffsets[session.id] || 0) : 0;
+    
+    // Calcular en tiempo real usando segundos para máxima precisión
+    const remainingSeconds = useMemo(() => {
+        if (!session?.started_at) return 0;
+        
+        let elapsedSecs;
+        if (isPaused) {
+            elapsedSecs = (pausedData?.elapsedAtPause || 0) * 60;
+        } else {
+            const start = new Date(session.started_at).getTime();
+            const now = Date.now();
+            elapsedSecs = Math.max(0, Math.floor((now - start) / 1000));
+        }
+
+        const limitSecs = hoursPaid * 3600;
+        const offsetSecs = hoursOffset * 3600;
+        const effectiveLimitSecs = Math.max(0, limitSecs - offsetSecs);
+        
+        const elapsedOffsetSecs = elapsedOffset * 60;
+        const effectiveElapsedSecs = elapsedOffsetSecs > 0 ? Math.max(0, elapsedSecs - elapsedOffsetSecs) : elapsedSecs;
+
+        return Math.max(0, effectiveLimitSecs - effectiveElapsedSecs);
+    }, [session, isPaused, pausedData, hoursPaid, hoursOffset, elapsedOffset, tick]);
+
+    if (remainingSeconds > 0) {
+        const isLowTime = remainingSeconds < 600; // < 10 mins (600 seconds)
+        return (
+            <span className={`${className} ${isLowTime ? 'text-amber-400 animate-pulse font-black' : 'text-emerald-400 font-extrabold'}`}>
+                ⌛ {fmtTimer(remainingSeconds)} rest.
+            </span>
+        );
+    } else {
+        return (
+            <span className={`${className} text-rose-500 animate-pulse font-black text-[10px] sm:text-[11.5px] tracking-wide uppercase`}>
+                ⚠️ Tiempo Cumplido
+            </span>
+        );
+    }
 }
 
 /** Punto de estado plano y discreto. */
@@ -166,15 +227,31 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, stat
     const imgDir = item.imgDir || (item.w * 16 > item.h * 9 ? 'horizontal' : 'vertical');
     const isPortrait = imgDir === 'vertical';
 
-    // Si está ocupada o por cobrar, añadimos un borde de destaque claro
-    const isOccupied = status === 'occupied';
-    const borderStyle = isOccupied 
-        ? '3.5px solid #ef4444' 
-        : status === 'checkout'
-            ? '3.5px dashed #f59e0b'
-            : status === 'exceeded'
-                ? '3.5px dashed #ef4444'
-                : '2.5px solid transparent'; // Borde transparente cuando está libre
+    // Borde y sombra de neón según el estado (Luces apagadas si está libre)
+    let borderStyle = '2.5px solid transparent';
+    let shadowStyle = {};
+
+    if (status === 'occupied') {
+        borderStyle = '3px solid #06b6d4'; // Cyan border
+        shadowStyle = {
+            boxShadow: '0 0 14px rgba(6, 182, 212, 0.85), inset 0 0 6px rgba(6, 182, 212, 0.35)'
+        };
+    } else if (status === 'checkout') {
+        borderStyle = '3px dashed #f59e0b'; // Amber/naranja border
+        shadowStyle = {
+            boxShadow: '0 0 16px rgba(245, 158, 11, 0.95), inset 0 0 8px rgba(245, 158, 11, 0.45)'
+        };
+    } else if (status === 'exceeded') {
+        borderStyle = '3px dashed #ef4444'; // Red border
+        shadowStyle = {
+            boxShadow: '0 0 16px rgba(239, 68, 68, 0.95), inset 0 0 8px rgba(239, 68, 68, 0.45)'
+        };
+    }
+
+    // Filtro de brillo simulando encendido/apagado de focos
+    const filterStyle = status === 'free'
+        ? 'brightness(0.35) contrast(0.9) saturate(0.8)'
+        : 'brightness(1.05) saturate(1.05)';
 
     // All pool tables use the same horizontal SVG image, rotated 90 degrees if the visual orientation is portrait
     const imgSrc = '/mesa-pool.svg';
@@ -201,18 +278,10 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, stat
     const overlayBg = status === 'free'
         ? 'rgba(0, 0, 0, 0)'
         : status === 'checkout'
-            ? 'rgba(217, 119, 6, 0.25)' // Amber/naranja cobro
+            ? 'rgba(217, 119, 6, 0.15)' // Amber
             : status === 'exceeded'
-                ? 'rgba(153, 27, 27, 0.35)' // Crimson/rojo excedido
-                : 'rgba(239, 68, 68, 0.15)'; // Red tint for occupied
-
-    const shadowStyle = status === 'free' ? {} : {
-        boxShadow: status === 'checkout' 
-            ? '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 6px rgba(245, 158, 11, 0.35)' 
-            : status === 'exceeded'
-                ? '0 0 14px rgba(239, 68, 68, 0.8), inset 0 0 6px rgba(239, 68, 68, 0.4)'
-                : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
-    };
+                ? 'rgba(153, 27, 27, 0.25)' // Crimson
+                : 'rgba(6, 182, 212, 0.08)'; // Cyan tint for occupied
 
     const handleClick = (e) => {
         if (onItemClick) {
@@ -247,8 +316,11 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, stat
             <img
                 src={imgSrc}
                 alt={item.label}
-                className="pointer-events-none select-none"
-                style={imageStyle}
+                className="pointer-events-none select-none transition-all duration-300"
+                style={{
+                    ...imageStyle,
+                    filter: filterStyle
+                }}
             />
 
             {/* Tint overlay for visual status feedback */}
@@ -259,37 +331,75 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, stat
 
             {/* Contenido: etiqueta + timer + cliente */}
             <div
-                className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-0.5 px-1 text-center bg-transparent transition-colors duration-200"
-                style={isCanvasRotated ? { transform: 'rotate(90deg)', writingMode: 'horizontal-tb' } : { writingMode: isPortrait && item.h > 28 ? 'vertical-rl' : 'horizontal-tb' }}
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1 px-1 text-center bg-transparent transition-colors duration-200"
+                style={isCanvasRotated ? { transform: 'rotate(90deg)', writingMode: 'horizontal-tb' } : { writingMode: 'horizontal-tb' }}
             >
                 <span className="font-extrabold text-white leading-none text-[13px] sm:text-[14.5px] tracking-wide drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
                     {item.label}
                 </span>
-                {(status === 'occupied' || status === 'exceeded') && session?.started_at && (
-                    <LiveTimer
-                        startedAt={session.started_at}
-                        className="font-mono font-extrabold text-white text-[11px] sm:text-[13px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]"
-                    />
-                )}
-                {(status === 'occupied' || status === 'exceeded') && session?.client_name && (
-                    <span className="text-white font-bold text-[10.5px] sm:text-[11px] truncate max-w-full drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
-                        {session.client_name}
+
+                {status === 'free' && (
+                    <span className="text-white/45 text-[10px] uppercase tracking-wider font-extrabold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)] mt-0.5">
+                        libre
                     </span>
                 )}
+
                 {status === 'checkout' && (
-                    <span className="font-black text-amber-300 text-[10.5px] sm:text-[11px] uppercase tracking-wider drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
+                    <span className="font-black text-amber-400 text-[10.5px] sm:text-[11.5px] uppercase tracking-wider drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)] animate-pulse">
                         COBRAR
                     </span>
                 )}
-                {status === 'exceeded' && (
-                    <span className="font-black text-rose-300 text-[10.5px] sm:text-[11px] uppercase tracking-wider animate-pulse drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]">
-                        EXCEDIDO
-                    </span>
-                )}
-                {status === 'free' && (
-                    <span className="text-white/55 text-[10px] uppercase tracking-wider font-extrabold drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">
-                        libre
-                    </span>
+
+                {(status === 'occupied' || status === 'exceeded') && (
+                    <>
+                        {/* 1. MODO JUGADA */}
+                        {session?.game_mode === 'PINA' ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                                {(() => {
+                                    const roundsCount = 1 + (Number(session.extended_times) || 0);
+                                    return (
+                                        <span className="font-black text-[10px] sm:text-[11px] text-white bg-slate-900/80 px-1.5 py-0.5 rounded border border-slate-700/60 flex items-center gap-1 drop-shadow-md">
+                                            🎱 {roundsCount} {roundsCount === 1 ? 'Jugada' : 'Jugadas'}
+                                        </span>
+                                    );
+                                })()}
+                                {session.started_at && (
+                                    <LiveTimer
+                                        session={session}
+                                        className="font-mono text-white/80 text-[9.5px] sm:text-[11px] drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.9)]"
+                                    />
+                                )}
+                            </div>
+                        ) : session?.game_mode === 'NORMAL' && session?.hours_paid > 0 ? (
+                            /* 2. MODO PREPAGO */
+                            <div className="flex flex-col items-center">
+                                <LiveCountdownTimer
+                                    session={session}
+                                    className="font-mono font-extrabold text-[11px] sm:text-[13px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]"
+                                />
+                            </div>
+                        ) : (
+                            /* 3. MODO LIBRE (POR MINUTO) */
+                            <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-widest bg-emerald-950/70 border border-emerald-800/40 px-1 py-[1.5px] rounded leading-none">
+                                    Libre
+                                </span>
+                                {session?.started_at && (
+                                    <LiveTimer
+                                        session={session}
+                                        className="font-mono font-extrabold text-white text-[11px] sm:text-[13px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)]"
+                                    />
+                                )}
+                            </div>
+                        )}
+
+                        {/* Nombre del cliente */}
+                        {session?.client_name && (
+                            <span className="text-white/90 font-bold text-[10px] sm:text-[10.5px] truncate max-w-full drop-shadow-[0_1px_1px_rgba(0,0,0,0.9)] mt-0.5">
+                                {session.client_name}
+                            </span>
+                        )}
+                    </>
                 )}
             </div>
         </button>
@@ -768,9 +878,9 @@ function Legend() {
         <div className="flex items-center gap-4 flex-wrap select-none bg-slate-900/5 px-4 py-2.5 rounded-2xl border border-slate-900/5">
             {[
                 { 
-                    bg: 'rgba(239, 68, 68, 0.15)', 
-                    border: '1.5px solid #ef4444', 
-                    shadow: '0 0 6px rgba(239, 68, 68, 0.5)', 
+                    bg: 'rgba(6, 182, 212, 0.1)', 
+                    border: '1.5px solid #06b6d4', 
+                    shadow: '0 0 6px rgba(6, 182, 212, 0.6)', 
                     label: 'Ocupada / Jugando' 
                 },
                 { 

@@ -90,18 +90,14 @@ export default function CashierPaymentModal({ session, table, config, currentUse
 
     // Elapsed time calculation
     const isPlaying = session && (session.status === 'ACTIVE' || session.status === 'CHECKOUT');
-    const [elapsed, setElapsed] = useState(0);
-
-    useEffect(() => {
-        if (isPlaying && session.started_at) {
-            setElapsed(calculateElapsedTime(session.started_at));
-        }
-    }, [isPlaying, session?.started_at]);
+    const pausedSessions = useTablesStore(state => state.pausedSessions);
+    const paused = pausedSessions?.[session?.id];
+    const elapsed = paused?.isPaused ? (paused.elapsedAtPause || 0) : (session?.started_at ? calculateElapsedTime(session.started_at) : 0);
 
     const isTimeFree = table.type === 'NORMAL';
     const hoursOffset = (paidHoursOffsets || {})[session?.id] || 0;
     const roundsOffset = (paidRoundsOffsets || {})[session?.id] || 0;
-    const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
+    const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
     
     const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
     const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
@@ -179,7 +175,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
 
             // 2. Si la mesa cobró tiempo, ingresarlo como ítems separados (jugadas + horas)
             if (timeCost > 0) {
-                const breakdown = calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset);
+                const breakdown = calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, null, table.type);
                 if (breakdown.pinaCost > 0) {
                     const pinaCount = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
                     const billableRounds = Math.max(0, pinaCount - roundsOffset);

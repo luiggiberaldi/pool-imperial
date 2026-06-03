@@ -1,13 +1,15 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { round2, sumR, subR } from '../utils/dinero';
 
-const EPSILON = 1; // 1 peso colombiano de tolerancia
+const EPSILON_COP = 1; // Tolerancia base cuando se paga solo en COP
+// Cuando hay pagos en USD, la tolerancia sube a 1 centavo USD = tasaCop/100 COP
+// (máxima diferencia posible al redondear 2 decimales USD × tasa)
 
 /**
  * Detecta si el cajero ingresó un monto absurdamente alto en COP.
  */
 function detectPaymentAnomaly({ cartTotalUsd, totalPaidUsd }) {
-    if (cartTotalUsd <= EPSILON) return null;
+    if (cartTotalUsd <= EPSILON_COP) return null;
 
     const ratio = totalPaidUsd / cartTotalUsd;
     const diff = totalPaidUsd - cartTotalUsd;
@@ -39,27 +41,39 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
 
     // En Pool Imperial, cartTotalUsd almacena en realidad el total en COP.
     // Los inputs de métodos en USD se multiplican por la tasa.
+    // Para USD: usar Math.floor para no inflar el monto pagado más allá del billete.
     const totalPaidUsd = useMemo(() => {
         const amounts = paymentMethods.map(m => {
             const val = parseFloat(barValues[m.id]) || 0;
-            const amt = m.currency === 'USD' ? Math.round(val * tasaCop) : Math.round(val);
+            const amt = m.currency === 'USD' ? Math.floor(val * tasaCop) : Math.round(val);
             return amt;
         });
         return sumR(amounts);
     }, [barValues, paymentMethods, tasaCop]);
 
+    // Epsilon dinámico: si hay algún método USD activo, tolerar hasta 1 centavo USD
+    // para absorber el redondeo inevitable entre COP y USD.
+    const epsilon = useMemo(() => {
+        const hasUsd = paymentMethods.some(m => m.currency === 'USD' && parseFloat(barValues[m.id]) > 0);
+        return hasUsd ? Math.ceil((tasaCop || 4150) / 100) : EPSILON_COP;
+    }, [paymentMethods, barValues, tasaCop]);
+
     const totalPaidBs = 0; // muerta la moneda Bs
 
     const proportionPaid = useMemo(() => {
-        if (adjustedTotal <= EPSILON) return 0;
+        if (adjustedTotal <= EPSILON_COP) return 0;
         return totalPaidUsd / adjustedTotal;
     }, [totalPaidUsd, adjustedTotal]);
 
+    // remainingUsd: cuánto falta por cobrar. Se considera 0 si la diferencia
+    // está dentro del epsilon (brecha de redondeo USD↔COP aceptable).
     const remainingUsd = useMemo(() => {
-        return Math.max(0, Math.round(adjustedTotal - totalPaidUsd));
-    }, [adjustedTotal, totalPaidUsd]);
+        const diff = adjustedTotal - totalPaidUsd;
+        return diff > epsilon ? Math.round(diff) : 0;
+    }, [adjustedTotal, totalPaidUsd, epsilon]);
 
     const remainingBs = 0;
+    // changeUsd: vuelto. Solo se muestra si el pago supera el total real (no el epsilon).
     const changeUsd = useMemo(() => {
         return Math.max(0, Math.round(totalPaidUsd - adjustedTotal));
     }, [totalPaidUsd, adjustedTotal]);
@@ -69,7 +83,8 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         return (parseFloat(barValues['tdc']) > 0) && (tdcSurchargePercent > 0) && !applyTdcSurcharge;
     }, [barValues, tdcSurchargePercent, applyTdcSurcharge]);
 
-    const isPaid = (adjustedTotal < EPSILON || totalPaidUsd >= (adjustedTotal - EPSILON)) && !hasUnappliedTdcSurcharge;
+    // isPaid: se permite una brecha de hasta epsilon COP (1 centavo USD en pagos mixtos)
+    const isPaid = (adjustedTotal < EPSILON_COP || totalPaidUsd >= (adjustedTotal - epsilon)) && !hasUnappliedTdcSurcharge;
 
     const remainingRef = useRef({ usd: remainingUsd });
     remainingRef.current = { usd: remainingUsd };
@@ -128,8 +143,13 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
             const isUsd = currency === 'USD';
             setBarValues(prev => {
                 const currentValue = parseFloat(prev[methodId]) || 0;
+                // USD: redondeo normal a 2 decimales.
+                // La brecha restante (< 1 centavo USD ≈ 42 COP) queda absorbida por
+                // el epsilon dinámico, así el sistema marca la venta como pagada
+                // sin mostrar "vuelto" ni "falta por cobrar".
+                const rawUsd = currentValue + (targetCOP / (tasaCop || 4150));
                 const value = isUsd 
-                    ? (currentValue + (targetCOP / (tasaCop || 4150))).toFixed(2) 
+                    ? round2(rawUsd).toFixed(2)
                     : Math.round(currentValue + targetCOP).toString();
                 return { ...prev, [methodId]: value };
             });
@@ -206,4 +226,4 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     };
 }
 
-export { EPSILON };
+export { EPSILON_COP as EPSILON };

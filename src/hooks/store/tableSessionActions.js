@@ -2,6 +2,7 @@ import { supabaseCloud } from '../../config/supabaseCloud';
 import { logEvent } from '../../services/auditService';
 import { useAuthStore } from './authStore';
 import { useOrdersStore } from './useOrdersStore';
+import { calculateElapsedTime } from '../../utils/tableBillingEngine';
 
 const getUser = () => useAuthStore.getState().currentUser;
 const getAuthUserId = async () => {
@@ -214,6 +215,17 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         if (!session) return;
 
         const tableId = session.table_id;
+        const table = get().tables.find(t => t.id === tableId);
+        const isPool = table?.type === 'POOL';
+
+        if (isPool) {
+            const paused = get().pausedSessions[sessionId];
+            if (!paused?.isPaused) {
+                const currentElapsed = calculateElapsedTime(session.started_at);
+                get().pauseSession(sessionId, currentElapsed);
+            }
+        }
+
         const otherCheckouts = get().activeSessions.filter(
             s => s.id !== sessionId && s.table_id === tableId && s.status === 'CHECKOUT'
         );
@@ -241,6 +253,18 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
     },
 
     cancelCheckoutRequest: async (sessionId) => {
+        const session = get().activeSessions.find(s => s.id === sessionId);
+        const table = session ? get().tables.find(t => t.id === session.table_id) : null;
+        const isPool = table?.type === 'POOL';
+
+        if (isPool) {
+            try {
+                await get().resumeSession(sessionId);
+            } catch (e) {
+                console.warn('[cancelCheckoutRequest] Error resuming session:', e);
+            }
+        }
+
         const newSessions = get().activeSessions.map(s =>
             s.id === sessionId ? { ...s, status: 'ACTIVE' } : s
         );

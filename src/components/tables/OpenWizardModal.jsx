@@ -152,7 +152,7 @@ export function OpenWizardModal({
                             <div className="flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200">
                                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Seleccionar tiempo</span>
                                 <div className="grid grid-cols-3 gap-2">
-                                    {[0.5, 1, 2, 3, 4].map(h => (
+                                    {[0.5, 1, 2, 3, 4, 0].map(h => (
                                         <button
                                             key={h}
                                             onClick={() => setSelectedHours(h)}
@@ -162,8 +162,8 @@ export function OpenWizardModal({
                                                     : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800'
                                             }`}
                                         >
-                                            <span className="text-lg">{h === 0.5 ? '30' : h}</span>
-                                            <span className="text-[10px] font-semibold opacity-70">{h === 0.5 ? 'MIN' : 'HRS'}</span>
+                                            <span className="text-lg">{h === 0 ? 'Libre' : h === 0.5 ? '30' : h}</span>
+                                            <span className="text-[10px] font-semibold opacity-70">{h === 0 ? 'Por Minuto' : h === 0.5 ? 'MIN' : 'HRS'}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -177,8 +177,12 @@ export function OpenWizardModal({
                                 <div className="flex gap-1.5">
                                     {modePina && <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">Jugada</span>}
                                     {modePina && modeHora && <span>+</span>}
-                                    {modeHora && selectedHours > 0 && <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">{selectedHours === 0.5 ? '30 min' : `${selectedHours}h`}</span>}
-                                    {modeHora && !selectedHours && <span className="bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">Selecciona tiempo</span>}
+                                    {modeHora && selectedHours !== null && selectedHours !== undefined && (
+                                        <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">
+                                            {selectedHours === 0 ? 'Libre' : selectedHours === 0.5 ? '30 min' : `${selectedHours}h`}
+                                        </span>
+                                    )}
+                                    {modeHora && (selectedHours === null || selectedHours === undefined) && <span className="bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">Selecciona tiempo</span>}
                                 </div>
                             </div>
                         )}
@@ -201,10 +205,10 @@ export function OpenWizardModal({
                                         setWizardStep(4);
                                     }
                                 }}
-                                disabled={!modePina && !modeHora || (modeHora && !selectedHours)}
+                                disabled={!modePina && !modeHora || (modeHora && (selectedHours === null || selectedHours === undefined))}
                                 className="flex-1 bg-sky-600 hover:bg-sky-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:text-slate-400 text-white font-black py-3 rounded-xl shadow-md transition-all active:scale-95 disabled:active:scale-100"
                             >
-                                {!modePina && !modeHora ? 'Selecciona un modo' : (modeHora && !selectedHours) ? 'Selecciona tiempo' : 'Continuar'}
+                                {!modePina && !modeHora ? 'Selecciona un modo' : (modeHora && (selectedHours === null || selectedHours === undefined)) ? 'Selecciona tiempo' : 'Continuar'}
                             </button>
                         </div>
                     </>
@@ -279,11 +283,11 @@ export function OpenWizardModal({
 
                 {/* ── Step 4: Confirmar ── */}
                 {wizardStep === 4 && (() => {
+                    const hoursLabel = selectedHours === 0 ? 'Libre' : selectedHours === 0.5 ? '30 min' : `${selectedHours}h`;
                     const modeLabel = modePina && modeHora
-                        ? `Jugada + ${selectedHours === 0.5 ? '30 min' : `${selectedHours}h`}`
+                        ? `Jugada + ${hoursLabel}`
                         : modePina ? 'Jugada'
-                        : selectedHours === 0.5 ? 'Prepago 30 min'
-                        : `Prepago ${selectedHours}h`;
+                        : selectedHours === 0 ? 'Modo Libre' : `Prepago ${hoursLabel}`;
                     const clientsLabel = sessionSeats.length > 0
                         ? sessionSeats.map(s => s.label).join(', ')
                         : 'Sin registrar';

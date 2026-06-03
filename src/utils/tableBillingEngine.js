@@ -28,7 +28,7 @@ export function calculateElapsedTime(startTimeISO) {
  * Soporta modo mixto: cualquier sesión puede tener piñas Y horas simultáneamente.
  * Todos los valores son en COP (Pesos Colombianos).
  */
-export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, hoursPaid = 0, extendedTimes = null, hoursOffset = 0, roundsOffset = 0, seats = null) {
+export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, hoursPaid = 0, extendedTimes = null, hoursOffset = 0, roundsOffset = 0, seats = null, tableType = 'POOL') {
     let pinaCost = 0;
     let hourCost = 0;
     let taxAmount = 0;
@@ -54,9 +54,18 @@ export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, 
         taxAmount += round2(taxed.tax * billableHours);
     }
 
-    // Modo libre eliminado — archivado en ARCHIVED_LIBRE_MODE.md
-    const libreCost = 0;
-    const isLibre = false;
+    // Modo libre: game_mode NORMAL sin horas prepagadas y sin seat-level hours
+    const seatHasHours = (seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
+    const isLibre = tableType === 'POOL' && gameMode === 'NORMAL' && hoursPaid === 0 && !seatHasHours;
+    let libreCost = 0;
+    if (isLibre && elapsedMinutes > 0) {
+        const pricePerHour = config.pricePerHour || 0;
+        const billableMinutes = Math.max(0, elapsedMinutes - (hoursOffset * 60));
+        const billableHours = billableMinutes / 60;
+        const taxed = computeItemTax(pricePerHour, config.tableTaxType || 'exento', config.tableTaxMode || 'inclusive');
+        libreCost = round2(billableHours * taxed.total);
+        taxAmount += round2(taxed.tax * billableHours);
+    }
 
     return {
         pinaCost,
@@ -66,15 +75,15 @@ export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, 
         hasHours: hoursPaid > 0,
         isLibre,
         taxAmount: round2(taxAmount),
-        total: round2(pinaCost + hourCost)
+        total: round2(pinaCost + hourCost + libreCost)
     };
 }
 
-export function calculateSessionCost(elapsedMinutes, gameMode, config, hoursPaid = 0, extendedTimes = null, paidAt = null, hoursOffset = 0, roundsOffset = 0, seats = null) {
+export function calculateSessionCost(elapsedMinutes, gameMode, config, hoursPaid = 0, extendedTimes = null, paidAt = null, hoursOffset = 0, roundsOffset = 0, seats = null, tableType = 'POOL') {
     // Si ya fue cobrada sin liberar, la deuda es $0
     if (paidAt) return 0;
 
-    const breakdown = calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, hoursPaid, extendedTimes, hoursOffset, roundsOffset, seats);
+    const breakdown = calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, hoursPaid, extendedTimes, hoursOffset, roundsOffset, seats, tableType);
     return breakdown.total;
 }
 
@@ -144,7 +153,7 @@ export function calculateSeatTimeChargesCost(timeCharges, config) {
  * Soporta nuevo estilo (timeCharges) y legacy (gameMode/hoursPaid/pinas).
  * seat: { timeCharges?, gameMode?, hoursPaid?, pinas? }
  */
-export function calculateSeatCostBreakdown(seat, elapsedMinutes, config) {
+export function calculateSeatCostBreakdown(seat, elapsedMinutes, config, tableType = 'POOL') {
     if (!seat) {
         return { pinaCost: 0, hourCost: 0, libreCost: 0, hasPinas: false, hasHours: false, isLibre: false, total: 0 };
     }
@@ -158,15 +167,14 @@ export function calculateSeatCostBreakdown(seat, elapsedMinutes, config) {
     }
     if (seat.gameMode === 'PINA') {
         const pinas = seat.pinas || 1;
-        return calculateSessionCostBreakdown(elapsedMinutes, 'PINA', config, 0, pinas - 1);
+        return calculateSessionCostBreakdown(elapsedMinutes, 'PINA', config, 0, pinas - 1, 0, 0, null, tableType);
     }
     if (seat.gameMode === 'HOURS') {
         const hours = seat.hoursPaid || 0;
-        return calculateSessionCostBreakdown(elapsedMinutes, 'NORMAL', config, hours, 0);
+        return calculateSessionCostBreakdown(elapsedMinutes, 'NORMAL', config, hours, 0, 0, 0, null, tableType);
     }
-    // gameMode LIBRE eliminado — retorna $0
     if (seat.gameMode === 'LIBRE') {
-        return { pinaCost: 0, hourCost: 0, libreCost: 0, hasPinas: false, hasHours: false, isLibre: false, total: 0 };
+        return calculateSessionCostBreakdown(elapsedMinutes, 'NORMAL', config, 0, 0, 0, 0, null, tableType);
     }
     return { pinaCost: 0, hourCost: 0, libreCost: 0, hasPinas: false, hasHours: false, isLibre: false, total: 0 };
 }
@@ -192,7 +200,7 @@ export const calculateConsumptionBs = calculateConsumptionCOP;
  * Si seats está vacío, retorna null (usar cálculo legacy de sesión).
  * Todos los valores son en COP (Pesos Colombianos).
  */
-export function calculateFullTableBreakdown(session, seats, elapsedMinutes, config, orderItems = [], sharedDivision = null, frozenDivisor = null, isTimeFree = false, hoursOffset = 0, roundsOffset = 0) {
+export function calculateFullTableBreakdown(session, seats, elapsedMinutes, config, orderItems = [], sharedDivision = null, frozenDivisor = null, isTimeFree = false, hoursOffset = 0, roundsOffset = 0, tableType = 'POOL') {
     if (!seats || seats.length === 0) return null;
 
     const activeSeats = seats.filter(s => !s.paid);
@@ -211,7 +219,8 @@ export function calculateFullTableBreakdown(session, seats, elapsedMinutes, conf
             session.extended_times || 0,
             hoursOffset,
             roundsOffset,
-            seats
+            seats,
+            tableType
         );
     const sharedTimeTotal = sessionTimeCost.total;
     const sharedTotal = round2(sharedConsumptionTotal + sharedTimeTotal);
@@ -229,7 +238,7 @@ export function calculateFullTableBreakdown(session, seats, elapsedMinutes, conf
     };
 
     const seatBreakdowns = allSeats.map(seat => {
-        const timeCost = calculateSeatCostBreakdown(seat, elapsedMinutes, config);
+        const timeCost = calculateSeatCostBreakdown(seat, elapsedMinutes, config, tableType);
         const seatItems = orderItems.filter(i => i.seat_id === seat.id);
         const consumption = seatItems.reduce((acc, i) => acc + (Number(i.unit_price_usd) * Number(i.qty)), 0);
         const sharedPortion = getSharedPortion(seat);
@@ -288,7 +297,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
         // PER-SEAT
         const seat = seats.find(s => s.id === seatId);
         if (seat) {
-            const seatTimeCost = calculateSeatCostBreakdown(seat, tableCheckoutData.elapsed, config);
+            const seatTimeCost = calculateSeatCostBreakdown(seat, tableCheckoutData.elapsed, config, tableCheckoutData.table?.type || 'POOL');
             const seatLabel = `${tableName} (${seat.label || 'Persona'})`;
 
             if (seatTimeCost.pinaCost > 0) {
@@ -319,6 +328,18 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                     taxMode: config.tableTaxMode || 'inclusive'
                 });
             }
+            if (seatTimeCost.libreCost > 0) {
+                const billableMinutes = Math.max(0, tableCheckoutData.elapsed - (hoursOff * 60));
+                const billableHours = billableMinutes / 60;
+                syntheticCart.push({
+                    id: crypto.randomUUID(),
+                    name: `Tiempo libre ${seatLabel}`,
+                    priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
+                    qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                    taxType: config.tableTaxType || 'exento',
+                    taxMode: config.tableTaxMode || 'inclusive'
+                });
+            }
 
             const seatItems = (tableCheckoutData.currentItems || []).filter(i => i.seat_id === seatId);
             seatItems.forEach(item => {
@@ -330,7 +351,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
             });
 
             const isTimeFree = tableCheckoutData.table?.type === 'NORMAL';
-            const fullBreakdown = calculateFullTableBreakdown(session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, isTimeFree, hoursOff, roundsOff);
+            const fullBreakdown = calculateFullTableBreakdown(session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, isTimeFree, hoursOff, roundsOff, tableCheckoutData.table?.type || 'POOL');
             if (fullBreakdown) {
                 const seatBd = fullBreakdown.seats.find(s => s.seat.id === seatId);
                 if (seatBd && seatBd.sharedPortion > 0) {
@@ -346,7 +367,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
     } else if (!seatId && seats.length > 0) {
         // COBRAR TODO CON CUANTAS DIVIDIDAS
         const isTimeFreeAll = tableCheckoutData.table?.type === 'NORMAL';
-        const fullBreakdown = calculateFullTableBreakdown(session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, isTimeFreeAll, hoursOff, roundsOff);
+        const fullBreakdown = calculateFullTableBreakdown(session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, isTimeFreeAll, hoursOff, roundsOff, tableCheckoutData.table?.type || 'POOL');
         if (fullBreakdown) {
             const unpaidSeatBds = fullBreakdown.seats.filter(sb => !sb.seat.paid);
             const divisorLabel = unpaidSeatBds.length;
@@ -381,6 +402,18 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                         taxMode: config.tableTaxMode || 'inclusive'
                     });
                 }
+                if (seatBd.timeCost.libreCost > 0) {
+                    const billableMinutes = Math.max(0, tableCheckoutData.elapsed - (hoursOff * 60));
+                    const billableHours = billableMinutes / 60;
+                    syntheticCart.push({
+                        id: crypto.randomUUID(),
+                        name: `Tiempo libre ${seatLabel}`,
+                        priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
+                        qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                        taxType: config.tableTaxType || 'exento',
+                        taxMode: config.tableTaxMode || 'inclusive'
+                    });
+                }
                 seatBd.items.forEach(item => {
                     const p = products.find(p => p.id === item.product_id);
                     syntheticCart.push(p
@@ -400,7 +433,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
         }
     } else {
         // CLASSIC FULL TABLE
-        const breakdown = calculateSessionCostBreakdown(tableCheckoutData.elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOff, roundsOff);
+        const breakdown = calculateSessionCostBreakdown(tableCheckoutData.elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOff, roundsOff, null, tableCheckoutData.table?.type || 'POOL');
         if (breakdown.pinaCost > 0) {
             const pinaCount = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
             const billableRounds = Math.max(0, pinaCount - roundsOff);
@@ -420,6 +453,18 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 name: `Tiempo ${tableName} (${formatHoursPaid(billableHours)})`,
                 priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
                 qty: billableHours, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                taxType: config.tableTaxType || 'exento',
+                taxMode: config.tableTaxMode || 'inclusive'
+            });
+        }
+        if (breakdown.libreCost > 0) {
+            const billableMinutes = Math.max(0, tableCheckoutData.elapsed - (hoursOff * 60));
+            const billableHours = billableMinutes / 60;
+            syntheticCart.push({
+                id: crypto.randomUUID(),
+                name: `Tiempo libre ${tableName}`,
+                priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
+                qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
                 taxType: config.tableTaxType || 'exento',
                 taxMode: config.tableTaxMode || 'inclusive'
             });

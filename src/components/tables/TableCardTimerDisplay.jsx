@@ -8,6 +8,16 @@ const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
     style: 'currency', currency: 'COP', minimumFractionDigits: 0
 }).format(Math.round(val || 0));
 
+// Formatea segundos en MM:SS o HH:MM:SS
+const fmtTimer = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return h > 0
+        ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+        : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
 export default function TableCardTimerDisplay({
     table, session, elapsed,
     isAvailable, isTimeFree, isPaidIdle, isMixedMode,
@@ -17,6 +27,7 @@ export default function TableCardTimerDisplay({
     config,
     roundsOffset, hoursOffset,
     onAdjustTime, onPauseTimer, onResumeTimer, onShowTotalDetails,
+    elapsedSeconds = 0, remainingSeconds = 0,
 }) {
     return (
         <div className="flex-1 flex flex-col justify-center items-center py-1 sm:py-3 min-h-[90px]">
@@ -65,12 +76,14 @@ export default function TableCardTimerDisplay({
                                     {/* Timer */}
                                     <div className="flex items-center justify-center gap-2">
                                         <div className={`text-2xl sm:text-3xl font-black tabular-nums tracking-tighter drop-shadow-md leading-none ${isExceeded ? 'text-rose-400 animate-pulse' : ''}`}>
-                                            {hasLimit ? formatElapsedTime(Math.max(0, remainingMins)) : formatElapsedTime(elapsed)}
+                                            {hasLimit ? fmtTimer(remainingSeconds) : fmtTimer(elapsedSeconds)}
                                         </div>
-                                        {!isLockedForMe && (
+                                        {!isLockedForMe && !isExceeded && (
                                             <button
+                                                disabled={session?.status === 'CHECKOUT'}
                                                 onClick={isPaused ? onResumeTimer : onPauseTimer}
-                                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm ${isPaused ? 'bg-emerald-500 hover:bg-emerald-400 text-white' : 'bg-white/20 hover:bg-white/40 text-white'}`}
+                                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all shadow-sm ${session?.status === 'CHECKOUT' ? 'opacity-50 cursor-not-allowed bg-slate-600/40 text-white/40' : 'active:scale-95'} ${isPaused && session?.status !== 'CHECKOUT' ? 'bg-emerald-500 hover:bg-emerald-400 text-white' : 'bg-white/20 hover:bg-white/40 text-white'}`}
+                                                title={session?.status === 'CHECKOUT' ? 'Mesa en proceso de cobro' : isPaused ? 'Reanudar tiempo' : 'Pausar tiempo'}
                                             >
                                                 {isPaused ? <Play size={10} fill="currentColor" /> : <Pause size={10} />}
                                             </button>
@@ -107,20 +120,21 @@ export default function TableCardTimerDisplay({
                                         </div>
                                     </div>
                                     <div className="text-[10px] font-bold text-white/60 bg-white/10 px-2 py-0.5 rounded-full">
-                                        {formatElapsedTime(elapsed)} en mesa
+                                        {fmtTimer(elapsedSeconds)} en mesa
                                     </div>
                                 </div>
                             ) : (
                                 <>
                                     <div className="flex items-center justify-center gap-2">
                                         <div className={`text-3xl sm:text-4xl font-black tabular-nums tracking-tighter drop-shadow-md leading-none ${isExceeded ? 'text-rose-400 animate-pulse' : ''}`}>
-                                            {hasLimit ? formatElapsedTime(Math.max(0, remainingMins)) : formatElapsedTime(elapsed)}
+                                            {hasLimit ? fmtTimer(remainingSeconds) : fmtTimer(elapsedSeconds)}
                                         </div>
-                                        {session?.game_mode !== 'PINA' && !isLockedForMe && (
+                                        {session?.game_mode !== 'PINA' && !isLockedForMe && !isExceeded && (
                                         <button
+                                            disabled={session?.status === 'CHECKOUT'}
                                             onClick={isPaused ? onResumeTimer : onPauseTimer}
-                                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-sm ${isPaused ? 'bg-emerald-500 hover:bg-emerald-400 text-white' : 'bg-white/20 hover:bg-white/40 text-white'}`}
-                                            title={isPaused ? 'Reanudar tiempo' : 'Pausar tiempo'}
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm ${session?.status === 'CHECKOUT' ? 'opacity-50 cursor-not-allowed bg-slate-600/40 text-white/40' : 'active:scale-95'} ${isPaused && session?.status !== 'CHECKOUT' ? 'bg-emerald-500 hover:bg-emerald-400 text-white' : 'bg-white/20 hover:bg-white/40 text-white'}`}
+                                            title={session?.status === 'CHECKOUT' ? 'Mesa en proceso de cobro' : isPaused ? 'Reanudar tiempo' : 'Pausar tiempo'}
                                         >
                                             {isPaused ? <Play size={12} fill="currentColor" /> : <Pause size={12} />}
                                         </button>

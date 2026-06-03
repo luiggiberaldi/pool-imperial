@@ -229,18 +229,7 @@ export async function generateTicketPDF(sale, _bcvRate) {
     doc.text(formatCOP(totalDisplay), CX, y, { align: 'center' });
     y += 8;
 
-    if (sale.rate > 1) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(...MUTED);
-        doc.text(`Tasa: ${formatCOP(sale.rate)}`, M, y);
-        const totalUSD = totalDisplay / sale.rate;
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...BODY);
-        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
-        doc.text(`≈ ${formatUsdVal(totalUSD)}`, RIGHT, y, { align: 'right' });
-        y += 5;
-    }
+
 
     y += 5;
 

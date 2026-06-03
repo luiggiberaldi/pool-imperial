@@ -449,8 +449,8 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
     const elapsedOffset = session ? ((paidElapsedOffsets || {})[session.id] || 0) : 0;
     
-    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
-    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats) : null;
+    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
+    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats, table.type) : null;
     const isMixedMode = costBreakdown ? (costBreakdown.hasPinas && costBreakdown.hasHours) : false;
     
     const seatHasPinas = (session?.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
@@ -476,9 +476,10 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const seatHoursTotal = (session?.seats || []).reduce((sum, s) =>
         sum + (s.timeCharges || []).filter(tc => tc.type === 'hora').reduce((acc, tc) => acc + (Number(tc.amount) || 0), 0), 0);
     const totalHoursPaid = (Number(session?.hours_paid) || 0) + seatHoursTotal;
+    const isLibreSession = !!costBreakdown?.isLibre;
     
-    const wasOpenedWithHours = isPlaying && !isTimeFree && session?.game_mode === 'NORMAL' && !hasPinas && totalHoursPaid === 0;
-    const hasLimit = totalHoursPaid > 0 || wasOpenedWithHours;
+    const wasOpenedWithHours = isPlaying && !isTimeFree && session?.game_mode === 'NORMAL' && !hasPinas && totalHoursPaid === 0 && !isLibreSession;
+    const hasLimit = (totalHoursPaid > 0 || wasOpenedWithHours) && !isLibreSession;
     const effectiveHours = hasLimit ? Math.max(0, totalHoursPaid - hoursOffset) : 0;
     const effectiveElapsed = elapsedOffset > 0 ? Math.max(0, elapsed - elapsedOffset) : elapsed;
     const remainingMins = hasLimit ? (effectiveHours * 60) - effectiveElapsed : 0;
@@ -518,7 +519,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                     ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 animate-pulse'
                                     : 'bg-sky-100 dark:bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-500/20'
                     }`}>
-                        {isAvailable ? 'Libre' : isPaidIdle ? 'Pagado' : isCheckoutPending ? 'En caja' : 'Jugando'}
+                        {isAvailable ? 'Libre' : isPaidIdle ? 'Pagado' : isCheckoutPending ? 'En caja' : isLibreSession ? 'Modo Libre' : 'Jugando'}
                     </div>
                 </div>
 

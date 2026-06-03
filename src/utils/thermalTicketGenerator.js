@@ -155,16 +155,7 @@ function _printThermalHTML(sale, _bcvRate) {
     `;
 
     const totalDisplay = sale.totalUsd || 0;
-    const rateHtml = (sale.rate > 1) ? (() => {
-        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
-        return `
-            <table style="width:100%; font-size:${fSmall}; margin-top:4px; border-collapse:collapse;">
-                <tr>
-                    <td style="text-align:left; color:#555; padding:2px 0;">Tasa: ${formatCOP(sale.rate)}</td>
-                    <td style="text-align:right; font-weight:bold; padding:2px 0;">≈ ${formatUsdVal(totalDisplay / sale.rate)}</td>
-                </tr>
-            </table>`;
-    })() : '';
+    const rateHtml = '';
 
     const html = `<!DOCTYPE html>
 <html>

@@ -94,11 +94,12 @@ export function useGlobalTableAlerts() {
                         const key = `cobrar-${session.id}`;
                         if (!notifiedRef.current.has(key)) {
                             notifiedRef.current.add(key);
-                            const elapsed = session.started_at ? calculateElapsedTime(session.started_at) : 0;
+                            const paused = pausedSessions?.[session.id];
+                            const elapsed = paused?.isPaused ? (paused.elapsedAtPause || 0) : (session.started_at ? calculateElapsedTime(session.started_at) : 0);
                             const hoursOff = (paidHoursOffsets || {})[session.id] || 0;
                             const roundsOff = (paidRoundsOffsets || {})[session.id] || 0;
                             const isTimeFree = table.type === 'NORMAL';
-                            const timeCost = isTimeFree ? 0 : calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, hoursOff, roundsOff, session.seats);
+                            const timeCost = isTimeFree ? 0 : calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, hoursOff, roundsOff, session.seats, table.type);
                             const totalUsd = round2(timeCost);
                             notifyMesaCobrar(table.name, totalUsd);
                             showToast(`💳 ${table.name} — Lista para cobrar`, 'info', 6000);

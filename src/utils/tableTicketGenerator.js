@@ -70,7 +70,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     push(`<hr>`);
 
     if (isMultiClient) {
-        const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset);
+        const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset, table.type);
         if (breakdown) {
             if (breakdown.sharedTotal > 0) {
                 push(`<div class="bold accent">COMPARTIDO</div>`);
@@ -187,11 +187,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
 
     const totalLabel = hasPaidBefore ? "TOTAL PENDIENTE:" : "TOTAL ESTIMADO:";
     push(`<div class="row total"><span>${totalLabel}</span><span>${formatCOP(grandTotal)}</span></div>`);
-    if (tasaUSD && tasaUSD > 1) {
-        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
-        push(`<div class="row small"><span>Tasa de cambio:</span><span>${formatCOP(tasaUSD)}</span></div>`);
-        push(`<div class="row bold"><span>Equivalente USD:</span><span>${formatUsdVal(grandTotal / tasaUSD)}</span></div>`);
-    }
+
     push(`<div class="center disclaimer">*** NO ES RECIBO DE PAGO ***</div>`);
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>

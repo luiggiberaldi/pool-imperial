@@ -29,7 +29,7 @@ export default function CheckoutChangeBreakdown({
                         {formatCOP(displayVal)} <span className="text-xs font-black">COP</span>
                     </span>
                     {tasaCop > 0 && (
-                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 pb-1 shrink-0">
+                        <span className={`text-lg font-black pb-0.5 shrink-0 ${isPaid ? 'text-emerald-700/95 dark:text-emerald-400' : 'text-orange-700/95 dark:text-orange-400'}`}>
                             ≈ ${usdVal.toFixed(2)} USD
                         </span>
                     )}

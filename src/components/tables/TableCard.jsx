@@ -51,6 +51,25 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const tick = useSharedTick();
     const [showOrderPanel, setShowOrderPanel] = useState(false);
 
+    // Variables de control de tiempo (Mover al tope para evitar dependencias circulares)
+    const isTimeFree = table.type === 'NORMAL';
+    const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
+    const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
+    const elapsedOffset = session ? ((paidElapsedOffsets || {})[session.id] || 0) : 0;
+
+    const seatHasHours = (session?.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
+    const isLibreSession = table.type === 'POOL' && session?.game_mode === 'NORMAL' && (Number(session?.hours_paid) || 0) === 0 && !seatHasHours;
+
+    const seatHoursTotal = (session?.seats || []).reduce((sum, s) =>
+        sum + (s.timeCharges || []).filter(tc => tc.type === 'hora').reduce((acc, tc) => acc + (Number(tc.amount) || 0), 0), 0);
+    const totalHoursPaid = (Number(session?.hours_paid) || 0) + seatHoursTotal;
+
+    const seatHasPinas = (session?.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
+    const hasPinas = session?.game_mode === 'PINA' || (Number(session?.extended_times) || 0) > 0 || seatHasPinas;
+
+    const wasOpenedWithHours = isPlaying && !isTimeFree && session?.game_mode === 'NORMAL' && !hasPinas && totalHoursPaid === 0 && !isLibreSession;
+    const hasLimit = (totalHoursPaid > 0 || wasOpenedWithHours) && !isLibreSession;
+
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [showAdjustModal, setShowAdjustModal] = useState(false);
     const [showModeModal, setShowModeModal] = useState(false);
@@ -149,11 +168,44 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const isPaused = pausedData?.isPaused ?? false;
     const pauseElapsed = pausedData?.elapsedAtPause ?? 0;
 
+    // elapsed en minutos limitado al tope si tiene limite (para billing)
     const elapsed = useMemo(() => {
         if (!isPlaying || !session?.started_at) return 0;
         if (isPaused) return pauseElapsed;
-        return calculateElapsedTime(session.started_at);
-    }, [isPlaying, session?.started_at, isPaused, pauseElapsed, tick]);
+        const rawElapsed = calculateElapsedTime(session.started_at);
+        if (hasLimit) {
+            const limitMins = totalHoursPaid * 60;
+            return Math.min(rawElapsed, limitMins);
+        }
+        return rawElapsed;
+    }, [isPlaying, session?.started_at, isPaused, pauseElapsed, hasLimit, totalHoursPaid, tick]);
+
+    // elapsed en segundos limitado al tope si tiene limite (para displays en tiempo real)
+    const elapsedSeconds = useMemo(() => {
+        if (!isPlaying || !session?.started_at) return 0;
+        if (isPaused) return (pausedData?.elapsedAtPause || 0) * 60;
+        const start = new Date(session.started_at).getTime();
+        const now = Date.now();
+        const rawSecs = Math.max(0, Math.floor((now - start) / 1000));
+        if (hasLimit) {
+            const limitSecs = totalHoursPaid * 3600;
+            return Math.min(rawSecs, limitSecs);
+        }
+        return rawSecs;
+    }, [isPlaying, session?.started_at, isPaused, pausedData, hasLimit, totalHoursPaid, tick]);
+
+    // segundos restantes exactos
+    const remainingSeconds = useMemo(() => {
+        if (!hasLimit) return 0;
+        const limitSecs = totalHoursPaid * 3600;
+        const offsetSecs = hoursOffset * 3600;
+        const effectiveLimitSecs = Math.max(0, limitSecs - offsetSecs);
+        
+        const elapsedOffsetSecs = elapsedOffset * 60;
+        const effectiveElapsedSecs = elapsedOffsetSecs > 0 ? Math.max(0, elapsedSeconds - elapsedOffsetSecs) : elapsedSeconds;
+        
+        return Math.max(0, effectiveLimitSecs - effectiveElapsedSecs);
+    }, [hasLimit, totalHoursPaid, hoursOffset, elapsedOffset, elapsedSeconds]);
 
     const handlePauseTimer = () => {
         if (!session) return;
@@ -437,16 +489,10 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
         }
     };
 
-    const isTimeFree = table.type === 'NORMAL';
-    const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
-    const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
-    const elapsedOffset = session ? ((paidElapsedOffsets || {})[session.id] || 0) : 0;
-    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
-    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats) : null;
+    // variables de offset de tiempo ya estan declaradas al inicio
+    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
+    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats, table.type) : null;
     const isMixedMode = costBreakdown ? (costBreakdown.hasPinas && costBreakdown.hasHours) : false;
-    const seatHasPinas = (session?.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
-    const seatHasHours = (session?.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
-    const hasPinas = (costBreakdown ? costBreakdown.hasPinas : (session?.game_mode === 'PINA')) || seatHasPinas;
     const hasHoursActive = (costBreakdown ? costBreakdown.hasHours : (session?.hours_paid > 0)) || seatHasHours;
     const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
     const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
@@ -489,17 +535,9 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, products]);
     // Mesa pagada sin cerrar y sin cargos nuevos agregados (ni tiempo ni consumo)
     const isPaidIdle = isPlaying && !!session?.paid_at && grandTotal === 0;
-    const seatHoursTotal = (session?.seats || []).reduce((sum, s) =>
-        sum + (s.timeCharges || []).filter(tc => tc.type === 'hora').reduce((acc, tc) => acc + (Number(tc.amount) || 0), 0), 0);
-    const totalHoursPaid = (Number(session?.hours_paid) || 0) + seatHoursTotal;
-    // Si la mesa fue abierta en modo hora (NORMAL, no BAR) y las horas llegaron a 0,
-    // tratar como si tuviera límite expirado en vez de timer libre corriendo hacia arriba.
-    const wasOpenedWithHours = isPlaying && !isTimeFree && session?.game_mode === 'NORMAL' && !hasPinas && totalHoursPaid === 0;
-    const hasLimit = totalHoursPaid > 0 || wasOpenedWithHours;
-    const effectiveHours = hasLimit ? Math.max(0, totalHoursPaid - hoursOffset) : 0;
-    const effectiveElapsed = elapsedOffset > 0 ? Math.max(0, elapsed - elapsedOffset) : elapsed;
-    const remainingMins = hasLimit ? (effectiveHours * 60) - effectiveElapsed : 0;
-    const isExceeded = hasLimit && remainingMins < 0;
+    // Calculado a partir de segundos
+    const remainingMins = hasLimit ? Math.max(0, Math.floor(remainingSeconds / 60)) : 0;
+    const isExceeded = hasLimit && remainingSeconds <= 0;
 
     // Notifications for tiempo agotado and mesa pagada ociosa are handled
     // globally by useGlobalTableAlerts (App.jsx) to avoid duplicates and
@@ -604,7 +642,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                 <div className={`px-2 py-1 rounded-md text-[9px] font-black tracking-widest uppercase shrink-0 ${
                     isAvailable ? 'bg-emerald-100 text-emerald-700' : isPaidIdle ? 'bg-emerald-400 text-white' : (hasLimit && isExceeded) ? 'bg-rose-500 text-white border border-rose-400' : hasLimit ? 'bg-amber-400 text-slate-900 border border-amber-300' : 'bg-white/20 text-white backdrop-blur-md'
                 }`}>
-                    {isAvailable ? 'LIBRE' : isPaidIdle ? 'PAGADO' : isMixedMode ? 'JUGADA + HORA' : session.game_mode === 'PINA' ? 'LA JUGADA' : session.game_mode === 'CONSUMO' ? 'BAR' : isTimeFree ? 'BAR' : (wasOpenedWithHours && isExceeded) ? 'SIN TIEMPO' : hasLimit ? (totalHoursPaid === 0.5 ? 'PREPAGO 30MIN' : `PREPAGO ${totalHoursPaid}h`) : hasPinas ? 'LA JUGADA' : 'JUG.'}
+                    {isAvailable ? 'LIBRE' : isPaidIdle ? 'PAGADO' : isLibreSession ? 'MODO LIBRE' : isMixedMode ? 'JUGADA + HORA' : session.game_mode === 'PINA' ? 'LA JUGADA' : session.game_mode === 'CONSUMO' ? 'BAR' : isTimeFree ? 'BAR' : (wasOpenedWithHours && isExceeded) ? 'SIN TIEMPO' : hasLimit ? (totalHoursPaid === 0.5 ? 'PREPAGO 30MIN' : `PREPAGO ${totalHoursPaid}h`) : hasPinas ? 'LA JUGADA' : 'JUG.'}
                 </div>
             </div>
 
@@ -621,6 +659,8 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                 hasHoursActive={hasHoursActive}
                 hasLimit={hasLimit}
                 remainingMins={remainingMins}
+                elapsedSeconds={elapsedSeconds}
+                remainingSeconds={remainingSeconds}
                 isExceeded={isExceeded}
                 isPaused={isPaused}
                 isLockedForMe={isLockedForMe}
