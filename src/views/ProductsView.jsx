@@ -392,7 +392,7 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                                                         <div className="flex items-center gap-2 mt-0.5">
                                                             {catInfo && catInfo.id !== 'todos' && <span className="text-[9px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{catInfo.label}</span>}
                                                             {isLowStock && <span className="text-[9px] font-bold text-amber-500 flex items-center gap-0.5"><AlertTriangle size={9} /> Bajo</span>}
-                                                            <span className="sm:hidden text-[11px] font-black text-emerald-600 dark:text-emerald-400">{formatCop(p.priceUsdt)}</span>
+                                                            <span className="sm:hidden text-[11px] font-black text-emerald-600 dark:text-emerald-400">{formatCop(p.priceUsdt)} (≈ ${(p.priceUsdt / (tasaCop || 4150)).toFixed(2)} USD)</span>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -411,7 +411,8 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                                                 </div>
                                                 {/* Desktop columns */}
                                                 <div className="hidden sm:block">
-                                                    <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">{formatCop(p.priceUsdt)}</p>
+                                                    <p className="text-sm font-black text-emerald-600 dark:text-emerald-400 leading-none">{formatCop(p.priceUsdt)}</p>
+                                                    <p className="text-[10px] font-bold text-slate-500 mt-1">≈ ${(p.priceUsdt / (tasaCop || 4150)).toFixed(2)} USD</p>
                                                 </div>
                                                 <div className="hidden sm:block">{!isCajero ? <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{p.costUsd ? formatCop(p.costUsd) : '-'}</p> : <span className="text-[10px] text-slate-300">-</span>}</div>
                                                 <div className="hidden sm:block">
@@ -477,6 +478,8 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                 categories={categories} products={products}
                 productMovements={form.editingId ? form.productMovements : null}
                 isCombo={form.isCombo}
+                taxType={form.taxType} setTaxType={form.setTaxType}
+                taxMode={form.taxMode} setTaxMode={form.setTaxMode}
             />
 
             <ComboFormModal

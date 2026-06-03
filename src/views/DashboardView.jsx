@@ -85,7 +85,9 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         today, todaySales, todayCashFlow, todayApertura,
         todayTotalBs, todayTotalUsd, todayItemsSold,
         todayExpenses, todayExpensesUsd, todayProfit,
+        todayTotalTax, todayTaxBreakdown,
         daySales, dayTotalUsd, dayTotalBs, dayItemsSold, dayProfit,
+        dayTotalTax, dayTaxBreakdown,
         recentSales, weekData, lowStockProducts,
         totalDeudas, topProducts, topStaff,
         paymentBreakdown, salesPaymentBreakdown, todayTopProducts,
@@ -237,6 +239,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 bcvRate, paymentBreakdown, topProducts: todayTopProducts,
                 todayTotalUsd, todayTotalBs, todayProfit, todayItemsSold,
                 reconData, apertura: todayApertura,
+                totalTax: dashTab === 'hoy' ? dayTotalTax : todayTotalTax,
+                taxBreakdown: dashTab === 'hoy' ? dayTaxBreakdown : todayTaxBreakdown,
             });
         }
         const currentCierreId = Date.now();

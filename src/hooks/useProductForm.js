@@ -26,6 +26,8 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
     const [linkedQty, setLinkedQty] = useState('1');
     const [isFormShaking, setIsFormShaking] = useState(false);
     const [productMovements, setProductMovements] = useState([]);
+    const [taxType, setTaxType] = useState('exento');
+    const [taxMode, setTaxMode] = useState('inclusive');
     const fileInputRef = useRef(null);
 
     const handleImageUpload = (e) => {
@@ -65,6 +67,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
         setPackagingType('suelto'); setStockInLotes(''); setGranelUnit('kg');
         setIsCombo(false); setLinkedProductId(null); setLinkedQty('1');
         setProductMovements([]);
+        setTaxType('exento'); setTaxMode('inclusive');
     };
 
     const handleSave = () => {
@@ -81,7 +84,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
         const productData = buildProductPayload({
             name, barcode, priceUsd, priceBs: '', costUsd, costBs: '', stock, stockInLotes,
             packagingType, unitsPerPackage, granelUnit, sellByUnit, unitPriceUsd,
-            category, lowStockAlert
+            category, lowStockAlert, taxType, taxMode
         }, effectiveRate);
 
         if (editingId) {
@@ -159,6 +162,8 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
         setIsCombo(!!product.isCombo);
         setLinkedProductId(product.linkedProductId || null);
         setLinkedQty(product.linkedQty ? String(product.linkedQty) : '1');
+        setTaxType(product.taxType || 'exento');
+        setTaxMode(product.taxMode || 'inclusive');
 
         try {
             const allSales = await storageService.getItem('bodega_sales_v1', []);
@@ -187,6 +192,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
         isFormShaking, productMovements,
         isCombo, setIsCombo, linkedProductId, setLinkedProductId,
         linkedQty, setLinkedQty,
+        taxType, setTaxType, taxMode, setTaxMode,
         fileInputRef,
         handleImageUpload, handlePriceUsdChange,
         handleCostUsdChange,

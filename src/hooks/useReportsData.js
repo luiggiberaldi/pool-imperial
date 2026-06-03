@@ -5,7 +5,7 @@ import { calculateReportsData, groupSalesByCierreId } from '../utils/reportsProc
 
 const SALES_KEY = 'bodega_sales_v1';
 
-export function useReportsData({ isActive, products, bcvRate, selectedRange, customFrom, customTo, activeTab }) {
+export function useReportsData({ isActive, products, bcvRate, selectedRange, customFrom, customTo, activeTab, tasaCop }) {
     const [allSales, setAllSales] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -70,7 +70,13 @@ export function useReportsData({ isActive, products, bcvRate, selectedRange, cus
         paymentBreakdown,
         topProducts,
         salesByDay,
-    } = useMemo(() => calculateReportsData(allSales, from, to, bcvRate, products), [allSales, from, to, bcvRate, products]);
+        avgRate,
+        totalUsdReal,
+        profitUsdReal,
+        totalTax,
+        taxBreakdown,
+        netRevenue,
+    } = useMemo(() => calculateReportsData(allSales, from, to, bcvRate, products, tasaCop), [allSales, from, to, bcvRate, products, tasaCop]);
 
     const groupedClosings = useMemo(() => {
         if (activeTab === 'history') {
@@ -89,5 +95,7 @@ export function useReportsData({ isActive, products, bcvRate, selectedRange, cus
         totalUsd, totalBs, totalItems, profit,
         paymentBreakdown, topProducts, salesByDay,
         groupedClosings, maxDayTotal,
+        avgRate, totalUsdReal, profitUsdReal,
+        totalTax, taxBreakdown, netRevenue,
     };
 }

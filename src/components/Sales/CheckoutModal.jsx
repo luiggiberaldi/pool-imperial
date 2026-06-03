@@ -6,6 +6,9 @@ import { useCheckoutPayments, EPSILON } from '../../hooks/useCheckoutPayments';
 import CustomerPickerSection from './CustomerPickerSection';
 import CheckoutChangeBreakdown from './CheckoutChangeBreakdown';
 import { FiarConfirmModal, OverpayAlertModal } from './CheckoutConfirmModals';
+import { useProductContext } from '../../context/ProductContext';
+import { computeItemTax } from '../../utils/tableBillingEngine';
+
 
 
 
@@ -19,6 +22,16 @@ const sectionStyles = {
         inputBorder: 'border-amber-200 dark:border-amber-800 focus:border-amber-500 focus:ring-amber-500/20',
         inputActive: 'border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30',
         btnBg: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 active:bg-amber-300',
+    },
+    USD: {
+        bg: 'bg-emerald-50/50 dark:bg-emerald-950/20',
+        border: 'border-emerald-100 dark:border-emerald-900/50',
+        title: 'text-emerald-800 dark:text-emerald-300',
+        titleBg: 'bg-emerald-100 dark:bg-emerald-900/50',
+        titleIcon: 'text-emerald-600 dark:text-emerald-400',
+        inputBorder: 'border-emerald-200 dark:border-emerald-800 focus:border-emerald-500 focus:ring-emerald-500/20',
+        inputActive: 'border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30',
+        btnBg: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 active:bg-emerald-300',
     },
 };
 
@@ -45,8 +58,36 @@ export default function CheckoutModal({
     tasaCop,
     currentFloatUsd = 0,
     tableContext = null,
+    totalTax = 0,
+    taxBreakdown = {},
 }) {
-    const [ivaRate, setIvaRate] = useState(19);
+    const { products } = useProductContext();
+    const getServiceChargeAmount = () => {
+        if (!tableContext || !tableContext.includeServiceCharge) return 0;
+        let subtotalBeforeDiscounts = 0;
+        if (tableContext.seatDisplayInfo) {
+            const di = tableContext.seatDisplayInfo;
+            const itemsTotal = di.items?.reduce((sum, item) => {
+                const p = products?.find(prod => prod.id === item.product_id);
+                const itemTaxDetail = computeItemTax(Number(item.unit_price_usd), p?.taxType || 'exento', p?.taxMode || 'inclusive');
+                return sum + (itemTaxDetail.total * Number(item.qty));
+            }, 0) || 0;
+            const timeTotal = di.timeCost?.total || 0;
+            const sharedTotal = di.sharedPortion || 0;
+            subtotalBeforeDiscounts = itemsTotal + timeTotal + sharedTotal;
+        } else {
+            const itemsTotal = tableContext.currentItems?.reduce((sum, item) => {
+                const p = products?.find(prod => prod.id === item.product_id);
+                const itemTaxDetail = computeItemTax(Number(item.unit_price_usd), p?.taxType || 'exento', p?.taxMode || 'inclusive');
+                return sum + (itemTaxDetail.total * Number(item.qty));
+            }, 0) || 0;
+            const timeTotal = tableContext.timeCost || 0;
+            subtotalBeforeDiscounts = itemsTotal + timeTotal;
+        }
+        const discountAmt = discountData?.active ? discountData.amountUsd : 0;
+        const totalBeforeService = Math.max(0, subtotalBeforeDiscounts - discountAmt);
+        return Math.max(0, cartTotalUsd - totalBeforeService);
+    };
     const [splitPeople, setSplitPeople] = useState(null);
     const [splitCustomInput, setSplitCustomInput] = useState('');
     const [activeMethodId, setActiveMethodId] = useState(null);
@@ -64,7 +105,8 @@ export default function CheckoutModal({
         applyTdcSurcharge, setApplyTdcSurcharge,
         tdcSurchargePercent, setTdcSurchargePercent,
         toggleTdcSurcharge, handleSurchargePercentChange,
-    } = useCheckoutPayments({ paymentMethods, effectiveRate: 1, tasaCop: 1, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta, tdcSurchargePercent: 5, ivaRate, tableContext });
+        hasUnappliedTdcSurcharge,
+    } = useCheckoutPayments({ paymentMethods, effectiveRate: 1, tasaCop: tasaCop || 4150, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta, tdcSurchargePercent: 5, totalTax, tableContext });
 
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
     const activePaymentMethods = paymentMethods.filter(m => m.isEnabled !== false);
@@ -72,7 +114,8 @@ export default function CheckoutModal({
     const renderPaymentBar = (method, styles) => {
         const val = barValues[method.id] || '';
         const hasValue = parseFloat(val) > 0;
-
+        const isUsd = method.currency === 'USD';
+ 
         return (
             <div key={method.id} className="mb-3 last:mb-0">
                 <div className="flex items-center gap-2 mb-1 ml-0.5">
@@ -89,26 +132,36 @@ export default function CheckoutModal({
                             value={val}
                             onChange={e => handleBarChange(method.id, e.target.value)}
                             onFocus={() => setActiveMethodId(method.id)}
-                            placeholder="0"
-                            className={`w-full py-3 px-4 pr-14 rounded-xl border-2 text-lg font-bold outline-none transition-all ${hasValue
+                            placeholder={isUsd ? "0.00" : "0"}
+                            className={`w-full py-3 px-4 pr-16 rounded-xl border-2 text-lg font-bold outline-none transition-all ${hasValue
                                 ? styles.inputActive
                                 : `bg-white dark:bg-slate-900 ${styles.inputBorder}`
                                 } text-slate-800 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-700 focus:ring-4`}
                         />
-                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black px-2 py-0.5 rounded-md border ${hasValue
+                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black px-1.5 py-0.5 rounded-md border ${hasValue
                             ? `${styles.titleBg} ${styles.title} ${styles.border}`
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
                             }`}>
-                            $
+                            {isUsd ? 'USD' : 'COP'}
                         </span>
                     </div>
                     <button
-                        onClick={() => fillBar(method.id, 'COP')}
+                        onClick={() => fillBar(method.id, method.currency)}
                         className={`shrink-0 py-3 px-3.5 rounded-xl font-black text-xs transition-all active:scale-95 flex items-center gap-1 ${styles.btnBg}`}
                     >
                         <Zap size={14} fill="currentColor" /> Total
                     </button>
                 </div>
+                {hasValue && isUsd && (
+                    <div className="mt-1 ml-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                        ≈ {formatCOP(parseFloat(val) * (tasaCop || 4150))} COP
+                    </div>
+                )}
+                {hasValue && !isUsd && (
+                    <div className="mt-1 ml-1 text-xs font-bold text-slate-500">
+                        ≈ ${(parseFloat(val) / (tasaCop || 4150)).toFixed(2)} USD
+                    </div>
+                )}
                 {method.id === 'tdc' && hasValue && (() => {
                     const previewSurcharge = Math.round((parseFloat(val) || 0) * (tdcSurchargePercent / 100));
                     const projectedTotal = (parseFloat(val) || 0) + previewSurcharge;
@@ -204,28 +257,35 @@ export default function CheckoutModal({
                             </div>
 
                             {/* Asistente de Datáfono */}
-                            <div className="bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between">
-                                <div className="text-left">
-                                    <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest leading-none">
-                                        Monto neto cubierto
-                                    </p>
-                                    <p className="text-xs font-black text-slate-700 dark:text-slate-300 mt-1.5">
-                                        {formatCOP(applyTdcSurcharge ? (parseFloat(val) || 0) - tdcSurcharge : (parseFloat(val) || 0))}
-                                    </p>
+                            <div className="bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 flex flex-col gap-2.5 shadow-sm">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest leading-none">
+                                            Monto neto cubierto
+                                        </p>
+                                        <p className="text-xs font-black text-slate-700 dark:text-slate-300 mt-1.5">
+                                            {formatCOP(applyTdcSurcharge ? (parseFloat(val) || 0) - tdcSurcharge : (parseFloat(val) || 0))}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-widest leading-none">
+                                            Total a cobrar en datafono
+                                        </p>
+                                        <p className="text-sm sm:text-base font-black text-amber-600 dark:text-amber-400 mt-1">
+                                            {formatCOP(parseFloat(val) || 0)}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div className="text-right bg-transparent">
-                                    <p className="text-[10px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-widest leading-none">
-                                        Total a cobrar en datafono
-                                    </p>
-                                    <p className="text-sm sm:text-base font-black text-amber-600 dark:text-amber-400 mt-1">
-                                        {formatCOP(parseFloat(val) || 0)}
-                                    </p>
-                                    {!applyTdcSurcharge && previewSurcharge > 0 && (
-                                        <span className="block text-[10px] text-amber-600 dark:text-amber-400 font-extrabold tracking-wide mt-1 animate-pulse">
-                                            Proyectado: {formatCOP(projectedTotal)}
+                                {!applyTdcSurcharge && previewSurcharge > 0 && (
+                                    <div className="pt-2 border-t border-amber-500/20 flex items-center justify-between gap-2 mt-0.5">
+                                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-800 dark:text-amber-300">
+                                            Proyectado con Recargo:
                                         </span>
-                                    )}
-                                </div>
+                                        <span className="text-sm sm:text-base font-black text-amber-700 dark:text-amber-300 bg-amber-500/20 dark:bg-amber-500/35 px-2.5 py-0.5 rounded-lg border border-amber-500/20 animate-pulse shadow-sm">
+                                            {formatCOP(projectedTotal)}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );
@@ -248,62 +308,63 @@ export default function CheckoutModal({
             </div>
 
             {/* --- SCROLLABLE BODY --- */}
-            <div className="flex-1 overflow-y-auto overscroll-contain pb-28">
+            <div className="flex-1 overflow-y-auto overscroll-contain pb-52">
 
                 {/* -- STICKY TOTAL HEADER (PROPOSAL 1) -- */}
                 <div 
                     data-tour="checkout-total" 
-                    className="sticky top-0 z-30 px-4 py-3 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-4 shadow-sm select-none"
+                    className="sticky top-0 z-30 px-5 py-4.5 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-4 shadow-sm select-none"
                 >
                     {/* Left: Total */}
                     <div className="flex flex-col text-left">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
                             {discountData?.active || tdcSurcharge > 0 ? 'Total Final' : 'Total a Pagar'}
                         </span>
-                        <span className={`text-xl sm:text-2xl font-black ${discountData?.active || tdcSurcharge > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
+                        <span className={`text-3xl sm:text-4xl font-black ${discountData?.active || tdcSurcharge > 0 ? 'text-emerald-600 dark:text-emerald-450' : 'text-slate-950 dark:text-white'} leading-tight`}>
                             {formatCOP(adjustedTotal)}
+                        </span>
+                        <span className="text-[13px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                            ≈ ${(adjustedTotal / (tasaCop || 4150)).toFixed(2)} USD <span className="text-[10px] text-slate-400 font-medium">(Tasa: {tasaCop})</span>
                         </span>
                     </div>
 
                     {/* Right: Desglose en Pills */}
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {/* Pill Base Gravable e IVA */}
-                        {ivaRate > 0 && (() => {
-                            const baseParaIva = tableContext?.includeServiceCharge ? Math.round(cartTotalUsd / 1.10) : cartTotalUsd;
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                        {/* Pill Base Gravable e IVA desglosados */}
+                        {taxBreakdown && Object.entries(taxBreakdown).map(([taxKey, taxVal]) => {
+                            if (taxVal <= 0) return null;
+                            const taxLabel = taxKey === 'iva_19' ? 'IVA 19%' : taxKey === 'impoconsumo_8' ? 'Impoconsumo 8%' : taxKey;
                             return (
-                                <div className="flex items-center gap-1 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-xl border border-blue-100/40 dark:border-blue-900/30 text-[9px] font-extrabold uppercase tracking-wide">
-                                    <span>IVA ({ivaRate}%): +{formatCOP(ivaAmount)}</span>
+                                <div key={taxKey} className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-3.5 py-1.5 rounded-xl border border-blue-100/40 dark:border-blue-900/30 text-[11px] font-black uppercase tracking-wide">
+                                    <span>{taxLabel}: {formatCOP(taxVal)}</span>
                                 </div>
                             );
-                        })()}
+                        })}
 
                         {/* Pill Servicio Voluntario */}
                         {tableContext?.includeServiceCharge && (() => {
                             const svcPercent = tableContext?.serviceChargePercent ?? 10;
-                            if (svcPercent > 0) {
-                                const baseVal = Math.round(cartTotalUsd / (1 + (svcPercent / 100)));
-                                const svcAmount = Math.round(baseVal * (svcPercent / 100));
-                                if (svcAmount > 0) {
-                                    return (
-                                        <div className="flex items-center gap-1 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 px-2.5 py-1 rounded-xl border border-violet-100/40 dark:border-violet-900/30 text-[9px] font-extrabold uppercase tracking-wide">
-                                            <span>Serv. ({svcPercent}%): +{formatCOP(svcAmount)}</span>
-                                        </div>
-                                    );
-                                }
+                            const svcAmount = getServiceChargeAmount();
+                            if (svcAmount > 0) {
+                                return (
+                                    <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 px-3.5 py-1.5 rounded-xl border border-violet-100/40 dark:border-violet-900/30 text-[11px] font-black uppercase tracking-wide">
+                                        <span>Serv. ({svcPercent}%): +{formatCOP(svcAmount)}</span>
+                                    </div>
+                                );
                             }
                             return null;
                         })()}
 
                         {/* Pill Recargo TDC */}
                         {tdcSurcharge > 0 && (
-                            <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-100/40 dark:border-emerald-900/30 text-[9px] font-extrabold uppercase tracking-wide animate-in zoom-in-95">
+                            <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 px-3.5 py-1.5 rounded-xl border border-emerald-100/40 dark:border-emerald-900/30 text-[11px] font-black uppercase tracking-wide animate-in zoom-in-95">
                                 <span>TDC ({tdcSurchargePercent}%): +{formatCOP(tdcSurcharge)}</span>
                             </div>
                         )}
 
                         {/* Pill Descuento */}
                         {discountData?.active && (
-                            <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 px-2.5 py-1 rounded-xl border border-amber-100/40 dark:border-amber-900/30 text-[9px] font-extrabold uppercase tracking-wide">
+                            <div className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 px-3.5 py-1.5 rounded-xl border border-amber-100/40 dark:border-amber-900/30 text-[11px] font-black uppercase tracking-wide">
                                 <span>Desc: -{formatCOP(discountData.amountUsd)} ({discountData.type === 'percentage' ? `${discountData.value}%` : 'Fijo'})</span>
                             </div>
                         )}
@@ -339,20 +400,26 @@ export default function CheckoutModal({
                                             <div className="flex items-center justify-between px-3 py-2">
                                                 <span className="flex items-center gap-1.5 text-xs text-slate-500">
                                                     <Clock size={11} className="text-blue-400" />
-                                                    {di.timeCost.pinaCost > 0 && di.timeCost.hourCost > 0 ? 'Tiempo + Piñas' : di.timeCost.pinaCost > 0 ? 'Piñas' : `Tiempo · ${tableContext.elapsed || 0} min`}
+                                                    {di.timeCost.pinaCost > 0 && di.timeCost.hourCost > 0 ? 'Tiempo + Jugadas' : di.timeCost.pinaCost > 0 ? 'Jugadas' : `Tiempo · ${tableContext.elapsed || 0} min`}
                                                 </span>
                                                 <span className="text-xs font-black text-slate-700 dark:text-white">{formatCOP(di.timeCost.total)}</span>
                                             </div>
                                         )}
-                                        {di.items.map((item, i) => (
-                                            <div key={i} className="flex items-center justify-between px-3 py-1.5">
-                                                <span className="flex items-center gap-1.5 text-xs text-slate-500 truncate pr-2">
-                                                    <Coffee size={11} className="text-amber-400 shrink-0" />
-                                                    <span className="font-bold text-slate-600">{item.qty}x</span> {item.product_name || item.name}
-                                                </span>
-                                                <span className="text-xs font-black text-slate-700 dark:text-white shrink-0">{formatCOP(Number(item.unit_price_usd) * Number(item.qty))}</span>
-                                            </div>
-                                        ))}
+                                        {di.items.map((item, i) => {
+                                             const p = products?.find(prod => prod.id === item.product_id);
+                                             const itemTaxDetail = computeItemTax(Number(item.unit_price_usd), p?.taxType || 'exento', p?.taxMode || 'inclusive');
+                                             const finalUnitPrice = itemTaxDetail.total;
+                                             const lineTotal = finalUnitPrice * Number(item.qty);
+                                             return (
+                                                 <div key={i} className="flex items-center justify-between px-3 py-1.5">
+                                                     <span className="flex items-center gap-1.5 text-xs text-slate-500 truncate pr-2">
+                                                         <Coffee size={11} className="text-amber-400 shrink-0" />
+                                                         <span className="font-bold text-slate-600">{item.qty}x</span> {item.product_name || item.name}
+                                                     </span>
+                                                     <span className="text-xs font-black text-slate-700 dark:text-white shrink-0">{formatCOP(lineTotal)}</span>
+                                                 </div>
+                                             );
+                                         })}
                                         {di.sharedPortion > 0 && (
                                             <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-slate-900/30">
                                                 <span className="flex items-center gap-1.5 text-xs text-slate-400">
@@ -367,6 +434,19 @@ export default function CheckoutModal({
                                                 <span className="text-xs font-black text-slate-600 dark:text-slate-300 shrink-0">{formatCOP(di.sharedPortion)}</span>
                                             </div>
                                         )}
+                                        {tableContext.includeServiceCharge && (() => {
+                                            const svcAmt = getServiceChargeAmount();
+                                            const svcPercent = tableContext.serviceChargePercent ?? 10;
+                                            if (svcAmt <= 0) return null;
+                                            return (
+                                                <div className="flex items-center justify-between px-3 py-1.5 bg-violet-50/50 dark:bg-violet-950/10 border-t border-violet-100/30 dark:border-violet-900/20">
+                                                    <span className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400">
+                                                        <span className="font-extrabold">%</span> Servicio Voluntario ({svcPercent}%)
+                                                    </span>
+                                                    <span className="text-xs font-black text-violet-700 dark:text-violet-350">{formatCOP(svcAmt)}</span>
+                                                </div>
+                                            );
+                                        })()}
                                     </>
                                 );
                             })() : (
@@ -377,7 +457,7 @@ export default function CheckoutModal({
                                                 const count = 1 + (Number(tableContext.session?.extended_times) || 0);
                                                 return (
                                                     <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                                        🎱 {count} piña{count !== 1 ? 's' : ''}
+                                                        🎱 {count} jugada{count !== 1 ? 's' : ''}
                                                     </span>
                                                 );
                                             })() : (() => {
@@ -398,23 +478,50 @@ export default function CheckoutModal({
                                             </span>
                                         </div>
                                     )}
-                                    {tableContext.currentItems?.map((item, i) => (
-                                        <div key={i} className="flex items-center justify-between px-3 py-1.5">
-                                            <span className="flex items-center gap-1.5 text-xs text-slate-500 truncate pr-2">
-                                                <Coffee size={11} className="text-amber-400 shrink-0" />
-                                                <span className="font-bold text-slate-600">{item.qty}x</span> {item.product_name || item.name}
-                                            </span>
-                                            <div className="flex items-center gap-1.5 shrink-0">
-                                                {splitPeople > 1 && (
-                                                    <span className="text-[10px] text-slate-400 line-through">{formatCOP(Number(item.unit_price_usd) * Number(item.qty))}</span>
-                                                )}
-                                                <span className="text-xs font-black text-slate-700 dark:text-white">
-                                                    {splitPeople > 1 ? formatCOP(divR(Number(item.unit_price_usd) * Number(item.qty), splitPeople)) : formatCOP(Number(item.unit_price_usd) * Number(item.qty))}
-                                                    {splitPeople > 1 && <span className="text-[9px] font-bold text-violet-500 ml-0.5">÷{splitPeople}</span>}
+                                    {tableContext.currentItems?.map((item, i) => {
+                                         const p = products?.find(prod => prod.id === item.product_id);
+                                         const itemTaxDetail = computeItemTax(Number(item.unit_price_usd), p?.taxType || 'exento', p?.taxMode || 'inclusive');
+                                         const finalUnitPrice = itemTaxDetail.total;
+                                         const lineTotal = finalUnitPrice * Number(item.qty);
+                                         return (
+                                             <div key={i} className="flex items-center justify-between px-3 py-1.5">
+                                                 <span className="flex items-center gap-1.5 text-xs text-slate-500 truncate pr-2">
+                                                     <Coffee size={11} className="text-amber-400 shrink-0" />
+                                                     <span className="font-bold text-slate-600">{item.qty}x</span> {item.product_name || item.name}
+                                                 </span>
+                                                 <div className="flex items-center gap-1.5 shrink-0">
+                                                     {splitPeople > 1 && (
+                                                         <span className="text-[10px] text-slate-400 line-through">{formatCOP(lineTotal)}</span>
+                                                     )}
+                                                     <span className="text-xs font-black text-slate-700 dark:text-white">
+                                                         {splitPeople > 1 ? formatCOP(divR(lineTotal, splitPeople)) : formatCOP(lineTotal)}
+                                                         {splitPeople > 1 && <span className="text-[9px] font-bold text-violet-500 ml-0.5">÷{splitPeople}</span>}
+                                                     </span>
+                                                 </div>
+                                             </div>
+                                         );
+                                     })}
+                                    {tableContext.includeServiceCharge && (() => {
+                                        const svcAmt = getServiceChargeAmount();
+                                        const svcPercent = tableContext.serviceChargePercent ?? 10;
+                                        if (svcAmt <= 0) return null;
+                                        return (
+                                            <div className="flex items-center justify-between px-3 py-1.5 bg-violet-50/50 dark:bg-violet-950/10 border-t border-violet-100/30 dark:border-violet-900/20">
+                                                <span className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-400">
+                                                    <span className="font-extrabold">%</span> Servicio Voluntario ({svcPercent}%)
                                                 </span>
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    {splitPeople > 1 && (
+                                                        <span className="text-[10px] text-slate-400 line-through">{formatCOP(svcAmt)}</span>
+                                                    )}
+                                                    <span className="text-xs font-black text-violet-700 dark:text-violet-350">
+                                                        {splitPeople > 1 ? formatCOP(divR(svcAmt, splitPeople)) : formatCOP(svcAmt)}
+                                                        {splitPeople > 1 && <span className="text-[9px] font-bold text-violet-500 ml-0.5">÷{splitPeople}</span>}
+                                                    </span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })()}
                                 </>
                             )}
                         </div>
@@ -481,62 +588,40 @@ export default function CheckoutModal({
                     })()}
                 </div>
 
-                {/* -- IVA CONFIG (Impuesto ajustable) -- */}
-                <div className="mx-3 mb-3 bg-slate-50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 rounded-2xl p-3 flex items-center justify-between select-none">
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 bg-blue-100 dark:bg-blue-950/40 rounded-xl flex items-center justify-center text-blue-600 dark:text-blue-400">
-                            <span className="font-extrabold text-sm">%</span>
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Impuesto IVA ({ivaRate}%)</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">Desglosado en el ticket de venta</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200/50 dark:border-slate-700/50">
-                        {[0, 8, 19].map(pct => (
-                            <button
-                                key={pct}
-                                onClick={() => setIvaRate(pct)}
-                                className={`px-2 py-0.5 rounded-md text-[10px] font-black transition-all ${ivaRate === pct ? 'bg-white dark:bg-slate-600 text-slate-700 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-500'}`}
-                            >
-                                {pct}%
-                            </button>
-                        ))}
-                        <div className="flex items-center w-10 border-l border-slate-200 dark:border-slate-700 pl-1.5 ml-0.5">
-                            <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={ivaRate}
-                                onChange={e => {
-                                    const v = parseInt(e.target.value);
-                                    setIvaRate(isNaN(v) ? 0 : Math.max(0, Math.min(100, v)));
-                                }}
-                                className="w-full text-center text-[10px] font-black bg-transparent text-slate-700 dark:text-white focus:outline-none"
-                            />
-                        </div>
-                    </div>
-                </div>
+
 
                 {/* -- SECCIÓN MÉTODOS DE PAGO -- */}
-                {activePaymentMethods.length > 0 && (
-                    <div className={`mx-3 mb-3 rounded-2xl border ${sectionStyles.COP.bg} ${sectionStyles.COP.border} p-3`}>
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${sectionStyles.COP.title}`}>
-                                <span className={`p-1 rounded-lg ${sectionStyles.COP.titleBg}`}>💵</span>
-                                Métodos de Pago (COP)
-                            </h3>
-                        </div>
-                        {activePaymentMethods.map(m => renderPaymentBar(m, sectionStyles.COP))}
-                    </div>
-                )}
+                {(() => {
+                    const activeCopMethods = activePaymentMethods.filter(m => m.currency === 'COP' || !m.currency);
+                    const activeUsdMethods = activePaymentMethods.filter(m => m.currency === 'USD');
+                    return (
+                        <>
+                            {activeCopMethods.length > 0 && (
+                                <div className={`mx-3 mb-3 rounded-2xl border ${sectionStyles.COP.bg} ${sectionStyles.COP.border} p-3`}>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${sectionStyles.COP.title}`}>
+                                            <span className={`p-1 rounded-lg ${sectionStyles.COP.titleBg}`}>🇨🇴</span>
+                                            Pagos en COP (Pesos)
+                                        </h3>
+                                    </div>
+                                    {activeCopMethods.map(m => renderPaymentBar(m, sectionStyles.COP))}
+                                </div>
+                            )}
 
-                {/* -- BANNER VUELTO / RESTANTE -- */}
-                <CheckoutChangeBreakdown
-                    isPaid={isPaid}
-                    changeUsd={changeUsd}
-                    remainingUsd={remainingUsd}
-                />
+                            {activeUsdMethods.length > 0 && (
+                                <div className={`mx-3 mb-3 rounded-2xl border ${sectionStyles.USD.bg} ${sectionStyles.USD.border} p-3`}>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${sectionStyles.USD.title}`}>
+                                            <span className={`p-1 rounded-lg ${sectionStyles.USD.titleBg}`}>💵</span>
+                                            Pagos en USD (Dólares)
+                                        </h3>
+                                    </div>
+                                    {activeUsdMethods.map(m => renderPaymentBar(m, sectionStyles.USD))}
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
 
                 {/* -- CLIENTE -- */}
                 <CustomerPickerSection
@@ -553,33 +638,52 @@ export default function CheckoutModal({
                 />
             </div>
 
-            {/* --- BOTÓN CTA FIJO --- */}
-            <div data-tour="checkout-confirm" className="shrink-0 px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-                <button
-                    onClick={() => {
-                        if (!isPaid && selectedCustomerId && remainingUsd >= EPSILON) {
-                            triggerHaptic && triggerHaptic();
-                            setConfirmFiar(true);
-                        } else {
-                            handleConfirm();
-                        }
-                    }}
-                    disabled={!selectedCustomerId && remainingUsd >= EPSILON}
-                    className={`w-full py-4 text-white font-black text-base rounded-2xl shadow-lg transition-all tracking-wide flex items-center justify-center gap-2 ${isPaid
-                        ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25 active:scale-[0.98]'
-                        : selectedCustomerId
-                            ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/25 active:scale-[0.98]'
-                            : 'bg-slate-300 dark:bg-slate-800 text-slate-500 shadow-none cursor-not-allowed'
+            {/* --- BOTÓN CTA Y BANNER DE MONTO FIJOS AL PIE --- */}
+            <div data-tour="checkout-confirm" className="shrink-0 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.03)] flex flex-col gap-1">
+                {/* -- BANNER VUELTO / RESTANTE (Sticky/Fijo) -- */}
+                <CheckoutChangeBreakdown
+                    isPaid={isPaid}
+                    changeUsd={changeUsd}
+                    remainingUsd={remainingUsd}
+                    tasaCop={tasaCop}
+                />
+
+                <div className="px-4 pb-3">
+                    <button
+                        onClick={() => {
+                            if (hasUnappliedTdcSurcharge) {
+                                toggleTdcSurcharge();
+                                return;
+                            }
+                            if (!isPaid && selectedCustomerId && remainingUsd >= EPSILON) {
+                                triggerHaptic && triggerHaptic();
+                                setConfirmFiar(true);
+                            } else {
+                                handleConfirm();
+                            }
+                        }}
+                        disabled={!hasUnappliedTdcSurcharge && !selectedCustomerId && remainingUsd >= EPSILON}
+                        className={`w-full py-4 text-white font-black text-base rounded-2xl shadow-lg transition-all tracking-wide flex items-center justify-center gap-2 ${
+                            hasUnappliedTdcSurcharge
+                                ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25 active:scale-[0.98]'
+                                : isPaid
+                                    ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25 active:scale-[0.98]'
+                                    : selectedCustomerId
+                                        ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/25 active:scale-[0.98]'
+                                        : 'bg-slate-300 dark:bg-slate-800 text-slate-500 shadow-none cursor-not-allowed'
                         }`}
-                >
-                    {isPaid ? (
-                        <><Receipt size={18} /> CONFIRMAR COBRO</>
-                    ) : selectedCustomerId ? (
-                        <><Users size={18} /> FIAR RESTANTE ({formatCOP(remainingUsd)})</>
-                    ) : (
-                        <><Receipt size={18} /> INGRESA LOS PAGOS</>
-                    )}
-                </button>
+                    >
+                        {hasUnappliedTdcSurcharge ? (
+                            <><CreditCard size={18} /> SUMA EL RECARGO TDC ({tdcSurchargePercent}%)</>
+                        ) : isPaid ? (
+                            <><Receipt size={18} /> CONFIRMAR COBRO</>
+                        ) : selectedCustomerId ? (
+                            <><Users size={18} /> FIAR RESTANTE ({formatCOP(remainingUsd)})</>
+                        ) : (
+                            <><Receipt size={18} /> INGRESA LOS PAGOS</>
+                        )}
+                    </button>
+                </div>
             </div>
 
             {/* --- MODALES DE CONFIRMACIÓN --- */}

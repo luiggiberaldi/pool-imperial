@@ -69,7 +69,7 @@ export function ProductProvider({ children, rates }) {
 
     // AUTO COP LOGIC
     const [copEnabled, setCopEnabled] = useState(() => {
-        return localStorage.getItem('cop_enabled') === 'true';
+        return localStorage.getItem('cop_enabled') !== 'false';
     });
     const [autoCopEnabled, setAutoCopEnabled] = useState(() => {
         return localStorage.getItem('auto_cop_enabled') === 'true';

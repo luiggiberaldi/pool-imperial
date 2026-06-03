@@ -6,6 +6,11 @@ const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
     style: 'currency', currency: 'COP', minimumFractionDigits: 0
 }).format(Math.round(val || 0));
 
+// Formatea un número como dólares: $ 12.50
+const formatUsd = (val) => new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: 'USD', minimumFractionDigits: 2
+}).format(val || 0);
+
 /**
  * Genera un PDF de Cierre del Día con reporte detallado.
  * Formato: 80mm ancho (estilo recibo) para compartir fácilmente por WhatsApp.
@@ -24,6 +29,8 @@ export async function generateDailyClosePDF({
     todayTotalUsd,
     bcvRate,
     todayTotalBs,
+    totalTax = 0,
+    taxBreakdown = {},
 }) {
     const WIDTH = 58;
     const M = 4;
@@ -34,11 +41,13 @@ export async function generateDailyClosePDF({
     const paymentRows = Object.keys(paymentBreakdown).length;
     const topProdRows = topProducts.length;
     const saleRows = allSales.length;
+    const taxRows = Object.keys(taxBreakdown || {}).filter(k => taxBreakdown[k] > 0).length;
     // Calculate dynamic base height. Increase to 45mm per sale to fit detailed change rows
     const H = 200
         + (paymentRows * 7)
         + (topProdRows * 10)
-        + (saleRows * 45);
+        + (saleRows * 45)
+        + (totalTax > 0 ? 12 + (taxRows * 5) : 0);
 
     const doc = new jsPDF({ unit: 'mm', format: [WIDTH, H] });
 
@@ -113,11 +122,18 @@ export async function generateDailyClosePDF({
     y = sectionTitle('RESUMEN GENERAL', y);
 
     const totalCOP = todayTotalCOP ?? todayTotalUsd ?? 0;
+    const totalUSD = allSales
+        .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
+        .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
+
+    const netCOP = totalCOP - totalTax;
 
     const statsRows = [
         ['Ventas realizadas', `${sales.length}`],
         ['Artículos vendidos', `${todayItemsSold}`],
-        ['Ingresos brutos', formatCOP(totalCOP)],
+        ['Ingresos Brutos COP', formatCOP(totalCOP)],
+        ['Ingresos Netos COP', formatCOP(netCOP)],
+        ['Ingresos USD equiv.', formatUsd(totalUSD)],
         ['Ganancia estimada', formatCOP(todayProfit || 0)],
     ];
 
@@ -143,8 +159,8 @@ export async function generateDailyClosePDF({
 
         Object.entries(paymentBreakdown).forEach(([methodId, data]) => {
             const label = toTitleCase(getPaymentLabel(methodId, data.label));
-            // En Pool Imperial todos los montos son COP
-            const val = formatCOP(data.total);
+            const isUsd = data.currency === 'USD';
+            const val = isUsd ? formatUsd(data.total) : formatCOP(data.total);
 
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7);
@@ -161,28 +177,77 @@ export async function generateDailyClosePDF({
     }
 
     // ════════════════════════════════════
+    //  DESGLOSE DE IMPUESTOS RECAUDADOS
+    // ════════════════════════════════════
+    if (totalTax > 0) {
+        y = sectionTitle('IMPUESTOS RECAUDADOS', y);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(...BODY);
+        doc.text('Total Impuestos Recaudados', M, y);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...INK);
+        doc.text(formatCOP(totalTax), RIGHT, y, { align: 'right' });
+        y += 5;
+
+        Object.entries(taxBreakdown || {}).forEach(([key, val]) => {
+            if (val <= 0) return;
+            const label = key === 'iva_19' ? 'IVA 19%' : key === 'impoconsumo_8' ? 'Impoconsumo 8%' : key;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...BODY);
+            doc.text(`  ${label}`, M, y);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...INK);
+            doc.text(formatCOP(val), RIGHT, y, { align: 'right' });
+            y += 5;
+        });
+
+        y += 2;
+        dash(y); y += 6;
+    }
+
+    // ════════════════════════════════════
     //  RECONCILIACIÓN DE CAJA (CUADRE)
     // ════════════════════════════════════
     if (reconData) {
         y = sectionTitle('CUADRE DE CAJA FISICA', y);
 
         const openingCOP = apertura?.openingCOP || apertura?.openingUsd || 0;
+        const openingUSD = apertura?.openingBs || 0;
+
+        const expectedCOP = (paymentBreakdown['efectivo']?.total || 0) + (paymentBreakdown['efectivo_cop']?.total || 0) + (paymentBreakdown['_vuelto_cop']?.total || 0);
+        const declaredCOP = reconData.declaredCop || reconData.declaredCOP || 0;
+        const diffCOP = declaredCOP - expectedCOP;
+
+        const expectedUSD = paymentBreakdown['efectivo_usd']?.total || 0;
+        const declaredUSD = reconData.declaredUsd || reconData.declaredUSD || 0;
+        const diffUSD = declaredUSD - expectedUSD;
+
         const reconRows = [
-            ['Fondo inicial', formatCOP(openingCOP)],
-            ['Declarado', formatCOP(reconData.declaredCOP || reconData.declaredUsd || 0)],
-            ['Diferencia', formatCOP(reconData.diffCOP || reconData.diffUsd || 0)]
+            ['Fondo inicial COP', formatCOP(openingCOP)],
+            ['COP Esperado', formatCOP(expectedCOP)],
+            ['COP Declarado', formatCOP(declaredCOP)],
+            ['COP Diferencia', formatCOP(diffCOP)],
+            ['Fondo inicial USD', formatUsd(openingUSD)],
+            ['USD Esperado', formatUsd(expectedUSD)],
+            ['USD Declarado', formatUsd(declaredUSD)],
+            ['USD Diferencia', formatUsd(diffUSD)]
         ];
 
-        reconRows.forEach(([label, value], i) => {
+        reconRows.forEach(([label, value]) => {
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7);
             doc.setTextColor(...BODY);
             doc.text(label, M, y);
 
             doc.setFont('helvetica', 'bold');
-            if (i === 2) {
-                const rawDiff = reconData.diffCOP || reconData.diffUsd || 0;
-                if (Math.abs(rawDiff) <= 500) doc.setTextColor(...MUTED);
+            if (label.includes('Diferencia')) {
+                const isCop = label.includes('COP');
+                const rawDiff = isCop ? diffCOP : diffUSD;
+                const tolerance = isCop ? 500 : 0.05;
+                if (Math.abs(rawDiff) <= tolerance) doc.setTextColor(...MUTED);
                 else if (rawDiff < 0) doc.setTextColor(...RED);
                 else doc.setTextColor(...GREEN);
             } else {
@@ -199,12 +264,15 @@ export async function generateDailyClosePDF({
     // ════════════════════════════════════
     //  APERTURA DE CAJA
     // ════════════════════════════════════
-    if (apertura && (apertura.openingCOP > 0 || apertura.openingUsd > 0)) {
+    if (apertura && (apertura.openingCOP > 0 || apertura.openingUsd > 0 || apertura.openingBs > 0)) {
         y = sectionTitle('FONDO INICIAL (APERTURA)', y);
 
         const aperturaRows = [];
         const openingAmount = apertura.openingCOP || apertura.openingUsd || 0;
+        const openingUSD = apertura.openingBs || 0;
+        
         if (openingAmount > 0) aperturaRows.push(['Efectivo COP inicial', formatCOP(openingAmount)]);
+        if (openingUSD > 0) aperturaRows.push(['Efectivo USD inicial', formatUsd(openingUSD)]);
         if (apertura.sellerName) aperturaRows.push(['Cajero apertura', apertura.sellerName]);
 
         aperturaRows.forEach(([label, value]) => {
@@ -305,8 +373,10 @@ export async function generateDailyClosePDF({
         if (!isCanceled && s.payments && s.payments.length > 0) {
             s.payments.forEach(p => {
                 const label = toTitleCase(p.methodLabel || getPaymentLabel(p.methodId) || 'Pago');
-                // En Pool Imperial todos los pagos son COP
-                const val = formatCOP(p.amountUsd !== undefined ? p.amountUsd : p.amount);
+                const isUsd = p.amountOriginalCurrency === 'USD';
+                const val = isUsd 
+                    ? `${formatUsd(p.amountOriginal)} USD` 
+                    : `${formatCOP(p.amountUsd !== undefined ? p.amountUsd : p.amount)} COP`;
                 doc.setFontSize(6);
                 doc.setTextColor(...MUTED);
                 doc.text(`  Recibido: ${label} (${val})`, M, y);

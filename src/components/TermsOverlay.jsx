@@ -69,7 +69,7 @@ export default function TermsOverlay({ onAccept }) {
                         Pool Imperial es una aplicación web progresiva (PWA) diseñada para la gestión integral de salas de pool y billar. Proporciona:
                     </p>
                     <ul className="text-sm text-slate-700 space-y-1 mb-4">
-                        <li><strong>Gestión de mesas de pool</strong> con control de tiempo, sesiones activas, modo Normal y modo Piña (precio por partida)</li>
+                        <li><strong>Gestión de mesas de pool</strong> con control de tiempo, sesiones activas, modo Normal y modo Jugada (precio por partida)</li>
                         <li><strong>Punto de venta (POS)</strong> con carrito, múltiples métodos de pago (Efectivo COP, Nequi, Daviplata, Transferencia, Datáfono, Fiado) y recibos térmicos</li>
                         <li><strong>Gestión de inventario</strong> con precios en Pesos Colombianos (COP), control de stock y alertas de bajo inventario</li>
                         <li><strong>Sistema de roles</strong> con Administrador, Cajero y Mesero, cada uno con permisos específicos</li>
@@ -112,7 +112,7 @@ export default function TermsOverlay({ onAccept }) {
                     <ul className="text-sm text-slate-700 space-y-1 mb-4">
                         <li><strong>Administrador:</strong> Acceso completo — configuración del sistema, gestión de usuarios (crear, editar, activar/desactivar, eliminar), reportes, apertura y cierre de caja, y anulación de sesiones.</li>
                         <li><strong>Cajero:</strong> Gestión de ventas, cobro de mesas, operaciones de caja. Puede tener permisos de apertura/cierre delegados por el administrador.</li>
-                        <li><strong>Mesero:</strong> Apertura de mesas y toma de pedidos. No puede anular sesiones activas. Requiere confirmación al abrir mesa en modo Piña.</li>
+                        <li><strong>Mesero:</strong> Apertura de mesas y toma de pedidos. No puede anular sesiones activas. Requiere confirmación al abrir mesa en modo Jugada.</li>
                     </ul>
                     <p className="text-sm text-slate-700 leading-relaxed mb-4">
                         Cada usuario accede mediante PIN personal hasheado (SHA-256). El administrador es el único responsable de la gestión de las cuentas de su equipo. Las cuentas desactivadas no pueden iniciar sesión pero conservan su historial.

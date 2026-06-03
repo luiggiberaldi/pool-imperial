@@ -79,6 +79,19 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
         [todaySales, bcvRate, products]
     );
 
+    const todayTotalTax = useMemo(() => todaySales.reduce((sum, s) => sum + (s.ivaAmount || 0), 0), [todaySales]);
+    const todayTaxBreakdown = useMemo(() => {
+        const breakdown = {};
+        todaySales.forEach(sale => {
+            if (sale.taxBreakdown) {
+                Object.entries(sale.taxBreakdown).forEach(([key, val]) => {
+                    breakdown[key] = (breakdown[key] || 0) + (val || 0);
+                });
+            }
+        });
+        return breakdown;
+    }, [todaySales]);
+
     // ── Métricas solo del DÍA CALENDARIO (para tab "Hoy") ──
     const daySales = useMemo(() =>
         sales.filter(s => {
@@ -98,6 +111,19 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
         FinancialEngine.calculateAggregateProfit(daySales, bcvRate, products),
         [daySales, bcvRate, products]
     );
+
+    const dayTotalTax = useMemo(() => daySales.reduce((sum, s) => sum + (s.ivaAmount || 0), 0), [daySales]);
+    const dayTaxBreakdown = useMemo(() => {
+        const breakdown = {};
+        daySales.forEach(sale => {
+            if (sale.taxBreakdown) {
+                Object.entries(sale.taxBreakdown).forEach(([key, val]) => {
+                    breakdown[key] = (breakdown[key] || 0) + (val || 0);
+                });
+            }
+        });
+        return breakdown;
+    }, [daySales]);
 
     const recentSales = useMemo(() => {
         const validTypes = ['VENTA', 'VENTA_FIADA'];
@@ -203,7 +229,9 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
         today, todaySales, todayCashFlow, todayApertura,
         todayTotalBs, todayTotalUsd, todayItemsSold,
         todayExpenses, todayExpensesUsd, todayProfit,
+        todayTotalTax, todayTaxBreakdown,
         daySales, dayTotalUsd, dayTotalBs, dayItemsSold, dayProfit,
+        dayTotalTax, dayTaxBreakdown,
         recentSales, weekData, lowStockProducts,
         totalDeudas, topProducts, topStaff,
         paymentBreakdown, salesPaymentBreakdown, todayTopProducts,

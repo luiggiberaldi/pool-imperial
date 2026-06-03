@@ -7,7 +7,7 @@ import { getLocalISODate } from './dateHelpers';
  * NOTA: Los campos totalUsd en las ventas ahora almacenan valores COP.
  * El parámetro bcvRate ya no se usa — se mantiene en la firma por compatibilidad.
  */
-export function calculateReportsData(allSales, from, to, _bcvRate, products) {
+export function calculateReportsData(allSales, from, to, _bcvRate, products, tasaCop) {
     // Ventas de Mercancía (para Totales, Profit, Top Productos)
     const salesForStats = allSales.filter(s => {
         if (s.status === 'ANULADA' || (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA')) return false;
@@ -31,9 +31,35 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products) {
 
     // totalUsd ahora almacena COP en Pool Imperial
     const totalCOP = salesForStats.reduce((s, sale) => s + (sale.totalCop || sale.totalUsd || 0), 0);
+    const totalTax = salesForStats.reduce((s, sale) => s + (sale.ivaAmount || 0), 0);
+    const taxBreakdown = {};
+    salesForStats.forEach(sale => {
+        if (sale.taxBreakdown) {
+            Object.entries(sale.taxBreakdown).forEach(([key, val]) => {
+                taxBreakdown[key] = (taxBreakdown[key] || 0) + (val || 0);
+            });
+        }
+    });
+
     const totalItems = salesForStats.reduce((s, sale) => s + (sale.items ? sale.items.reduce((is, i) => is + i.qty, 0) : 0), 0);
     const profit = FinancialEngine.calculateAggregateProfit(salesForStats, 1, products);
     const paymentBreakdown = FinancialEngine.calculatePaymentBreakdown(salesForCashFlow);
+
+    // Calcular tasa promedio ponderada
+    let totalCOPWithRate = 0;
+    let totalCOPForRateAvg = 0;
+    salesForStats.forEach(sale => {
+        const rate = sale.rate || 1;
+        const total = sale.totalCop || sale.totalUsd || 0;
+        if (rate > 1) {
+            totalCOPWithRate += total;
+            totalCOPForRateAvg += total / rate;
+        }
+    });
+
+    const avgRate = totalCOPForRateAvg > 0 ? (totalCOPWithRate / totalCOPForRateAvg) : (tasaCop || 4150);
+    const totalUsdReal = totalCOP / avgRate;
+    const profitUsdReal = profit / avgRate;
 
     // Top productos
     const productMap = {};
@@ -72,7 +98,13 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products) {
         profit,
         paymentBreakdown,
         topProducts,
-        salesByDay
+        salesByDay,
+        avgRate,
+        totalUsdReal,
+        profitUsdReal,
+        totalTax,
+        taxBreakdown,
+        netRevenue: Math.max(0, totalCOP - totalTax)
     };
 }
 
@@ -109,6 +141,15 @@ export function groupSalesByCierreId(allSales, from, to) {
             const salesForCashFlow = c.sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR');
 
             const totalCOP = salesForStats.reduce((acc, s) => acc + (s.totalCop || s.totalUsd || 0), 0);
+            const totalTax = salesForStats.reduce((acc, s) => acc + (s.ivaAmount || 0), 0);
+            const taxBreakdown = {};
+            salesForStats.forEach(sale => {
+                if (sale.taxBreakdown) {
+                    Object.entries(sale.taxBreakdown).forEach(([key, val]) => {
+                        taxBreakdown[key] = (taxBreakdown[key] || 0) + (val || 0);
+                    });
+                }
+            });
             const totalItems = salesForStats.reduce((acc, s) => acc + (s.items ? s.items.reduce((is, it) => is + it.qty, 0) : 0), 0);
             const paymentBreakdown = FinancialEngine.calculatePaymentBreakdown(salesForCashFlow);
 
@@ -122,6 +163,8 @@ export function groupSalesByCierreId(allSales, from, to) {
                 totalBs: 0,          // siempre 0 en Pool Imperial
                 totalItems,
                 paymentBreakdown,
+                totalTax,
+                taxBreakdown,
             };
         })
         .sort((a, b) => b.cierreId - a.cierreId);

@@ -16,7 +16,9 @@ export function buildProductPayload(formData, effectiveRate) {
         sellByUnit,
         unitPriceUsd,
         category,
-        lowStockAlert
+        lowStockAlert,
+        taxType,
+        taxMode
     } = formData;
 
     const formattedName = name.replace(/(^\w{1})|(\s+\w{1})/g, letter => letter.toUpperCase());
@@ -56,6 +58,8 @@ export function buildProductPayload(formData, effectiveRate) {
         unitPriceUsd: isLote && sellByUnit ? finalUnitPrice : null,
         stockInLotes: isLote && stockInLotes ? parseInt(stockInLotes) : null,
         category: category,
-        lowStockAlert: lowStockAlert ? parseInt(lowStockAlert) : 5
+        lowStockAlert: lowStockAlert ? parseInt(lowStockAlert) : 5,
+        taxType: taxType || 'exento',
+        taxMode: taxMode || 'inclusive'
     };
 }

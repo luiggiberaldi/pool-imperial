@@ -12,6 +12,21 @@
 
 import { round2, mulR, divR, subR, sumR } from '../utils/dinero';
 
+export const TAX_RATES = { exento: 0, iva_19: 0.19, impoconsumo_8: 0.08 };
+
+export function computeItemTax(priceCop, taxType = 'exento', taxMode = 'inclusive') {
+    const rate = TAX_RATES[taxType] || 0;
+    if (rate === 0) return { base: priceCop, tax: 0, total: priceCop };
+    if (taxMode === 'inclusive') {
+        const base = priceCop / (1 + rate);
+        const tax = priceCop - base;
+        return { base, tax, total: priceCop };
+    }
+    // exclusive
+    const tax = priceCop * rate;
+    return { base: priceCop, tax, total: priceCop + tax };
+}
+
 // ── Labels de métodos de pago de fábrica (lookup puro, sin async) ──
 // Resuelve el nombre legible de un methodId sin necesitar el módulo async.
 const FACTORY_LABELS = {
@@ -49,50 +64,54 @@ export class FinancialEngine {
     static calculateSaleProfit(sale, bcvRate, products) {
         if (!sale || !sale.items || sale.items.length === 0) return 0;
         
-        const saleRate = sale.rate || bcvRate;
-        
-        // Sum the profit of each individual item (Revenue - Cost)
+        // Sum the profit of each individual item (Revenue - Cost) in COP
         const itemProfits = sale.items.map(item => {
-            // Guard: skip items with missing or invalid qty
+            const nameLower = (item.name || '').toLowerCase();
+            // Exclude voluntary tips and card surcharges from store net profit calculations
+            if (nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) {
+                return 0;
+            }
+
             const qty = Number(item.qty);
             if (qty === undefined || item.qty === null || isNaN(qty)) {
                 console.warn(`[FinancialEngine] Item "${item.name || item.id}" has invalid qty (${item.qty}), treating as 0.`);
                 return 0;
             }
 
-            let costBs = 0;
+            let costCop = 0;
 
             if (item.costUsd) {
-                costBs = mulR(item.costUsd, saleRate);
+                costCop = Number(item.costUsd);
             } else if (item.costBs) {
-                costBs = round2(item.costBs);
+                costCop = Number(item.costBs);
             } else {
                 // Fallback: Resolve cost dynamically from the products dictionary
                 const p = products.find(p => p.id === item.id || p.id === item._originalId || p.name === item.name);
                 if (p) {
-                    costBs = p.costUsd ? mulR(p.costUsd, saleRate) : round2(p.costBs || 0);
+                    costCop = p.costUsd ? Number(p.costUsd) : Number(p.costBs || 0);
                     if (item.id && typeof item.id === 'string' && item.id.endsWith('_unit')) {
-                        costBs = divR(costBs, (p.unitsPerPackage || 1));
+                        costCop = costCop / (p.unitsPerPackage || 1);
                     }
                 }
             }
             
-            // Revenue = price * qty * rate (rounded at each step)
-            const itemRevenueBs = mulR(mulR(item.priceUsd, qty), saleRate);
-            const itemCostBs = mulR(costBs, qty);
-            return subR(itemRevenueBs, itemCostBs);
+            // Revenue and cost calculated directly in COP
+            let priceBeforeTax = item.priceUsd || 0;
+            const taxType = item.taxType || 'exento';
+            const taxMode = item.taxMode || 'inclusive';
+            if (taxType !== 'exento' && taxMode === 'inclusive') {
+                const rate = TAX_RATES[taxType] || 0;
+                priceBeforeTax = priceBeforeTax / (1 + rate);
+            }
+            const itemRevenueCop = mulR(priceBeforeTax, qty);
+            const itemCostCop = mulR(costCop, qty);
+            return subR(itemRevenueCop, itemCostCop);
         });
 
         const itemsProfit = sumR(itemProfits);
-
-        // Subtract the global cart discount spread (represented in Bs)
-        // NOTE: Discount is intentionally converted using the sale's own exchange rate
-        // (saleRate) captured at transaction time. Even if the sale has mixed-currency
-        // payments, the discount was agreed upon in USD at this rate, so applying it
-        // uniformly here is correct and consistent with the receipt.
-        const discountBs = mulR((sale.discountAmountUsd || 0), saleRate);
+        const discountCop = sale.discountAmountUsd || 0;
         
-        return subR(itemsProfit, discountBs);
+        return subR(itemsProfit, discountCop);
     }
 
     /**
@@ -117,12 +136,12 @@ export class FinancialEngine {
             // ── APERTURA DE CAJA: add opening float to cash buckets (not revenue) ──
             if (sale.tipo === 'APERTURA_CAJA') {
                 if (sale.openingUsd > 0) {
-                    if (!breakdown['efectivo_usd']) breakdown['efectivo_usd'] = { total: 0, currency: 'USD', label: 'Efectivo $' };
-                    breakdown['efectivo_usd'].total = round2(breakdown['efectivo_usd'].total + round2(sale.openingUsd));
+                    if (!breakdown['efectivo']) breakdown['efectivo'] = { total: 0, currency: 'COP', label: 'Efectivo' };
+                    breakdown['efectivo'].total = round2(breakdown['efectivo'].total + round2(sale.openingUsd));
                 }
-                if (sale.openingBs > 0) {
-                    if (!breakdown['efectivo_bs']) breakdown['efectivo_bs'] = { total: 0, currency: 'BS', label: 'Efectivo Bs' };
-                    breakdown['efectivo_bs'].total = round2(breakdown['efectivo_bs'].total + round2(sale.openingBs));
+                if (sale.openingBs > 0) { // openingBs stores USD float
+                    if (!breakdown['efectivo_usd']) breakdown['efectivo_usd'] = { total: 0, currency: 'USD', label: 'Efectivo USD' };
+                    breakdown['efectivo_usd'].total = round2(breakdown['efectivo_usd'].total + round2(sale.openingBs));
                 }
                 return; // Do NOT count opening as revenue
             }
@@ -147,16 +166,17 @@ export class FinancialEngine {
 
             if (!sale.payments || sale.payments.length === 0) {
                 // V1 Legacy Sales & Cobro Deudas
-                const method = sale.paymentMethod || 'efectivo_bs';
-                let currency = 'BS';
-                let valueToSum = round2(sale.totalBs || 0);
+                const method = sale.paymentMethod || 'efectivo';
+                let currency = 'COP';
+                let valueToSum = round2(sale.totalCop || sale.totalUsd || 0);
 
                 if (method.includes('usd') || method.includes('zelle') || method.includes('binance')) {
                     currency = 'USD';
-                    valueToSum = round2(sale.totalUsd || 0);
-                } else if (method.includes('cop')) {
-                    currency = 'COP';
-                    valueToSum = round2(sale.totalCop || 0);
+                    valueToSum = round2(sale.totalUsd || 0); // En legacy se guardaba COP
+                    // Pero si el método es USD, intentemos convertirlo usando tasa si es posible
+                    if (currency === 'USD' && sale.rate > 1) {
+                        valueToSum = round2(valueToSum / sale.rate);
+                    }
                 }
 
                 if (!breakdown[method]) {
@@ -166,85 +186,50 @@ export class FinancialEngine {
             } else {
                 // Aggregate incoming payments (V2 sales)
                 sale.payments.forEach(p => {
-                    if (!breakdown[p.methodId]) {
-                        // Resolver label de forma robusta:
-                        // 1. methodLabel del objeto pago (nuevo formato)
-                        // 2. methodLabel del payload legacy
-                        // 3. methodId formateado como fallback humano
-                        const resolvedLabel = (p.methodLabel && p.methodLabel !== p.methodId)
-                            ? p.methodLabel
-                            : _resolveMethodLabel(p.methodId);
+                    const resolvedLabel = (p.methodLabel && p.methodLabel !== p.methodId)
+                        ? p.methodLabel
+                        : _resolveMethodLabel(p.methodId);
 
+                    const originalCurrency = p.amountOriginalCurrency || p.amountInputCurrency || p.currency || 'COP';
+
+                    if (!breakdown[p.methodId]) {
                         breakdown[p.methodId] = { 
                             total: 0, 
-                            currency: p.currency || 'BS', 
+                            currency: originalCurrency, 
                             label: resolvedLabel
                         };
                     }
 
-                    // Use pre-computed amountUsd/amountBs; fallback with sale rate (NEVER hardcoded)
-                    const saleRate = sale.rate || 1;
-                    const amountUsd = p.amountUsd !== undefined
-                        ? round2(p.amountUsd)
-                        : (p.currency === 'USD' ? round2(p.amount) : divR(p.amount, saleRate));
-                    const amountBs = p.amountBs !== undefined
-                        ? round2(p.amountBs)
-                        : (p.currency === 'BS' ? round2(p.amount) : mulR(p.amount, saleRate));
+                    // Use pre-computed amountUsd (which is COP in database)
+                    const valCop = p.amountUsd || 0;
 
-                    if (p.currency === 'USD') {
-                        breakdown[p.methodId].total = round2(breakdown[p.methodId].total + amountUsd);
-                    } else if (p.currency === 'COP') {
-                        // Store native COP amount: convert back from USD using sale's tasaCop
-                        const copAmount = mulR(amountUsd, (sale.tasaCop || 1));
-                        breakdown[p.methodId].total = round2(breakdown[p.methodId].total + copAmount);
+                    if (originalCurrency === 'USD') {
+                        // For USD methods, accumulate USD value
+                        const valUsd = p.amountOriginal !== undefined ? p.amountOriginal : (valCop / (sale.rate || 4150));
+                        breakdown[p.methodId].total = round2(breakdown[p.methodId].total + valUsd);
                     } else {
-                        breakdown[p.methodId].total = round2(breakdown[p.methodId].total + amountBs);
+                        // For COP methods, accumulate COP value directly
+                        breakdown[p.methodId].total = round2(breakdown[p.methodId].total + valCop);
                     }
                 });
             }
 
-            // Deduct outgoing change to find True Net Income
+            // Deduct outgoing change to find True Net Income (vuelto is in COP)
             let safeChangeUsd = round2(sale.changeUsd || 0);
-            let safeChangeBs = round2(sale.changeBs || 0);
-            
-            // ── ANOMALY DETECTION (Warning-only mode — v2.0) ──
-            // Instead of silently zeroing anomalous change, we FLAG the sale
-            // but still register the full change amount for mathematical accuracy.
-            // The UI can read sale._changeAnomaly to display a warning badge.
-            const saleRate = sale.rate || 1;
-            const isChangeAnomalousUsd = safeChangeUsd > 100 && safeChangeUsd > (round2(sale.totalUsd || 0) * 5);
-            const isChangeAnomalousBs = safeChangeBs > mulR(100, saleRate) && safeChangeBs > (round2(sale.totalBs || 0) * 5);
-            
-            if (isChangeAnomalousUsd || isChangeAnomalousBs) {
-                // Flag for UI — but do NOT zero out the values
-                if (!sale._changeAnomaly) {
-                    // We can't mutate the sale object directly (may be frozen),
-                    // so we just log the warning. UI should check independently.
-                    console.warn(`[FinancialEngine] Anomalia de vuelto detectada en venta ${sale.id}: changeUsd=${safeChangeUsd}, changeBs=${safeChangeBs}, totalUsd=${sale.totalUsd}`);
-                }
-            }
             
             // If the sale was completely free/zero, any outgoing change is a glitch
-            if (round2(sale.totalUsd || 0) === 0 && round2(sale.totalBs || 0) === 0) {
+            if (round2(sale.totalUsd || 0) === 0 && round2(sale.totalCop || 0) === 0) {
                 safeChangeUsd = 0;
-                safeChangeBs = 0;
             }
 
             // Accumulate change in dedicated vuelto buckets (negative totals)
-            // so they display as a separate row in the UI instead of silently
-            // reducing the efectivo totals.
             if (safeChangeUsd > 0) {
-                if (!breakdown['_vuelto_usd']) breakdown['_vuelto_usd'] = { total: 0, currency: 'VUELTO_USD', label: 'Vuelto Entregado' };
-                breakdown['_vuelto_usd'].total = round2(breakdown['_vuelto_usd'].total - safeChangeUsd);
-            }
-            if (safeChangeBs > 0) {
-                if (!breakdown['_vuelto_bs']) breakdown['_vuelto_bs'] = { total: 0, currency: 'VUELTO_BS', label: 'Vuelto Entregado' };
-                breakdown['_vuelto_bs'].total = round2(breakdown['_vuelto_bs'].total - safeChangeBs);
+                if (!breakdown['_vuelto_cop']) breakdown['_vuelto_cop'] = { total: 0, currency: 'COP', label: 'Vuelto Entregado (COP)' };
+                breakdown['_vuelto_cop'].total = round2(breakdown['_vuelto_cop'].total - safeChangeUsd);
             }
         });
 
         // Final pass: round all totals strictly and filter out zeroes.
-        // Vuelto entries (_vuelto_bs, _vuelto_usd) have negative totals — keep them.
         const finalBreakdown = {};
         Object.keys(breakdown).forEach(k => {
             const roundedTotal = round2(breakdown[k].total);
@@ -267,35 +252,58 @@ export class FinancialEngine {
      * @returns {Object} Complete financial summary for the receipt.
      */
     static buildCartTotals(cartItems, discountData, bcvRate, copRate = 0) {
-        // Round each line item BEFORE summing to prevent IEEE 754 drift
-        const lineItemsUsd = cartItems.map(item => mulR(item.priceUsd, item.qty));
-        const subtotalUsd = sumR(lineItemsUsd);
-        
-        const lineItemsBs = cartItems.map(item => {
-            if (item.exactBs != null) {
-                return mulR(item.exactBs, item.qty);
+        let subtotalUsd = 0;
+        let totalTax = 0;
+        let totalUsd = 0;
+        const taxBreakdown = { iva_19: 0, impoconsumo_8: 0 };
+
+        cartItems.forEach(item => {
+            const qty = Number(item.qty) || 0;
+            const price = Number(item.priceUsd) || 0;
+            const taxType = item.taxType || 'exento';
+            const taxMode = item.taxMode || 'inclusive';
+
+            const computed = computeItemTax(price, taxType, taxMode);
+            const base = mulR(computed.base, qty);
+            const tax = mulR(computed.tax, qty);
+            const total = mulR(computed.total, qty);
+
+            subtotalUsd = round2(subtotalUsd + base);
+            totalTax = round2(totalTax + tax);
+            totalUsd = round2(totalUsd + total);
+
+            if (taxType !== 'exento') {
+                taxBreakdown[taxType] = round2((taxBreakdown[taxType] || 0) + tax);
             }
-            return mulR(mulR(item.priceUsd, item.qty), bcvRate);
         });
-        const subtotalBs = sumR(lineItemsBs);
-        
+
         let discountAmountUsd = 0;
         if (discountData && discountData.value > 0) {
             if (discountData.type === 'percentage') {
-                discountAmountUsd = mulR(subtotalUsd, (discountData.value / 100));
+                discountAmountUsd = mulR(totalUsd, (discountData.value / 100));
             } else if (discountData.type === 'fixed') {
                 discountAmountUsd = round2(discountData.value);
             }
         }
         
-        if (discountAmountUsd > subtotalUsd) discountAmountUsd = subtotalUsd;
+        if (discountAmountUsd > totalUsd) discountAmountUsd = totalUsd;
         
-        const totalUsd = round2(Math.max(0, subR(subtotalUsd, discountAmountUsd)));
+        const discountRatio = totalUsd > 0 ? (totalUsd - discountAmountUsd) / totalUsd : 0;
         
-        const discountAmountBs = mulR(discountAmountUsd, bcvRate);
-        const totalBs = round2(Math.max(0, subR(subtotalBs, discountAmountBs)));
-        
-        const totalCop = copRate > 0 ? mulR(totalUsd, copRate) : 0;
+        // Adjust the bases, taxes, and totals based on discount ratio
+        subtotalUsd = round2(subtotalUsd * discountRatio);
+        totalTax = round2(totalTax * discountRatio);
+        totalUsd = round2(Math.max(0, totalUsd - discountAmountUsd));
+
+        // Adjust the breakdown based on discount ratio
+        Object.keys(taxBreakdown).forEach(key => {
+            taxBreakdown[key] = round2(taxBreakdown[key] * discountRatio);
+        });
+
+        const subtotalBs = round2(subtotalUsd * bcvRate);
+        const discountAmountBs = round2(discountAmountUsd * bcvRate);
+        const totalBs = round2(totalUsd * bcvRate);
+        const totalCop = copRate > 0 ? mulR(totalUsd, copRate) : totalUsd;
 
         return {
             subtotalUsd,
@@ -304,7 +312,9 @@ export class FinancialEngine {
             discountAmountBs,
             totalUsd,
             totalBs,
-            totalCop
+            totalCop,
+            totalTax,
+            taxBreakdown
         };
     }
 }

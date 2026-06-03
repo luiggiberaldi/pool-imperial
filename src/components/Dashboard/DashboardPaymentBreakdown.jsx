@@ -1,23 +1,27 @@
 import React from 'react';
 import { getPaymentLabel, PAYMENT_ICONS, getPaymentIcon, toTitleCase } from '../../config/paymentMethods';
 
-export function DashboardPaymentBreakdown({ salesPaymentBreakdown }) {
+export function DashboardPaymentBreakdown({ salesPaymentBreakdown, tasaCop }) {
     // Filter out vuelto and keep methods with totals > 0
     const entries = Object.entries(salesPaymentBreakdown).filter(([k, d]) => d.total > 0 && !k.startsWith('_vuelto'));
     if (entries.length === 0) return null;
 
     const fmtCop = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(v || 0));
+    const fmtUsd = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v || 0);
 
     // Calculate total COP of all payments
-    const totalPaymentsCop = entries.reduce((acc, [, d]) => acc + d.total, 0);
+    const totalPaymentsCop = entries.reduce((acc, [, d]) => {
+        const valueCop = d.currency === 'USD' ? d.total * (tasaCop || 4150) : d.total;
+        return acc + valueCop;
+    }, 0);
 
     const renderMethod = ([method, data]) => {
         const label = toTitleCase(getPaymentLabel(method, data.label));
         const PayIcon = getPaymentIcon(method) || PAYMENT_ICONS[method];
         
-        // Since we are strictly COP, percentage is total / totalPaymentsCop
-        const pct = totalPaymentsCop > 0 ? Math.min(100, (data.total / totalPaymentsCop) * 100) : 0;
-        const displayAmount = fmtCop(data.total);
+        const valueCop = data.currency === 'USD' ? data.total * (tasaCop || 4150) : data.total;
+        const pct = totalPaymentsCop > 0 ? Math.min(100, (valueCop / totalPaymentsCop) * 100) : 0;
+        const displayAmount = data.currency === 'USD' ? `${fmtUsd(data.total)} USD` : `${fmtCop(data.total)} COP`;
 
         return (
             <div key={method} className="mb-3">

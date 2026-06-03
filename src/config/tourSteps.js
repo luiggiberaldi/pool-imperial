@@ -188,8 +188,8 @@ export const TAB_STEPS = {
             },
             {
                 target: '[data-tour="mesa-btn-pina"]',
-                title: 'La Piña',
-                text: 'Cobra por partida a precio fijo. Cada vez que terminen una partida, toca "+ Nueva Piña" para sumar otra. Ideal para grupos que juegan varias rondas.'
+                title: 'La Jugada',
+                text: 'Cobra por partida a precio fijo. Cada vez que terminen una partida, toca "+ Nueva Jugada" para sumar otra. Ideal para grupos que juegan varias rondas.'
             },
             {
                 target: null,
@@ -210,8 +210,8 @@ export const TAB_STEPS = {
             },
             {
                 target: '[data-tour="mesa-btn-pina"]',
-                title: 'La Piña',
-                text: 'Precio fijo por partida. Cada vez que el grupo quiera otra ronda, toca "+ Nueva Piña" para agregarla.'
+                title: 'La Jugada',
+                text: 'Precio fijo por partida. Cada vez que el grupo quiera otra ronda, toca "+ Nueva Jugada" para agregarla.'
             },
             {
                 target: null,
@@ -232,8 +232,8 @@ export const TAB_STEPS = {
             },
             {
                 target: '[data-tour="mesa-btn-pina"]',
-                title: 'La Piña',
-                text: 'Precio fijo por partida. Cada vez que el grupo quiera otra ronda, toca "+ Nueva Piña" para agregarla.'
+                title: 'La Jugada',
+                text: 'Precio fijo por partida. Cada vez que el grupo quiera otra ronda, toca "+ Nueva Jugada" para agregarla.'
             },
             {
                 target: null,

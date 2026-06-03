@@ -12,7 +12,7 @@ export function AttributionModal({
     const activeSeats = (seats || []).filter(s => !s.paid);
     const title = pendingCharge?.type === 'hora'
         ? 'Agregar Hora — ¿A quién cobrar?'
-        : 'Nueva Piña — ¿A quién cobrar?';
+        : 'Nueva Jugada — ¿A quién cobrar?';
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title}>

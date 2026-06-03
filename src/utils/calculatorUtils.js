@@ -4,7 +4,36 @@
 // Formateadores
 export const formatCop = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(val || 0));
 export const formatBs = (val) => formatCop(val);
-export const formatUsd = (val) => formatCop(val);
+export const formatUsd = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val || 0);
+
+export const formatPaymentAmount = (p) => {
+    if (!p) return '$ 0 COP';
+    const currency = (
+        p.amountOriginalCurrency || 
+        p.amountInputCurrency || 
+        p.currency || 
+        (p.methodId && p.methodId.toLowerCase().includes('usd') ? 'USD' : 'COP')
+    ).toUpperCase();
+    
+    const isUsd = currency === 'USD';
+    const amount = isUsd 
+        ? (p.amountInput !== undefined ? p.amountInput : (p.amountOriginal !== undefined ? p.amountOriginal : (p.amount || p.amountUsd)))
+        : (p.amountUsd !== undefined ? p.amountUsd : (p.amount || p.amountInput || 0));
+
+    if (isUsd) {
+        return `${formatUsd(amount)} USD`;
+    }
+    return `${formatCop(amount)} COP`;
+};
+
+export const copToUsd = (copAmount, rate) => {
+    if (!rate || rate <= 0) return 0;
+    return copAmount / rate;
+};
+
+export const usdToCop = (usdAmount, rate) => {
+    return Math.round((usdAmount || 0) * (rate || 0));
+};
 
 /** Capitaliza la primera letra de cada palabra en un nombre */
 export const capitalizeName = (str) => {

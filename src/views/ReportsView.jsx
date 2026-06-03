@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Recycle, Search, X, LockIcon, ListOrdered } from 'lucide-react';
-import { formatCop } from '../utils/calculatorUtils';
+import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent } from 'lucide-react';
+import { formatCop, formatUsd } from '../utils/calculatorUtils';
 import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
 import { useProductContext } from '../context/ProductContext';
@@ -44,7 +44,9 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         totalUsd, totalBs, totalItems, profit,
         paymentBreakdown, topProducts, salesByDay,
         groupedClosings, maxDayTotal,
-    } = useReportsData({ isActive, products, bcvRate, selectedRange, customFrom, customTo, activeTab });
+        avgRate, totalUsdReal, profitUsdReal,
+        totalTax, taxBreakdown, netRevenue,
+    } = useReportsData({ isActive, products, bcvRate, selectedRange, customFrom, customTo, activeTab, tasaCop });
 
     // ── Aggregated product sales for "Por Artículo" tab ──
     const allProductsSold = useMemo(() => {
@@ -239,10 +241,35 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <StatCard icon={ShoppingBag} label="Ventas" value={salesForStats.length} color="emerald" />
-                        <StatCard icon={DollarSign} label="Ingresos" value={formatCop(totalUsd)} color="blue" />
-                        <StatCard icon={TrendingUp} label="Ganancia" value={formatCop(profit)} color="indigo" />
+                        <StatCard icon={DollarSign} label="Ingresos (Neto)" value={formatCop(netRevenue)} sub={`Bruto: ${formatCop(totalUsd)}`} color="blue" />
+                        <StatCard icon={TrendingUp} label="Ganancia" value={formatCop(profit)} sub={`≈ ${formatUsd(profitUsdReal)}`} color="indigo" />
                         <StatCard icon={Package} label="Artículos" value={totalItems} color="amber" />
                     </div>
+
+                    {/* Tax Breakdown */}
+                    {totalTax > 0 && (
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm mt-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1.5">
+                                <Percent size={14} className="text-indigo-500" /> Impuestos Recaudados
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                <div className="bg-indigo-50/40 dark:bg-indigo-950/10 rounded-xl p-3 border border-indigo-100/30 dark:border-indigo-900/20 flex flex-col">
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">Total Impuestos</span>
+                                    <span className="text-base font-black text-indigo-600 dark:text-indigo-400 mt-1">{formatCop(totalTax)}</span>
+                                </div>
+                                {Object.entries(taxBreakdown || {}).map(([key, val]) => {
+                                    if (val <= 0) return null;
+                                    const label = key === 'iva_19' ? 'IVA 19%' : key === 'impoconsumo_8' ? 'Impoconsumo 8%' : key;
+                                    return (
+                                        <div key={key} className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 border border-slate-100/50 dark:border-slate-800/50 flex flex-col">
+                                            <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">{label}</span>
+                                            <span className="text-base font-black text-slate-700 dark:text-slate-300 mt-1">{formatCop(val)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Mini bar chart per day */}
                     {salesByDay.length > 1 && (

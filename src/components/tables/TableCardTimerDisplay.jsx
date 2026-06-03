@@ -90,7 +90,7 @@ export default function TableCardTimerDisplay({
                                         return (
                                             <div className="text-[10px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full text-center flex items-center gap-1.5">
                                                 <TargetIcon size={10} />
-                                                {totalRounds} piña{totalRounds !== 1 ? 's' : ''}
+                                                {totalRounds} jugada{totalRounds !== 1 ? 's' : ''}
                                                 {paidRounds > 0 && <span className="text-emerald-400">({paidRounds} pagada{paidRounds !== 1 ? 's' : ''})</span>}
                                             </div>
                                         );
@@ -103,7 +103,7 @@ export default function TableCardTimerDisplay({
                                             <TargetIcon size={16} />
                                         </div>
                                         <div className="text-lg font-black tracking-tight text-amber-400 uppercase leading-none">
-                                            Modo Piña
+                                            Modo Jugada
                                         </div>
                                     </div>
                                     <div className="text-[10px] font-bold text-white/60 bg-white/10 px-2 py-0.5 rounded-full">
@@ -162,7 +162,7 @@ export default function TableCardTimerDisplay({
                         const paidRounds = roundsOffset || 0;
                         return (
                         <div className="text-[10px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full mt-1 text-center">
-                            {totalRounds} piña{totalRounds !== 1 ? 's' : ''}
+                            {totalRounds} jugada{totalRounds !== 1 ? 's' : ''}
                             {paidRounds > 0 && <span className="text-emerald-400 ml-1">({paidRounds} pagada{paidRounds !== 1 ? 's' : ''})</span>}
                         </div>
                         );

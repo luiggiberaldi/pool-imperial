@@ -20,18 +20,23 @@ export function TotalDetailsModal({
     const seatPinas = (session?.seats || []).reduce((sum, s) =>
         sum + (s.timeCharges || []).filter(tc => tc.type === 'pina').reduce((a, tc) => a + (Number(tc.amount) || 0), 0), 0);
 
+    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+    const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+    const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Detalle de Cuenta">
              <div className="flex flex-col gap-3 py-4 text-slate-800 dark:text-white max-h-[70vh] overflow-y-auto">
-                {/* Piñas */}
+                {/* Jugadas */}
                 {table?.type !== 'NORMAL' && (costBreakdown?.hasPinas || seatPinas > 0) && (
                 <div className="flex flex-col p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/40">
                     <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-bold text-amber-700 dark:text-amber-400">Piñas jugadas</span>
+                        <span className="text-sm font-bold text-amber-700 dark:text-amber-400">Jugadas</span>
                         <span className="text-lg font-black">{formatCOP(costBreakdown.pinaCost || 0)}</span>
                     </div>
                     <span className="text-xs text-amber-600 dark:text-amber-400/70">
-                        {session?.game_mode === 'PINA' ? 1 + (Number(session?.extended_times) || 0) : Number(session?.extended_times) || 0} piña(s) · {formatCOP(config.pricePina || 0)} c/u
+                        {session?.game_mode === 'PINA' ? 1 + (Number(session?.extended_times) || 0) : Number(session?.extended_times) || 0} jugada(s) · {formatCOP(finalPina)} c/u
                     </span>
                 </div>
                 )}
@@ -54,10 +59,10 @@ export function TotalDetailsModal({
                 <div className="flex flex-col p-3 bg-sky-50 dark:bg-sky-950/20 rounded-xl border border-sky-200 dark:border-sky-800/40">
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-sm font-bold text-sky-700 dark:text-sky-400">Horas Prepagadas</span>
-                        <span className="text-lg font-black">{formatCOP(seatHours * (config.pricePerHour || 0))}</span>
+                        <span className="text-lg font-black">{formatCOP(seatHours * finalHora)}</span>
                     </div>
                     <span className="text-xs text-sky-600 dark:text-sky-400/70">
-                        {seatHours === 0.5 ? '30 min' : `${seatHours}h`} · {formatCOP(config.pricePerHour || 0)}/hora
+                        {seatHours === 0.5 ? '30 min' : `${seatHours}h`} · {formatCOP(finalHora)}/hora
                     </span>
                 </div>
                 )}

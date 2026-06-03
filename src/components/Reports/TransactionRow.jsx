@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { formatCop } from '../../utils/calculatorUtils';
+import { formatCop, formatPaymentAmount } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, toTitleCase, getPaymentIcon } from '../../config/paymentMethods';
 import { generateTicketPDF } from '../../utils/ticketGenerator';
 import { ChevronDown, ChevronUp, Send, Ban, Shuffle, Clock, Recycle, LockIcon, User, UserCheck, Printer } from 'lucide-react';
@@ -148,11 +148,10 @@ export default function TransactionRow({
                             <div className="space-y-1 text-xs">
                                 {s.payments.map((p, i) => {
                                     const label = toTitleCase(p.methodLabel || p.methodId);
-                                    const amount = p.amountInput || p.amount || p.amountUsd;
                                     return (
                                         <div key={i} className="flex justify-between text-slate-600 dark:text-slate-300">
                                             <span>{label}</span>
-                                            <span className="font-bold">{formatCop(amount)}</span>
+                                            <span className="font-bold">{formatPaymentAmount(p)}</span>
                                         </div>
                                     );
                                 })}

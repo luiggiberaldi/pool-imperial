@@ -234,7 +234,7 @@ export const createBillingActions = (set, get, tablesCache, scopedKey) => ({
             );
             set({ activeSessions: newSessions });
             await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
-            logEvent('MESAS', 'MESA_PIÑA_AGREGADA', `Mesa ${tableName} · Piña añadida a cliente`, getUser(), { sessionId, seatId });
+            logEvent('MESAS', 'MESA_PIÑA_AGREGADA', `Mesa ${tableName} · Jugada añadida a cliente`, getUser(), { sessionId, seatId });
             try {
                 const { error } = await supabaseCloud.from('table_sessions').update({ seats: newSeats }).eq('id', sessionId);
                 if (error) throw error;
@@ -248,7 +248,7 @@ export const createBillingActions = (set, get, tablesCache, scopedKey) => ({
             );
             set({ activeSessions: newSessions });
             await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
-            logEvent('MESAS', 'MESA_PIÑA_AGREGADA', `Mesa ${tableName} · Piña añadida (total: ${newRounds})`, getUser(), { sessionId, newRounds });
+            logEvent('MESAS', 'MESA_PIÑA_AGREGADA', `Mesa ${tableName} · Jugada añadida (total: ${newRounds})`, getUser(), { sessionId, newRounds });
             try {
                 const { error } = await supabaseCloud.from('table_sessions').update({ extended_times: newRounds }).eq('id', sessionId);
                 if (error) throw error;
@@ -290,7 +290,7 @@ export const createBillingActions = (set, get, tablesCache, scopedKey) => ({
         set({ activeSessions: newSessions });
         await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
 
-        logEvent('MESAS', 'MESA_PIÑA_AGREGADA', `Mesa ${tableName} · Primera piña añadida (modo mixto)`, getUser(), { sessionId });
+        logEvent('MESAS', 'MESA_PIÑA_AGREGADA', `Mesa ${tableName} · Primera jugada añadida (modo mixto)`, getUser(), { sessionId });
 
         try {
             const { error } = await supabaseCloud.from('table_sessions').update({ extended_times: newExtendedTimes }).eq('id', sessionId);
@@ -310,7 +310,7 @@ export const createBillingActions = (set, get, tablesCache, scopedKey) => ({
         set({ activeSessions: newSessions });
         await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
 
-        logEvent('MESAS', 'MESA_PIÑA_QUITADA', `Mesa ${tableName} · Piña removida (total: ${newRounds})`, getUser(), { sessionId, newRounds });
+        logEvent('MESAS', 'MESA_PIÑA_QUITADA', `Mesa ${tableName} · Jugada removida (total: ${newRounds})`, getUser(), { sessionId, newRounds });
 
         try {
             const { error } = await supabaseCloud.from('table_sessions').update({ extended_times: newRounds }).eq('id', sessionId);

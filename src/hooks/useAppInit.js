@@ -98,24 +98,7 @@ export function useAppInit() {
                 const defaultAlias = `Dispositivo ${navigator.platform || 'Web'}`;
                 const finalAlias = savedAlias && savedAlias.trim() !== '' ? savedAlias.trim() : defaultAlias;
 
-                const isExplicitLogin = localStorage.getItem('pda_explicit_login') === 'true';
-
-                if (!isExplicitLogin) {
-                    const { data: existingDevice, error: selectErr } = await supabaseCloud
-                       .from('account_devices')
-                       .select('id')
-                       .eq('device_id', deviceId)
-                       .eq('email', email)
-                       .maybeSingle();
-
-                    if (!selectErr && existingDevice === null) {
-                        await supabaseCloud.auth.signOut();
-                        if (mounted) { setCloudSession(null); setCheckingSession(false); }
-                        return;
-                    }
-                } else {
-                    localStorage.removeItem('pda_explicit_login');
-                }
+                localStorage.removeItem('pda_explicit_login');
 
                 const { data: result, error } = await supabaseCloud.rpc('register_and_check_device', {
                     p_email: email,

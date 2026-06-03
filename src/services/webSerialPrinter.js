@@ -10,8 +10,9 @@
 
 import { capitalizeName } from '../utils/calculatorUtils';
 import { lookupPrinter } from './printerDatabase';
-import { formatHoursPaid, calculateFullTableBreakdown } from '../utils/tableBillingEngine';
+import { formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart } from '../utils/tableBillingEngine';
 import { round2 } from '../utils/dinero';
+import { FinancialEngine } from '../core/FinancialEngine';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -241,12 +242,31 @@ export async function openCashDrawerWebSerial() {
  * Se usa en lugar del PDF+iframe para evitar que la impresora térmica
  * abra el cajón al recibir un trabajo de impresión del sistema.
  */
-export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0 }) {
+export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0, products = [] }) {
     const port = await getConnectedPrinter();
     if (!port) return false;
 
     const cfg = getWebSerialConfig();
     const W = cfg.paperWidth >= 80 ? 42 : 32;
+    const WS = cfg.paperWidth >= 80 ? 56 : 42;
+
+    let baseBeforeTaxes = grandTotal;
+    let totalTax = 0;
+    let taxBreakdown = {};
+
+    try {
+        const { syntheticCart } = buildTableSyntheticCart(
+            { table, session, elapsed, currentItems, grandTotal, paidHoursOffsets: { [session?.id]: hoursOffset }, paidRoundsOffsets: { [session?.id]: roundsOffset } },
+            config,
+            products || []
+        );
+        const totals = FinancialEngine.buildCartTotals(syntheticCart, { active: false }, 1, 1);
+        totalTax = totals.totalTax;
+        baseBeforeTaxes = grandTotal - totalTax;
+        taxBreakdown = totals.taxBreakdown;
+    } catch (e) {
+        console.error('[printPreCuentaEscPos] Error building synthetic cart taxes:', e);
+    }
 
     const p = escposEncoder().init();
 
@@ -391,8 +411,24 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
     }
 
     p.line('=', W);
+
+    if (totalTax > 0) {
+        p.smallFont(true).row('Base Gravable:', formatCOP(baseBeforeTaxes), WS);
+        Object.entries(taxBreakdown).forEach(([taxKey, taxVal]) => {
+            if (taxVal > 0) {
+                const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                p.smallFont(true).row(`${taxLabel}:`, formatCOP(taxVal), WS);
+            }
+        });
+        p.smallFont(false).line('-', W);
+    }
+
     p.align(1).bold(true).text(hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:').newline();
     p.text(`${formatCOP(grandTotal)}`).newline();
+    if (tasaUSD && tasaUSD > 1) {
+        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
+        p.align(0).bold(false).row(`Tasa: ${formatCOP(tasaUSD)}`, `≈ ${formatUsdVal(grandTotal / tasaUSD)}`, W);
+    }
     p.newline();
     p.align(1).text('*** NO ES RECIBO DE PAGO ***').newline();
     p.feed(4).cut();
@@ -528,10 +564,19 @@ export async function printReceiptEscPos(sale, bcvRate) {
 
     p.line('=', W);
 
-    if (sale.ivaRate > 0) {
+    if (sale.ivaAmount > 0) {
         const base = sale.totalUsd - (sale.ivaAmount || 0);
         p.smallFont(true).row('Base Gravable:', formatCOP(base), WS);
-        p.smallFont(true).row(`IVA (${sale.ivaRate}%):`, formatCOP(sale.ivaAmount || 0), WS);
+        if (sale.taxBreakdown && Object.keys(sale.taxBreakdown).length > 0) {
+            Object.entries(sale.taxBreakdown).forEach(([taxKey, taxVal]) => {
+                if (taxVal > 0) {
+                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                    p.smallFont(true).row(`${taxLabel}:`, formatCOP(taxVal), WS);
+                }
+            });
+        } else {
+            p.smallFont(true).row(`IVA (${sale.ivaRate || 19}%):`, formatCOP(sale.ivaAmount || 0), WS);
+        }
         p.smallFont(false).line('-', W);
     }
 
@@ -539,6 +584,10 @@ export async function printReceiptEscPos(sale, bcvRate) {
     p.align(1).bigText(true).bold(true);
     p.text(formatCOP(sale.totalUsd || 0)).newline();
     p.bigText(false).bold(true);
+    if (sale.rate > 1) {
+        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
+        p.align(0).row(`Tasa: ${formatCOP(sale.rate)}`, `≈ ${formatUsdVal((sale.totalUsd || 0) / sale.rate)}`, W);
+    }
     p.newline();
 
     // Pagos
@@ -546,7 +595,11 @@ export async function printReceiptEscPos(sale, bcvRate) {
     if (sale.payments?.length > 0) {
         sale.payments.forEach(pm => {
             const label = pm.methodLabel || pm.methodId || 'Pago';
-            const amt   = formatCOP(pm.amountInput || pm.amountUsd);
+            const isUsd = pm.amountOriginalCurrency === 'USD';
+            const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
+            const amt   = isUsd 
+                ? formatUsdVal(pm.amountOriginal) 
+                : formatCOP(pm.amountInput || pm.amountUsd);
             p.row(label, amt, W);
         });
     }

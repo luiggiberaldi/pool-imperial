@@ -22,10 +22,81 @@ export default function CartPanel({
     onClearCart,
     triggerHaptic,
     cartSelectedIndex,
+    totalTax = 0,
+    taxBreakdown = {},
 }) {
     const [editingQtyId, setEditingQtyId] = React.useState(null);
     const [tempQty, setTempQty] = React.useState('');
     const inputRef = React.useRef(null);
+
+    const getCartFinancialBreakdown = () => {
+        let exemptBase = 0;
+        let taxedBase = 0;
+
+        cart.forEach(item => {
+            const qty = Number(item.qty) || 0;
+            const price = Number(item.priceUsd) || 0;
+            const taxType = item.taxType || 'exento';
+            const taxMode = item.taxMode || 'inclusive';
+
+            let taxRate = 0;
+            if (taxType === 'iva_19') taxRate = 0.19;
+            else if (taxType === 'impoconsumo_8') taxRate = 0.08;
+
+            let baseVal = price;
+            if (taxType !== 'exento' && taxRate > 0) {
+                if (taxMode === 'inclusive') {
+                    baseVal = price / (1 + taxRate);
+                }
+            }
+
+            const lineBase = baseVal * qty;
+
+            if (taxType === 'exento' || taxRate === 0) {
+                exemptBase += lineBase;
+            } else {
+                taxedBase += lineBase;
+            }
+        });
+
+        // Apply discount ratio if active
+        let discountAmountUsd = 0;
+        const initialTotal = cart.reduce((sum, item) => {
+            const qty = Number(item.qty) || 0;
+            const price = Number(item.priceUsd) || 0;
+            const taxType = item.taxType || 'exento';
+            const taxMode = item.taxMode || 'inclusive';
+            
+            let taxRate = 0;
+            if (taxType === 'iva_19') taxRate = 0.19;
+            else if (taxType === 'impoconsumo_8') taxRate = 0.08;
+
+            let totalVal = price;
+            if (taxType !== 'exento' && taxRate > 0 && taxMode === 'exclusive') {
+                totalVal = price * (1 + taxRate);
+            }
+            return sum + (totalVal * qty);
+        }, 0);
+
+        if (discountData && discountData.value > 0) {
+            if (discountData.type === 'percentage') {
+                discountAmountUsd = initialTotal * (discountData.value / 100);
+            } else if (discountData.type === 'fixed') {
+                discountAmountUsd = Number(discountData.value);
+            }
+        }
+
+        if (discountAmountUsd > initialTotal) discountAmountUsd = initialTotal;
+        const discountRatio = initialTotal > 0 ? (initialTotal - discountAmountUsd) / initialTotal : 0;
+
+        exemptBase = Math.round(exemptBase * discountRatio);
+        taxedBase = Math.round(taxedBase * discountRatio);
+
+        return {
+            exemptBase,
+            taxedBase
+        };
+    };
 
     const handleQtyClick = (item) => {
         setEditingQtyId(item.id);
@@ -102,11 +173,21 @@ export default function CartPanel({
                                             <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight mb-0.5 sm:mb-1 truncate">{item.name}</p>
                                             <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
                                                 <p className="text-[10px] sm:text-[11px] md:text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-1 sm:px-1.5 rounded">{formatCOP(item.priceUsd)}</p>
+                                                {item.taxType !== 'exento' && item.taxMode === 'exclusive' && (
+                                                    <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded">
+                                                        + {item.taxType === 'iva_19' ? '19% IVA' : '8% Impo.'}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end shrink-0 gap-1.5 sm:gap-2">
-                                        <p className="text-sm sm:text-base font-black text-slate-800 dark:text-white">{formatCOP(item.priceUsd * item.qty)}</p>
+                                        <p className="text-sm sm:text-base font-black text-slate-800 dark:text-white text-right leading-none">
+                                            {formatCOP(item.priceUsd * item.qty)}
+                                            {item.taxType !== 'exento' && item.taxMode === 'exclusive' && (
+                                                <span className="text-[8px] text-slate-400 dark:text-slate-500 font-black block text-right mt-1">+ IVA</span>
+                                            )}
+                                        </p>
                                         <div className="flex items-center bg-slate-50 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-100 dark:border-slate-700">
                                             <button onClick={() => updateQty(item.id, item.isWeight ? -0.1 : -1)} className="w-7 sm:w-8 h-7 sm:h-8 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors rounded-l-md active:bg-slate-200 dark:active:bg-slate-700"><Minus size={14} strokeWidth={3} /></button>
                                             
@@ -168,6 +249,41 @@ export default function CartPanel({
                         </div>
                     )}
                 </button>
+
+                {/* Desglose de impuestos en la cesta */}
+                {totalTax > 0 && (() => {
+                    const { exemptBase, taxedBase } = getCartFinancialBreakdown();
+                    return (
+                        <div className="px-1 py-1.5 border-t border-dashed border-slate-200 dark:border-slate-800 space-y-1.5 text-xs text-slate-500 dark:text-slate-400 select-none animate-in fade-in duration-200">
+                            {exemptBase > 0 && (
+                                <div className="flex justify-between font-medium">
+                                    <span>Subtotal Exento:</span>
+                                    <span className="text-slate-700 dark:text-slate-300">{formatCOP(exemptBase)}</span>
+                                </div>
+                            )}
+                            {taxedBase > 0 && (
+                                <div className="flex justify-between font-medium">
+                                    <span>Base Gravable:</span>
+                                    <span className="text-slate-700 dark:text-slate-300">{formatCOP(taxedBase)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between font-semibold border-t border-slate-100 dark:border-slate-800/40 pt-1">
+                                <span>Subtotal (sin IVA):</span>
+                                <span className="text-slate-700 dark:text-slate-300">{formatCOP(exemptBase + taxedBase)}</span>
+                            </div>
+                            {taxBreakdown && Object.entries(taxBreakdown).map(([taxKey, taxVal]) => {
+                                if (taxVal <= 0) return null;
+                                const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                                return (
+                                    <div key={taxKey} className="flex justify-between font-bold text-slate-650 dark:text-slate-300">
+                                        <span>{taxLabel}:</span>
+                                        <span>{formatCOP(taxVal)}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    );
+                })()}
 
                 <div data-tour="cart-total" className="flex justify-between items-end px-1 sm:px-0 pt-1">
                     <div className="flex flex-col">

@@ -191,19 +191,32 @@ export async function generateTicketPDF(sale, _bcvRate) {
         y += 7;
     }
 
-    const hasIva = (sale.ivaRate || 0) > 0;
-    if (hasIva) {
-        const baseBeforeIva = (sale.totalCop || sale.totalUsd || 0) - (sale.ivaAmount || 0);
+    const hasTaxes = (sale.ivaAmount || 0) > 0;
+    if (hasTaxes) {
+        const baseBeforeTaxes = (sale.totalCop || sale.totalUsd || 0) - (sale.ivaAmount || 0);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7.5);
         doc.setTextColor(...BODY);
         doc.text('Base Gravable:', M, y);
-        doc.text(formatCOP(baseBeforeIva), RIGHT, y, { align: 'right' });
+        doc.text(formatCOP(baseBeforeTaxes), RIGHT, y, { align: 'right' });
         y += 4.5;
 
-        doc.text(`IVA (${sale.ivaRate}%):`, M, y);
-        doc.text(formatCOP(sale.ivaAmount || 0), RIGHT, y, { align: 'right' });
-        y += 5.5;
+        if (sale.taxBreakdown && Object.keys(sale.taxBreakdown).length > 0) {
+            Object.entries(sale.taxBreakdown).forEach(([taxKey, taxVal]) => {
+                if (taxVal > 0) {
+                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                    doc.text(`${taxLabel}:`, M, y);
+                    doc.text(formatCOP(taxVal), RIGHT, y, { align: 'right' });
+                    y += 4.5;
+                }
+            });
+            y += 1;
+        } else {
+            // Fallback retrocompatible
+            doc.text(`IVA (${sale.ivaRate || 19}%):`, M, y);
+            doc.text(formatCOP(sale.ivaAmount || 0), RIGHT, y, { align: 'right' });
+            y += 5.5;
+        }
     }
 
     doc.setTextColor(...BODY);
@@ -214,7 +227,22 @@ export async function generateTicketPDF(sale, _bcvRate) {
     doc.setTextColor(...GREEN);
     const totalDisplay = sale.totalCop || sale.totalUsd || 0;
     doc.text(formatCOP(totalDisplay), CX, y, { align: 'center' });
-    y += 10;
+    y += 8;
+
+    if (sale.rate > 1) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...MUTED);
+        doc.text(`Tasa: ${formatCOP(sale.rate)}`, M, y);
+        const totalUSD = totalDisplay / sale.rate;
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...BODY);
+        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
+        doc.text(`≈ ${formatUsdVal(totalUSD)}`, RIGHT, y, { align: 'right' });
+        y += 5;
+    }
+
+    y += 5;
 
     dash(y); y += 7;
 
@@ -231,8 +259,11 @@ export async function generateTicketPDF(sale, _bcvRate) {
 
         if (sale.payments && sale.payments.length > 0) {
             sale.payments.forEach(p => {
-                // En Pool Imperial todos los pagos son COP
-                const val = formatCOP(p.amountUsd || p.amountCOP || 0);
+                const isUsd = p.amountOriginalCurrency === 'USD';
+                const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
+                const val = isUsd 
+                    ? `${formatUsdVal(p.amountOriginal)} USD` 
+                    : `${formatCOP(p.amountUsd || p.amountCOP || 0)} COP`;
 
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(7.5);

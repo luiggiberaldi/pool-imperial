@@ -71,14 +71,14 @@ export default function TableCardActions({
                                 }}
                                 className="w-full bg-amber-500 hover:bg-amber-400 active:scale-95 text-white font-black text-xs py-3 rounded-xl shadow-md transition-all whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none"
                             >
-                                + Nueva Piña
+                                + Nueva Jugada
                             </button>
                             {(currentUser?.role === 'ADMIN') && (Number(session?.extended_times) || 0) > 0 && (
                                 <button
                                     onClick={() => useTablesStore.getState().removeRoundFromSession(session.id)}
                                     className="w-full text-[10px] font-bold text-white/80 bg-rose-500/20 hover:bg-rose-500/40 border border-rose-400/30 transition-colors py-1 rounded-lg flex items-center justify-center gap-1 whitespace-nowrap"
                                 >
-                                    <X size={10} strokeWidth={2.5} /> Quitar última piña
+                                    <X size={10} strokeWidth={2.5} /> Quitar última jugada
                                 </button>
                             )}
                         </div>
@@ -102,7 +102,7 @@ export default function TableCardActions({
                                     }}
                                     className="flex-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 font-bold text-[10px] py-2 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50 disabled:pointer-events-none"
                                 >
-                                    <TargetIcon size={10} /> + Piña
+                                    <TargetIcon size={10} /> + Jugada
                                 </button>
                             )}
                             {/* Agregar/Quitar Hora */}

@@ -14,17 +14,23 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
     // Config State — synced from store config
     const [pricePerHour, setPricePerHour] = useState(config?.pricePerHour || 0);
     const [pricePina, setPricePina] = useState(config?.pricePina || 0);
+    const [tableTaxType, setTableTaxType] = useState(config?.tableTaxType || 'exento');
+    const [tableTaxMode, setTableTaxMode] = useState(config?.tableTaxMode || 'inclusive');
 
     // Sync local state when external config changes (e.g., from another tab/device)
     const configPricePerHour = config?.pricePerHour;
     const configPricePina = config?.pricePina;
+    const configTableTaxType = config?.tableTaxType;
+    const configTableTaxMode = config?.tableTaxMode;
     useEffect(() => {
         const raf = requestAnimationFrame(() => {
             if (configPricePerHour != null) setPricePerHour(configPricePerHour);
             if (configPricePina != null) setPricePina(configPricePina);
+            if (configTableTaxType != null) setTableTaxType(configTableTaxType);
+            if (configTableTaxMode != null) setTableTaxMode(configTableTaxMode);
         });
         return () => cancelAnimationFrame(raf);
-    }, [configPricePerHour, configPricePina]);
+    }, [configPricePerHour, configPricePina, configTableTaxType, configTableTaxMode]);
 
     // Form State for adding new tables
     const [tableName, setTableName] = useState(() => {
@@ -110,7 +116,7 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
         if (anyZero) {
             const items = [];
             if (hourVal <= 0) items.push('Hora Libre (COP)');
-            if (pinaVal <= 0) items.push('La Piña (COP)');
+            if (pinaVal <= 0) items.push('Por Jugada (COP)');
             showToast(`Tarifa en 0: ${items.join(', ')}. Todas las tarifas deben ser mayores a 0.`, 'error');
             triggerHaptic?.('error');
             return;
@@ -120,8 +126,10 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
             pricePerHourBs: 0,
             pricePina: parseFloat(pricePina) || 0,
             pricePinaBs: 0,
+            tableTaxType,
+            tableTaxMode,
         });
-        showToast('Tarifas guardadas', 'success');
+        showToast('Tarifas y configuración de impuestos guardadas', 'success');
         triggerHaptic?.('light');
     };
 
@@ -314,22 +322,36 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                             </div>
                         </div>
                         {/* Price per minute helper */}
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-slate-400">
+                        <div className="mt-2 flex flex-col gap-1.5 text-[10px] font-bold text-slate-400">
                             {pricePerHour > 0 && (
                                 <span className="flex items-center gap-1">
                                     <Clock size={10} /> {formatCOPDecimals(parseFloat(pricePerHour) / 60)}/min
                                 </span>
                             )}
+                            {(() => {
+                                const taxRate = tableTaxType === 'iva_19' ? 0.19 : tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+                                if (tableTaxMode === 'exclusive' && taxRate > 0 && pricePerHour > 0) {
+                                    const label = tableTaxType === 'iva_19' ? '19% IVA' : '8% Impoconsumo';
+                                    const finalPerHour = parseFloat(pricePerHour) * (1 + taxRate);
+                                    return (
+                                        <div className="bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-black mt-1 flex justify-between items-center w-full">
+                                            <span>Precio Final Cliente (+ {label}):</span>
+                                            <span className="text-sm">{formatCOP(finalPerHour)}/hora (≈ {formatCOPDecimals(finalPerHour / 60)}/min)</span>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
                         </div>
                     </div>
 
-                    {/* La Piña Block */}
+                    {/* Por Jugada Block */}
                     <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-3">
                             <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
                                 <Trophy size={14} className="text-amber-600 dark:text-amber-400" />
                             </div>
-                            <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">La Piña</span>
+                            <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Por Jugada</span>
                         </div>
                         <div>
                             <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Pesos Colombianos (COP)</label>
@@ -342,6 +364,55 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                                     onWheel={e => e.target.blur()}
                                     className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-amber-500/30 transition-all dark:text-white"
                                 />
+                            </div>
+                        </div>
+                        {(() => {
+                            const taxRate = tableTaxType === 'iva_19' ? 0.19 : tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+                            if (tableTaxMode === 'exclusive' && taxRate > 0 && pricePina > 0) {
+                                const label = tableTaxType === 'iva_19' ? '19% IVA' : '8% Impoconsumo';
+                                const finalPina = parseFloat(pricePina) * (1 + taxRate);
+                                return (
+                                    <div className="bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-black mt-2.5 flex justify-between items-center w-full">
+                                        <span>Precio Final Cliente (+ {label}):</span>
+                                        <span className="text-sm">{formatCOP(finalPina)}/partida</span>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+                    </div>
+
+                    {/* Impuesto Servicio de Mesa Block */}
+                    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                                <Layers size={14} className="text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Impuesto Servicio de Mesa</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Tipo Impuesto</label>
+                                <select
+                                    value={tableTaxType}
+                                    onChange={e => setTableTaxType(e.target.value)}
+                                    className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all dark:text-white outline-none"
+                                >
+                                    <option value="exento">Exento (0%)</option>
+                                    <option value="iva_19">IVA (19%)</option>
+                                    <option value="impoconsumo_8">Impoconsumo (8%)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Modo Impuesto</label>
+                                <select
+                                    value={tableTaxMode}
+                                    onChange={e => setTableTaxMode(e.target.value)}
+                                    className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all dark:text-white outline-none"
+                                >
+                                    <option value="inclusive">Incluido en precio</option>
+                                    <option value="exclusive">Más impuesto</option>
+                                </select>
                             </div>
                         </div>
                     </div>

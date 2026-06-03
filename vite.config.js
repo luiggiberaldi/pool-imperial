@@ -9,8 +9,22 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
-      // Archivos estáticos que deben estar disponibles offline
-      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'logo.png', 'logo-ticket.png', 'logodark.png'],
+      includeAssets: [
+        'favicon.png',
+        'apple-touch-icon.png',
+        'pwa-192x192.png',
+        'pwa-512x512.png',
+        'logo.png',
+        'logo-ticket.png',
+        'piso-madera-clara.png',
+        'piso-alfombra.png',
+        'mesa-pool.svg',
+        'mesa-pool-vertical.svg',
+        'mesas-normales.svg',
+        'mesa-redonda.svg',
+        'bancos.svg',
+        'barra.svg'
+      ],
       workbox: {
         cleanupOutdatedCaches: true,
         skipWaiting: true,

@@ -4,11 +4,12 @@ import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useOrdersStore } from '../hooks/store/useOrdersStore';
 import { useAuthStore } from '../hooks/store/authStore';
 import { useCustomersStore } from '../hooks/store/useCustomersStore';
-import { calculateSessionCost, calculateElapsedTime, calculateSessionCostBreakdown, formatHoursPaid } from '../utils/tableBillingEngine';
+import { calculateSessionCost, calculateElapsedTime, calculateSessionCostBreakdown, formatHoursPaid, buildTableSyntheticCart } from '../utils/tableBillingEngine';
 import { Modal } from '../components/Modal';
 import { processSaleTransaction } from '../utils/checkoutProcessor';
 import { useProductContext } from '../context/ProductContext';
 import { showToast } from '../components/Toast';
+import { FinancialEngine } from '../core/FinancialEngine';
 import { round2, divR, subR } from '../utils/dinero';
 import { openCashDrawerWebSerial, getWebSerialConfig } from '../services/webSerialPrinter';
 
@@ -22,7 +23,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
     const { cancelOrderBySessionId } = useOrdersStore();
     const { orders: allOrders, orderItems: allItems } = useOrdersStore();
     const cachedUsers = useAuthStore(s => s.cachedUsers);
-    const { products } = useProductContext();
+    const { products, tasaCop } = useProductContext();
 
     const [method, setMethod] = useState('EFECTIVO');
     const [receivedCOP, setReceivedCOP] = useState('');
@@ -100,8 +101,43 @@ export default function CashierPaymentModal({ session, table, config, currentUse
     const isTimeFree = table.type === 'NORMAL';
     const hoursOffset = (paidHoursOffsets || {})[session?.id] || 0;
     const roundsOffset = (paidRoundsOffsets || {})[session?.id] || 0;
-    const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset) : 0;
-    const grandTotal = round2(timeCost + totalConsumption);
+    const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
+    
+    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+    const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+    const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
+    const seatTimeCost = !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
+        const tc = (s.timeCharges || []);
+        const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+        const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+        return sum + (h * finalHora) + (p * finalPina);
+    }, 0) : 0;
+
+    let grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+    try {
+        const tableCheckoutData = {
+            table,
+            session,
+            elapsed,
+            timeCost,
+            totalConsumption,
+            currentItems,
+            config,
+            hoursOffset,
+            roundsOffset,
+            paidHoursOffsets: {},
+            paidRoundsOffsets: {}
+        };
+        const result = buildTableSyntheticCart(tableCheckoutData, config, products);
+        if (result && result.syntheticCart) {
+            const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
+            grandTotal = totals.totalUsd || 0;
+        }
+    } catch (e) {
+        console.error("Error calculating CashierPaymentModal grand total:", e);
+    }
 
     // Auto-fill received COP for electronic payment methods
     useEffect(() => {
@@ -141,7 +177,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                 };
             });
 
-            // 2. Si la mesa cobró tiempo, ingresarlo como ítems separados (piñas + horas)
+            // 2. Si la mesa cobró tiempo, ingresarlo como ítems separados (jugadas + horas)
             if (timeCost > 0) {
                 const breakdown = calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset);
                 if (breakdown.pinaCost > 0) {
@@ -150,7 +186,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                     cart.push({
                         id: `MESA-PINA-${session.id}`,
                         _originalId: `MESA-PINA-${session.id}`,
-                        name: `Piña ${table.name}`,
+                        name: `Jugada ${table.name}`,
                         qty: billableRounds,
                         priceUsd: round2(config.pricePina || 0),
                         isWeight: false
@@ -209,7 +245,8 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                 meseroId: meseroUser?.id || null,
                 meseroNombre: meseroUser?.name || meseroUser?.nombre || null,
                 tableName: table?.name || null,
-                skipStockDeduction: true // Stock already deducted when items were added to order
+                skipStockDeduction: true, // Stock already deducted when items were added to order
+                tasaCop: tasaCop
             });
 
             if (!saleResult.success) {

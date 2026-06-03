@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Coffee, Layers, ChevronRight, Timer, MessageSquare, Percent, Tag, Trash2, Users, Target } from 'lucide-react';
-import { formatElapsedTime, calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreakdown } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart } from '../../utils/tableBillingEngine';
+import { FinancialEngine } from '../../core/FinancialEngine';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useAuthStore } from '../../hooks/store/authStore';
 import { useProductContext } from '../../context/ProductContext';
@@ -36,6 +37,11 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const { currentUser } = useAuthStore();
     const { products: allProducts, effectiveRate: tasaUSD } = useProductContext();
     const canDiscount = currentUser?.role === 'ADMIN' || currentUser?.role === 'CAJERO';
+
+    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+    const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+    const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
 
     const [discount, setDiscount] = useState({ type: 'percentage', value: 0 });
     const [showDiscountModal, setShowDiscountModal] = useState(false);
@@ -87,7 +93,34 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
         const lineTotal = Number(item.unit_price_usd) * Number(item.qty);
         return acc + (disc.type === 'percentage' ? lineTotal * (disc.value / 100) : Math.min(disc.value * Number(item.qty), lineTotal));
     }, 0);
-    const adjustedConsumption = totalConsumption - itemDiscountTotal;
+    const consumptionTaxInclusive = Math.max(0, grandTotal - timeCost);
+    const adjustedConsumption = consumptionTaxInclusive - itemDiscountTotal;
+
+    let taxBreakdown = {};
+    let totalTax = 0;
+    try {
+        const tableCheckoutData = {
+            table,
+            session,
+            elapsed,
+            timeCost,
+            totalConsumption,
+            currentItems,
+            config,
+            hoursOffset,
+            roundsOffset,
+            paidHoursOffsets: {},
+            paidRoundsOffsets: {}
+        };
+        const result = buildTableSyntheticCart(tableCheckoutData, config, allProducts);
+        if (result && result.syntheticCart) {
+            const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
+            taxBreakdown = totals.taxBreakdown || {};
+            totalTax = totals.totalTax || 0;
+        }
+    } catch (e) {
+        console.error("Error calculating tax breakdown in TableBillModal:", e);
+    }
 
     // Grand total with item discounts applied
     const subtotalAfterItems = grandTotal - itemDiscountTotal;
@@ -110,13 +143,13 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     // Header subtitle
     const headerParts = [];
     if (fullBreakdown.hasPinas) {
-        headerParts.push(`${pinaCount} piña(s)`);
+        headerParts.push(`${pinaCount} jugada(s)`);
     }
     if (fullBreakdown.hasHours) {
         headerParts.push(`${formatElapsedTime(elapsed)} de sesión`);
     }
     if (headerParts.length === 0) {
-        headerParts.push(session.game_mode === 'PINA' ? `${pinaCount} piña(s)` : `${formatElapsedTime(elapsed)} de sesión`);
+        headerParts.push(session.game_mode === 'PINA' ? `${pinaCount} jugada(s)` : `${formatElapsedTime(elapsed)} de sesión`);
     }
 
     return (
@@ -184,6 +217,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             itemDiscounts={itemDiscounts} setItemDiscounts={setItemDiscounts}
                             discountPopoverItem={discountPopoverItem} setDiscountPopoverItem={setDiscountPopoverItem}
                             discountCustomValue={discountCustomValue} setDiscountCustomValue={setDiscountCustomValue}
+                            products={allProducts}
                         />
                     )}
                     {/* ═══ END CLASSIC MODE ═══ */}
@@ -239,6 +273,28 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                         </div>
                     </div>
 
+                    {/* -- DESGLOSE DE IMPUESTOS DYNAMIC -- */}
+                    {totalTax > 0 && (
+                        <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 rounded-2xl p-4 space-y-2 select-none text-xs">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="font-extrabold text-sm text-slate-400">%</span>
+                                <span className="font-bold text-slate-700 dark:text-slate-200">Impuestos del Consumo</span>
+                            </div>
+                            <div className="space-y-1 border-t border-slate-100 dark:border-slate-800 pt-2 font-medium text-slate-500 dark:text-slate-400">
+                                {taxBreakdown && Object.entries(taxBreakdown).map(([taxKey, taxVal]) => {
+                                    if (taxVal <= 0) return null;
+                                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                                    return (
+                                        <div key={taxKey} className="flex justify-between">
+                                            <span>{taxLabel}:</span>
+                                            <span className="font-bold text-slate-700 dark:text-slate-350">{formatCOP(taxVal)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Total */}
                     <div
                         className="rounded-2xl p-4 flex items-center justify-between"
@@ -255,8 +311,8 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             )}
                             {!hasSeats && isMixed && (
                                 <p className="text-[10px] text-white/60 mt-0.5">
-                                    Piñas {formatCOP(fullBreakdown.pinaCost)} + Tiempo {formatCOP(fullBreakdown.hourCost)}{adjustedConsumption > 0 ? ` + Consumos ${formatCOP(adjustedConsumption)}` : ''}
-                                    {(roundsOffset > 0 || hoursOffset > 0) ? ` − Pagado ${formatCOP(roundsOffset * (config.pricePina || 0) + hoursOffset * (config.pricePerHour || 0))}` : ''}
+                                    Jugadas {formatCOP(fullBreakdown.pinaCost)} + Tiempo {formatCOP(fullBreakdown.hourCost)}{adjustedConsumption > 0 ? ` + Consumos ${formatCOP(adjustedConsumption)}` : ''}
+                                    {(roundsOffset > 0 || hoursOffset > 0) ? ` − Pagado ${formatCOP(roundsOffset * finalPina + hoursOffset * finalHora)}` : ''}
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
                                     {includeServiceCharge ? ` + Propina (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
                                 </p>

@@ -141,6 +141,8 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                 price_per_hour_bs: merged.pricePerHourBs || 0,
                 price_pina: merged.pricePina,
                 price_pina_bs: merged.pricePinaBs || 0,
+                table_tax_type: merged.tableTaxType || 'exento',
+                table_tax_mode: merged.tableTaxMode || 'inclusive',
                 updated_at: new Date().toISOString()
             }).eq('id', 1);
             if (error && error.message?.includes('column')) {
@@ -182,6 +184,8 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                     pricePerHourBs: cloudHourBs ?? get().config.pricePerHourBs ?? 0,
                     pricePina: Number(configData.price_pina) || get().config.pricePina,
                     pricePinaBs: cloudPinaBs ?? get().config.pricePinaBs ?? 0,
+                    tableTaxType: configData.table_tax_type || 'exento',
+                    tableTaxMode: configData.table_tax_mode || 'inclusive',
                 };
                 set({ config: cloudConfig });
                 await tablesCache.setItem(scopedKey('pool_config'), cloudConfig);

@@ -3,17 +3,18 @@ import { CheckCircle2, AlertCircle, RefreshCw, DollarSign } from 'lucide-react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useOrdersStore } from '../hooks/store/useOrdersStore';
 import { useAuthStore } from '../hooks/store/authStore';
-import { calculateSessionCost, calculateElapsedTime } from '../utils/tableBillingEngine';
+import { calculateSessionCost, calculateElapsedTime, buildTableSyntheticCart } from '../utils/tableBillingEngine';
 import { useConfirm } from '../hooks/useConfirm.jsx';
 import { round2 } from '../utils/dinero';
 import CashierPaymentModal from './CashierPaymentModal';
 import { useProductContext } from '../context/ProductContext';
+import { FinancialEngine } from '../core/FinancialEngine';
 
 export default function CashierCheckoutView({ triggerHaptic, isActive }) {
     const { tables, activeSessions, config, closeSession, cancelCheckoutRequest, syncTablesAndSessions, paidHoursOffsets, paidRoundsOffsets } = useTablesStore();
     const { orders: allOrders, orderItems: allItems } = useOrdersStore();
     const { currentUser } = useAuthStore();
-    const { effectiveRate } = useProductContext();
+    const { effectiveRate, products } = useProductContext();
     const tasaUSD = effectiveRate;
     const confirm = useConfirm();
 
@@ -69,7 +70,7 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                 {checkoutSessions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
                         <CheckCircle2 size={48} className="text-emerald-400 mb-4" />
-                        <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300">Cola vacía</h3>
+                        <h3 className="text-lg font-bold text-slate-700 dark:bg-slate-300">Cola vacía</h3>
                         <p className="text-slate-500 mt-2 text-sm max-w-sm">No hay mesas pendientes de cobro en este momento.</p>
                     </div>
                 ) : (
@@ -87,13 +88,43 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                             const hoursOffset = (paidHoursOffsets || {})[session.id] || 0;
                             const roundsOffset = (paidRoundsOffsets || {})[session.id] || 0;
                             const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
+                            
+                            const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+                            const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+                            const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+                            const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
                             const seatTimeCost = !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
                                 const tc = (s.timeCharges || []);
                                 const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
                                 const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
-                                return sum + (h * (config.pricePerHour || 0)) + (p * (config.pricePina || 0));
+                                return sum + (h * finalHora) + (p * finalPina);
                             }, 0) : 0;
-                            const grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+                            
+                            let grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+                            
+                            try {
+                                const tableCheckoutData = {
+                                    table,
+                                    session,
+                                    elapsed,
+                                    timeCost,
+                                    totalConsumption,
+                                    currentItems,
+                                    config,
+                                    hoursOffset,
+                                    roundsOffset,
+                                    paidHoursOffsets: {},
+                                    paidRoundsOffsets: {}
+                                };
+                                const result = buildTableSyntheticCart(tableCheckoutData, config, products);
+                                if (result && result.syntheticCart) {
+                                    const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
+                                    grandTotal = totals.totalUsd || 0;
+                                }
+                            } catch (e) {
+                                console.error("Error calculating CashierCheckoutView grand total:", e);
+                            }
 
                             return (
                                 <div key={session.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border-2 border-orange-500/30 flex flex-col gap-3">

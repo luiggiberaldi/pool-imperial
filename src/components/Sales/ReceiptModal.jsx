@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCircle, Wallet, Send, X, Printer } from 'lucide-react';
-import { formatCop } from '../../utils/calculatorUtils';
+import { formatCop, formatPaymentAmount } from '../../utils/calculatorUtils';
 import { printThermalTicket } from '../../utils/ticketGenerator';
 
 export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
@@ -64,17 +64,30 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                             ))}
                         </div>
 
-                        {/* Desglose de IVA para el mercado colombiano */}
-                        {receipt.ivaRate > 0 && (
-                            <div className="mt-4 pt-3.5 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 space-y-1.5 select-none">
+                        {/* Desglose de IVA y otros impuestos dinámico */}
+                        {receipt.ivaAmount > 0 && (
+                            <div className="mt-4 pt-3.5 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 space-y-1.5 select-none animate-in fade-in">
                                 <div className="flex justify-between">
-                                    <span>Subtotal Base (excl. IVA):</span>
+                                    <span>Subtotal Base (excl. Impuestos):</span>
                                     <span className="font-bold text-slate-600 dark:text-slate-400">{formatCop(receipt.totalUsd - receipt.ivaAmount)}</span>
                                 </div>
-                                <div className="flex justify-between font-black text-slate-700 dark:text-slate-300">
-                                    <span>IVA ({receipt.ivaRate}%):</span>
-                                    <span>{formatCop(receipt.ivaAmount)}</span>
-                                </div>
+                                {receipt.taxBreakdown && Object.entries(receipt.taxBreakdown).map(([taxKey, taxVal]) => {
+                                    if (taxVal <= 0) return null;
+                                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                                    return (
+                                        <div key={taxKey} className="flex justify-between font-black text-slate-700 dark:text-slate-300">
+                                            <span>{taxLabel}:</span>
+                                            <span>{formatCop(taxVal)}</span>
+                                        </div>
+                                    );
+                                })}
+                                {!receipt.taxBreakdown && (
+                                    // Fallback retrocompatible para ventas antiguas
+                                    <div className="flex justify-between font-black text-slate-700 dark:text-slate-300">
+                                        <span>IVA ({receipt.ivaRate || 19}%):</span>
+                                        <span>{formatCop(receipt.ivaAmount)}</span>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -84,7 +97,7 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                                 {receipt.payments.map(p => (
                                     <div key={p.id} className="flex justify-between text-slate-600 mb-1">
                                         <span>{p.methodLabel}:</span>
-                                        <span className="font-bold">{formatCop(parseFloat(p.amountInput || 0))}</span>
+                                        <span className="font-bold">{formatPaymentAmount(p)}</span>
                                     </div>
                                 ))}
 

@@ -45,7 +45,9 @@ export default function CierreHistoryCard({ cierre, products: _products }) {
             todayItemsSold: cierre.totalItems,
             reconData: null,
             apertura: cierre.apertura,
-            isReprint: true
+            isReprint: true,
+            totalTax: cierre.totalTax || 0,
+            taxBreakdown: cierre.taxBreakdown || {},
         });
     };
 

@@ -31,7 +31,7 @@ const META_LABELS = {
     sessionId:     'Sesión (ID)',
     gameMode:      'Modo de juego',
     hoursPaid:     'Horas pagadas',
-    newRounds:     'Piñas jugadas',
+    newRounds:     'Jugadas',
     totalCost:     'Monto cobrado',
     paymentMethod: 'Forma de pago',
     tableType:     'Tipo de mesa',
@@ -52,7 +52,7 @@ const META_LABELS = {
 };
 const META_VALUES = {
     NORMAL:        'Normal',
-    PINA:          'La Piña',
+    PINA:          'La Jugada',
     PREPAGO:       'Prepago',
     ADMIN:         'Administrador',
     CAJERO:        'Cajero',
@@ -83,8 +83,8 @@ const ACTION_LABELS = {
     PIN_CAMBIADO:             'PIN cambiado',
     MESA_ABIERTA:             'Mesa abierta',
     MESA_CERRADA:             'Mesa cobrada',
-    MESA_PIÑA_AGREGADA:       'Piña agregada',
-    MESA_PIÑA_QUITADA:        'Piña quitada',
+    MESA_PIÑA_AGREGADA:       'Jugada agregada',
+    MESA_PIÑA_QUITADA:        'Jugada quitada',
     MESA_CREADA:              'Mesa creada',
     MESA_ELIMINADA:           'Mesa eliminada',
     ANULACION:                'Mesa anulada',

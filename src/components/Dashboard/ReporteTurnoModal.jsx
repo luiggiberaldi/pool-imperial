@@ -24,6 +24,14 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
 
     const isAdmin = role === 'ADMIN';
 
+    const totalSalesCop = useMemo(() => {
+        return todaySales.reduce((sum, s) => sum + (s.totalCop || s.totalUsd || 0), 0);
+    }, [todaySales]);
+
+    const totalSalesUsd = useMemo(() => {
+        return todaySales.reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
+    }, [todaySales]);
+
     const fecha = formatFecha(activeCashSession?.opened_at || new Date().toISOString());
     const horaApertura = formatHora(activeCashSession?.opened_at);
 
@@ -70,8 +78,8 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
 
         // Resumen
         rows.push(['=== RESUMEN ===']);
-        rows.push(['Total Ventas USD', `$${todayTotalUsd.toFixed(2)}`]);
-        rows.push(['Total Ventas Bs', `Bs ${todayTotalBs.toFixed(2)}`]);
+        rows.push(['Total Ventas COP', new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(totalSalesCop)]);
+        rows.push(['Total Ventas USD equiv.', new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalSalesUsd)]);
         rows.push(['Cantidad de Ventas', todaySales.length]);
         rows.push(['Productos Vendidos', todayItemsSold]);
         rows.push([]);
@@ -86,16 +94,18 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
 
         // Detalle de ventas
         rows.push(['=== DETALLE DE VENTAS ===']);
-        rows.push(['Hora', 'Cliente', 'Productos', 'Cant. Items', 'Total USD', 'Total Bs', 'Método de Pago']);
+        rows.push(['Hora', 'Cliente', 'Productos', 'Cant. Items', 'Total COP', 'Total USD Equiv.', 'Método de Pago']);
         todaySales.forEach(s => {
             const productos = s.items ? s.items.map(i => `${i.name} x${i.qty}`).join(' | ') : '—';
+            const saleCop = s.totalCop || s.totalUsd || 0;
+            const saleUsd = saleCop / (s.rate || 4150);
             rows.push([
                 formatHora(s.timestamp),
                 s.clientName || 'Público General',
                 productos,
                 s.items ? s.items.reduce((sum, i) => sum + i.qty, 0) : 0,
-                `$${(s.totalUsd || 0).toFixed(2)}`,
-                `Bs ${(s.totalBs || 0).toFixed(2)}`,
+                new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(saleCop),
+                new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(saleUsd),
                 getSalePaymentLabel(s),
             ]);
         });
@@ -204,18 +214,22 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                         <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-3.5">
                             <div className="flex items-center gap-1.5 mb-1">
                                 <TrendingUp size={12} className="text-emerald-500" />
-                                <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Total USD</p>
+                                <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Total COP</p>
                             </div>
-                            <p className="text-xl font-black text-emerald-700 dark:text-emerald-300">${todayTotalUsd.toFixed(2)}</p>
+                            <p className="text-xl font-black text-emerald-700 dark:text-emerald-300">
+                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(totalSalesCop)}
+                            </p>
                         </div>
                         )}
                         {isAdmin && (
                         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3.5">
                             <div className="flex items-center gap-1.5 mb-1">
                                 <TrendingUp size={12} className="text-blue-500" />
-                                <p className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Total Bs</p>
+                                <p className="text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Total USD</p>
                             </div>
-                            <p className="text-xl font-black text-blue-700 dark:text-blue-300">Bs {todayTotalBs.toFixed(2)}</p>
+                            <p className="text-xl font-black text-blue-700 dark:text-blue-300">
+                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(totalSalesUsd)}
+                            </p>
                         </div>
                         )}
                         <div className="bg-violet-50 dark:bg-violet-900/20 rounded-2xl p-3.5">
@@ -247,7 +261,9 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                                         <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{d.label}</p>
                                         <div className="text-right">
                                             <p className="text-sm font-black text-slate-800 dark:text-white">
-                                                {d.currency === 'USD' ? `$${d.total.toFixed(2)}` : `Bs ${d.total.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                {d.currency === 'USD' 
+                                                    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(d.total) 
+                                                    : new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(d.total)}
                                             </p>
                                             {d.count > 0 && <p className="text-[9px] text-slate-400">{d.count} {d.count === 1 ? 'transacción' : 'transacciones'}</p>}
                                         </div>
@@ -277,7 +293,9 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                                                 {s.items ? s.items.map(i => `${i.name} x${i.qty}`).join(', ') : '—'}
                                             </p>
                                         </div>
-                                        <p className="text-sm font-black text-slate-800 dark:text-white ml-3 shrink-0">${(s.totalUsd || 0).toFixed(2)}</p>
+                                        <p className="text-sm font-black text-slate-800 dark:text-white ml-3 shrink-0">
+                                            {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(s.totalCop || s.totalUsd || 0)}
+                                        </p>
                                     </div>
                                 ))}
                             </div>

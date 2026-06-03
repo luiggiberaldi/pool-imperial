@@ -23,6 +23,7 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
     const [showAdd, setShowAdd] = useState(false);
     const [newLabel, setNewLabel] = useState('');
     const [newIcon, setNewIcon] = useState('Banknote');
+    const [newCurrency, setNewCurrency] = useState('COP');
 
     useEffect(() => {
         getAllPaymentMethods().then(setMethods);
@@ -45,7 +46,7 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
             id: 'custom_' + Date.now(),
             label: toTitleCase(newLabel.trim()),
             icon: newIcon,
-            currency: 'COP',
+            currency: newCurrency,
             isFactory: false,
         }];
         await savePaymentMethods(updated);
@@ -55,7 +56,7 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
         setNewLabel('');
         setShowAdd(false);
         showToast('Método de pago agregado', 'success');
-        log('CONFIG', 'METODO_PAGO_CREADO', `Método de pago creado: ${toTitleCase(newLabel.trim())} (COP)`, { label: toTitleCase(newLabel.trim()), currency: 'COP', icon: newIcon });
+        log('CONFIG', 'METODO_PAGO_CREADO', `Método de pago creado: ${toTitleCase(newLabel.trim())} (${newCurrency})`, { label: toTitleCase(newLabel.trim()), currency: newCurrency, icon: newIcon });
     };
 
     const handleRemove = async (id) => {
@@ -75,16 +76,21 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
         setMethods(updated);
     };
 
-    const methodsCop = methods.filter(m => m.currency === 'COP');
+    const methodsCop = methods.filter(m => m.currency === 'COP' || !m.currency);
+    const methodsUsd = methods.filter(m => m.currency === 'USD');
 
     const renderMethod = (m) => {
         const isEnabled = m.isEnabled !== false;
+        const isUsd = m.currency === 'USD';
         return (
-            <div key={m.id} className={`flex items-center justify-between py-2.5 px-3 bg-white dark:bg-slate-900 rounded-xl border mb-2 transition-colors ${isEnabled ? 'border-emerald-200 dark:border-emerald-800 ring-1 ring-emerald-500/10' : 'border-slate-100 dark:border-slate-800 opacity-60'}`}>
+            <div key={m.id} className={`flex items-center justify-between py-2.5 px-3 bg-white dark:bg-slate-900 rounded-xl border mb-2 transition-colors ${isEnabled ? (isUsd ? 'border-emerald-200 dark:border-emerald-800 ring-1 ring-emerald-500/10' : 'border-amber-200 dark:border-amber-800 ring-1 ring-amber-500/10') : 'border-slate-100 dark:border-slate-800 opacity-60'}`}>
                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                    {(() => { const MIcon = m.Icon || PAYMENT_ICONS[m.id] || ICON_COMPONENTS[m.icon]; return MIcon ? <MIcon size={18} className={isEnabled ? "text-emerald-500" : "text-slate-400"} /> : <span className="text-lg grayscale opacity-50">{m.icon}</span>; })()}
+                    {(() => { const MIcon = m.Icon || PAYMENT_ICONS[m.id] || ICON_COMPONENTS[m.icon]; return MIcon ? <MIcon size={18} className={isEnabled ? (isUsd ? "text-emerald-500" : "text-amber-500") : "text-slate-400"} /> : <span className="text-lg grayscale opacity-50">{m.icon}</span>; })()}
                     <span className={`text-sm font-bold truncate ${isEnabled ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500 line-through decoration-slate-300 dark:decoration-slate-600'}`}>
                         {m.label}
+                    </span>
+                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded shrink-0 ${isUsd ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'}`}>
+                        {m.currency || 'COP'}
                     </span>
                     {m.isFactory && (
                         <span className="text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded shrink-0">Nat</span>
@@ -138,6 +144,25 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
                         placeholder="Nombre del método..."
                         className="w-full py-2.5 px-3 rounded-lg border border-emerald-200 dark:border-emerald-700 bg-white dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/30"
                     />
+                    
+                    {/* Selector de Moneda */}
+                    <div className="flex gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setNewCurrency('COP')}
+                            className={`flex-1 py-1.5 rounded-lg border text-xs font-bold transition-all ${newCurrency === 'COP' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
+                        >
+                            🇨🇴 COP (Pesos)
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setNewCurrency('USD')}
+                            className={`flex-1 py-1.5 rounded-lg border text-xs font-bold transition-all ${newCurrency === 'USD' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
+                        >
+                            💵 USD (Dólares)
+                        </button>
+                    </div>
+
                     <div className="flex flex-wrap gap-2">
                         {ICON_OPTIONS.map(({ key, Icon }) => (
                             <button
@@ -159,8 +184,23 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
             )}
 
             {/* Lista de Métodos de Pago */}
-            <div className="space-y-1">
-                {methodsCop.map(renderMethod)}
+            <div className="space-y-4">
+                {methodsCop.length > 0 && (
+                    <div>
+                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Métodos en COP (Pesos)</div>
+                        <div className="space-y-1">
+                            {methodsCop.map(renderMethod)}
+                        </div>
+                    </div>
+                )}
+                {methodsUsd.length > 0 && (
+                    <div>
+                        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Métodos en USD (Dólares)</div>
+                        <div className="space-y-1">
+                            {methodsUsd.map(renderMethod)}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

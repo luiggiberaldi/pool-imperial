@@ -38,6 +38,9 @@ export async function processSaleTransaction({
     // Alias de compatibilidad (llamadores legacy pueden pasar cartTotalUsd)
     cartTotalUsd,
     cartSubtotalUsd,
+    totalTax,
+    taxBreakdown,
+    tasaCop,
     ivaRate = 19,
 }) {
     // Compatibilidad con llamadores que aún usan el nombre legacy
@@ -169,7 +172,7 @@ export async function processSaleTransaction({
 
     // ── CACHÉ LOCAL ──
     const currentUser = useAuthStore.getState().currentUser;
-    const computedIvaAmount = Math.round(totalCOP - (totalCOP / (1 + (ivaRate / 100))));
+    const finalTaxAmount = totalTax !== undefined ? totalTax : Math.round(totalCOP - (totalCOP / (1 + ((ivaRate || 19) / 100))));
 
     const sale = {
         id: finalSaleId || crypto.randomUUID(),
@@ -182,7 +185,7 @@ export async function processSaleTransaction({
         meseroNombre: capitalizeName(meseroNombre) || null,
         tableName: tableName || null,
         // Campos de items — priceUsd almacena precio COP (campo heredado)
-        items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costUsd: i.costUsd || 0, isWeight: i.isWeight })),
+        items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costUsd: i.costUsd || 0, isWeight: i.isWeight, taxType: i.taxType || 'exento', taxMode: i.taxMode || 'inclusive' })),
         cartSubtotalUsd: subtotalCOP,   // heredado — ahora COP
         discountType: discountData?.type || null,
         discountValue: discountData?.value || 0,
@@ -191,8 +194,8 @@ export async function processSaleTransaction({
         totalBs: 0,                      // siempre 0 en Pool Imperial
         totalCop: totalCOP,              // campo explícito COP
         payments,
-        rate: 1,                         // tasa 1:1 (sin conversión)
-        rateSource: 'COP',
+        rate: tasaCop || 1,
+        rateSource: (tasaCop && tasaCop > 1) ? 'manual_cop' : 'COP',
         timestamp: new Date().toISOString(),
         changeUsd: fiadoAmount > 0 ? 0 : (changeBreakdown?.changeUsdGiven || 0),
         changeBs: 0,                     // siempre 0 en Pool Imperial
@@ -202,8 +205,9 @@ export async function processSaleTransaction({
         customerPhone: selectedCustomer?.phone || null,
         fiadoUsd: fiadoAmount,           // heredado — COP
         splitMeta: splitMeta || null,
-        ivaRate: Number(ivaRate) || 0,
-        ivaAmount: computedIvaAmount || 0,
+        ivaRate: 0,
+        ivaAmount: finalTaxAmount || 0,
+        taxBreakdown: taxBreakdown || {},
     };
 
     const existingSales = await storageService.getItem(SALES_KEY, []);

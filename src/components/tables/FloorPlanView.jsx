@@ -597,7 +597,7 @@ const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, status
  * BarCounterEl — Mostrador de barra (Barra 1 y Barra 2).
  * Render: bloque plano y sólido sin gradientes ni vetas.
  */
-const BarCounterEl = React.memo(function BarCounterEl({ item, isCanvasRotated, ...props }) {
+const BarCounterEl = React.memo(function BarCounterEl({ item, isCanvasRotated, onItemClick, ...props }) {
     // Use imgDir if explicitly set, fallback to actual aspect-ratio on 16:9 canvas
     const imgDir = item.imgDir || (item.w * 16 > item.h * 9 ? 'horizontal' : 'vertical');
     const isPortrait = imgDir === 'vertical';
@@ -663,7 +663,7 @@ const BarCounterEl = React.memo(function BarCounterEl({ item, isCanvasRotated, .
  * EntryEl — Marcador de entrada al local.
  * Render: bloque limpio y técnico de entrada.
  */
-const EntryEl = React.memo(function EntryEl({ item, ...props }) {
+const EntryEl = React.memo(function EntryEl({ item, isCanvasRotated, onItemClick, ...props }) {
     const rotation = item.r || 0;
     const isHorizontal = item.w > item.h;
     return (
@@ -727,7 +727,7 @@ const EntryEl = React.memo(function EntryEl({ item, ...props }) {
 /**
  * LogoEl — Área de marca central simplificada.
  */
-const LogoEl = React.memo(function LogoEl({ item, isCanvasRotated, ...props }) {
+const LogoEl = React.memo(function LogoEl({ item, isCanvasRotated, onItemClick, ...props }) {
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
     return (

@@ -7,6 +7,7 @@ import { useTablesStore } from './store/useTablesStore';
 import { useOrdersStore } from './store/useOrdersStore';
 import { useAuthStore } from './store/authStore';
 import { calculateSessionCostBreakdown, formatHoursPaid, calculateSeatCostBreakdown, calculateFullTableBreakdown } from '../utils/tableBillingEngine';
+import { FinancialEngine } from '../core/FinancialEngine';
 
 const EPSILON = 1; // 1 peso colombiano de tolerancia
 
@@ -23,7 +24,7 @@ export function useSalesCheckout({
         triggerHaptic && triggerHaptic();
         const opts = {
             cart, cartTotalUsd, cartTotalBs: 0, cartSubtotalUsd, payments, changeBreakdown,
-            selectedCustomerId: '', customers, products, effectiveRate: 1, tasaCop: 1, copEnabled: true,
+            selectedCustomerId: '', customers, products, effectiveRate, tasaCop, copEnabled,
             discountData: discountData ? { ...discountData, amountBs: 0 } : null, useAutoRate: false
         };
         const result = await processSaleTransaction(opts);
@@ -43,13 +44,13 @@ export function useSalesCheckout({
         setShowCheckout(false);
         setSelectedCustomerId('');
         setCartSelectedIndex(-1);
-    }, [cart, cartTotalUsd, cartSubtotalUsd, discountData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, playCheckout, setShowConfetti, notifyLowStock, setCart, setShowCheckout, setSelectedCustomerId, setCartSelectedIndex, playError, triggerHaptic]);
+    }, [cart, cartTotalUsd, cartSubtotalUsd, discountData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, playCheckout, setShowConfetti, notifyLowStock, setCart, setShowCheckout, setSelectedCustomerId, setCartSelectedIndex, playError, triggerHaptic, effectiveRate, tasaCop, copEnabled]);
 
     const handleCheckoutWithCustomer = useCallback(async (payments, changeBreakdown, selectedCustomerId, splitMeta = null) => {
         triggerHaptic && triggerHaptic();
         const opts = {
             cart, cartTotalUsd, cartTotalBs: 0, cartSubtotalUsd, payments, changeBreakdown,
-            selectedCustomerId, customers, products, effectiveRate: 1, tasaCop: 1, copEnabled: true,
+            selectedCustomerId, customers, products, effectiveRate, tasaCop, copEnabled,
             discountData: discountData ? { ...discountData, amountBs: 0 } : null, useAutoRate: false, splitMeta
         };
         const result = await processSaleTransaction(opts);
@@ -69,7 +70,7 @@ export function useSalesCheckout({
         setShowCheckout(false);
         setSelectedCustomerId('');
         setCartSelectedIndex(-1);
-    }, [cart, cartTotalUsd, cartSubtotalUsd, discountData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, playCheckout, setShowConfetti, notifyLowStock, setCart, setShowCheckout, setSelectedCustomerId, setCartSelectedIndex, playError, triggerHaptic]);
+    }, [cart, cartTotalUsd, cartSubtotalUsd, discountData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, playCheckout, setShowConfetti, notifyLowStock, setCart, setShowCheckout, setSelectedCustomerId, setCartSelectedIndex, playError, triggerHaptic, effectiveRate, tasaCop, copEnabled]);
 
     const handleTableCheckout = useCallback(async (payments, changeBreakdown, selectedCustomerId, shouldRelease = null, splitMeta = null, surchargeData = null) => {
         if (!tableCheckoutData) return;
@@ -82,7 +83,6 @@ export function useSalesCheckout({
         const seats = session?.seats || [];
         const config = useTablesStore.getState().config;
         const includeServiceCharge = !!tableCheckoutData.includeServiceCharge;
-        const ivaRate = surchargeData ? (Number(surchargeData.ivaRate) || 0) : 19;
         const paidHoursOffsets = useTablesStore.getState().paidHoursOffsets || {};
         const paidRoundsOffsets = useTablesStore.getState().paidRoundsOffsets || {};
         const hoursOff = paidHoursOffsets[session?.id] || 0;
@@ -102,22 +102,28 @@ export function useSalesCheckout({
                 const pinaQty = seat.timeCharges
                     ? seat.timeCharges.filter(tc => tc.type === 'pina').reduce((s, tc) => s + (tc.amount || 1), 0)
                     : (seat.pinas || 1);
+                const billablePinas = Math.max(0, pinaQty - (paidRoundsOffsets[session?.id] || 0));
                 syntheticCart.push({
                     id: crypto.randomUUID(),
-                    name: `Piña ${tableName}`,
+                    name: `Jugada ${tableName}`,
                     priceUsdt: round2(config.pricePina || 0), priceUsd: round2(config.pricePina || 0),
-                    qty: pinaQty, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999
+                    qty: billablePinas, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                    taxType: config.tableTaxType || 'exento',
+                    taxMode: config.tableTaxMode || 'inclusive'
                 });
             }
             if (seatTimeCost.hourCost > 0) {
                 const horasQty = seat.timeCharges
                     ? seat.timeCharges.filter(tc => tc.type === 'hora').reduce((s, tc) => s + (tc.amount || 0), 0)
                     : (seat.hoursPaid || 0);
+                const billableHours = Math.max(0, horasQty - (paidHoursOffsets[session?.id] || 0));
                 syntheticCart.push({
                     id: crypto.randomUUID(),
                     name: `Tiempo ${tableName} (${formatHoursPaid(horasQty)})`,
-                    priceUsdt: round2(seatTimeCost.hourCost), priceUsd: round2(seatTimeCost.hourCost),
-                    qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999
+                    priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
+                    qty: billableHours, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                    taxType: config.tableTaxType || 'exento',
+                    taxMode: config.tableTaxMode || 'inclusive'
                 });
             }
 
@@ -159,13 +165,29 @@ export function useSalesCheckout({
                         const pinaQty = seat.timeCharges
                             ? seat.timeCharges.filter(tc => tc.type === 'pina').reduce((s, tc) => s + (tc.amount || 1), 0)
                             : (seat.pinas || 1);
-                        syntheticCart.push({ id: crypto.randomUUID(), name: `Piña ${seatLabel}`, priceUsdt: round2(config.pricePina || 0), priceUsd: round2(config.pricePina || 0), qty: pinaQty, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999 });
+                        const billablePinas = Math.max(0, pinaQty - (paidRoundsOffsets[session?.id] || 0));
+                        syntheticCart.push({
+                            id: crypto.randomUUID(),
+                            name: `Jugada ${seatLabel}`,
+                            priceUsdt: round2(config.pricePina || 0), priceUsd: round2(config.pricePina || 0),
+                            qty: billablePinas, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                            taxType: config.tableTaxType || 'exento',
+                            taxMode: config.tableTaxMode || 'inclusive'
+                        });
                     }
                     if (seatBd.timeCost.hourCost > 0) {
                         const horasQty = seat.timeCharges
                             ? seat.timeCharges.filter(tc => tc.type === 'hora').reduce((s, tc) => s + (tc.amount || 0), 0)
                             : (seat.hoursPaid || 0);
-                        syntheticCart.push({ id: crypto.randomUUID(), name: `Tiempo ${seatLabel} (${formatHoursPaid(horasQty)})`, priceUsdt: round2(seatBd.timeCost.hourCost), priceUsd: round2(seatBd.timeCost.hourCost), qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999 });
+                        const billableHours = Math.max(0, horasQty - (paidHoursOffsets[session?.id] || 0));
+                        syntheticCart.push({
+                            id: crypto.randomUUID(),
+                            name: `Tiempo ${seatLabel} (${formatHoursPaid(horasQty)})`,
+                            priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
+                            qty: billableHours, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                            taxType: config.tableTaxType || 'exento',
+                            taxMode: config.tableTaxMode || 'inclusive'
+                        });
                     }
                     seatBd.items.forEach(item => {
                         const p = products.find(p => p.id === item.product_id);
@@ -188,9 +210,11 @@ export function useSalesCheckout({
                 const billableRounds = Math.max(0, pinaCount - roundsOff);
                 syntheticCart.push({
                     id: crypto.randomUUID(),
-                    name: `Piña ${tableCheckoutData.table.name}`,
+                    name: `Jugada ${tableCheckoutData.table.name}`,
                     priceUsdt: round2(config.pricePina || 0), priceUsd: round2(config.pricePina || 0),
-                    qty: billableRounds, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999
+                    qty: billableRounds, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                    taxType: config.tableTaxType || 'exento',
+                    taxMode: config.tableTaxMode || 'inclusive'
                 });
             }
             if (breakdown.hourCost > 0) {
@@ -198,8 +222,10 @@ export function useSalesCheckout({
                 syntheticCart.push({
                     id: crypto.randomUUID(),
                     name: `Tiempo ${tableCheckoutData.table.name} (${formatHoursPaid(billableHours)})`,
-                    priceUsdt: round2(breakdown.hourCost), priceUsd: round2(breakdown.hourCost),
-                    qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999
+                    priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
+                    qty: billableHours, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                    taxType: config.tableTaxType || 'exento',
+                    taxMode: config.tableTaxMode || 'inclusive'
                 });
             }
             if (tableCheckoutData.currentItems?.length > 0) {
@@ -260,15 +286,9 @@ export function useSalesCheckout({
             });
         }
 
-        const recalcCartTotal = round2(syntheticCart.reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0));
-        let effectiveCartTotal = round2(Math.max(0, recalcCartTotal - discountAmt));
-
-        // 4. Calcular el IVA exclusivo (se suma al total) sobre la base imponible (excluyendo el servicio voluntario y el recargo TDC)
-        const baseParaIva = round2(syntheticCart.filter(item => !item.name.startsWith('Servicio Voluntario') && !item.name.startsWith('Recargo TDC')).reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0) - discountAmt);
-        const cleanIvaRate = Number(surchargeData?.ivaRate) || 0;
-        const ivaAmount = cleanIvaRate > 0 ? Math.round(baseParaIva * (cleanIvaRate / 100)) : 0;
-        
-        let finalTotalWithIva = effectiveCartTotal + ivaAmount;
+        const discountData = tableCheckoutData.discountData || { active: false, amountUsd: 0, amountBs: 0, type: 'percentage', value: 0 };
+        const totals = FinancialEngine.buildCartTotals(syntheticCart, discountData, effectiveRate, tasaCop);
+        let finalTotalWithIva = totals.totalUsd;
 
         const _totalPaidCheck = sumR(payments.map(p => p.amountUsd));
         const _shownTotal = round2(tableCheckoutData.grandTotal || 0);
@@ -284,13 +304,14 @@ export function useSalesCheckout({
             cart: syntheticCart,
             cartTotalUsd: finalTotalWithIva,
             cartTotalBs: 0,
-            cartSubtotalUsd: finalTotalWithIva,
+            cartSubtotalUsd: totals.subtotalUsd,
             payments, changeBreakdown, selectedCustomerId, customers, products,
-            effectiveRate: 1, tasaCop: 1, copEnabled: true,
-            discountData: tableCheckoutData.discountData ? { ...tableCheckoutData.discountData, amountBs: 0 } : { active: false, amountUsd: 0, amountBs: 0, type: 'percentage', value: 0 },
+            effectiveRate, tasaCop, copEnabled,
+            discountData: discountData ? { ...discountData, amountBs: 0 } : { active: false, amountUsd: 0, amountBs: 0, type: 'percentage', value: 0 },
             useAutoRate: false, splitMeta,
             skipStockDeduction: true,
-            ivaRate: cleanIvaRate
+            totalTax: totals.totalTax,
+            taxBreakdown: totals.taxBreakdown
         };
 
         opts.tableName = seatId
@@ -368,7 +389,7 @@ export function useSalesCheckout({
         setShowConfetti(true);
         notifyLowStock(result.updatedProducts);
         setSelectedCustomerId('');
-    }, [tableCheckoutData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, setTableCheckoutData, setSelectedCustomerId, setShowConfetti, playCheckout, playError, notifyLowStock, triggerHaptic]);
+    }, [tableCheckoutData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, setTableCheckoutData, setSelectedCustomerId, setShowConfetti, playCheckout, playError, notifyLowStock, triggerHaptic, effectiveRate, tasaCop, copEnabled]);
 
     const handleCreateCustomer = useCallback(async (name, documentId, phone) => {
         const newCustomer = { id: crypto.randomUUID(), name, documentId: documentId || '', phone: phone || '', deuda: 0, favor: 0, createdAt: new Date().toISOString() };

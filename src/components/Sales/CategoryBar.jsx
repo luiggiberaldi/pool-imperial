@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Package, Calculator, ChevronDown } from 'lucide-react';
 import { BODEGA_CATEGORIES, CATEGORY_ICONS } from '../../config/categories';
+import { formatCop } from '../../utils/calculatorUtils';
 
 const PAGE_SIZE = 30;
 
@@ -98,7 +99,16 @@ export default function CategoryBar({
                                         }
                                     </div>
                                     <p className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 leading-tight line-clamp-2 mb-1">{p.name}</p>
-                                    <p className="text-[11px] sm:text-xs font-black text-emerald-600 dark:text-emerald-400">${p.priceUsdt?.toFixed(2)}</p>
+                                    {(() => {
+                                        const taxRate = p.taxType === 'iva_19' ? 0.19 : p.taxType === 'impoconsumo_8' ? 0.08 : 0;
+                                        const isExclusive = p.taxMode === 'exclusive' && taxRate > 0;
+                                        const finalPrice = isExclusive ? (p.priceUsdt || 0) * (1 + taxRate) : (p.priceUsdt || 0);
+                                        return (
+                                            <p className="text-[11px] sm:text-xs font-black text-emerald-600 dark:text-emerald-400">
+                                                {formatCop(finalPrice)}
+                                            </p>
+                                        );
+                                    })()}
                                     <p className="text-[9px] text-slate-400 font-medium">{isOut ? 'Agotado' : `${effectiveStock} disp.`}</p>
                                 </button>
                             );

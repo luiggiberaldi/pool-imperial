@@ -4,9 +4,11 @@ import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useOrdersStore } from '../../hooks/store/useOrdersStore';
 import { useAuthStore } from '../../hooks/store/authStore';
 import { useCashStore } from '../../hooks/store/cashStore';
-import { formatElapsedTime, calculateElapsedTime, calculateSessionCost } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, calculateElapsedTime, calculateSessionCost, buildTableSyntheticCart } from '../../utils/tableBillingEngine';
 import { round2 } from '../../utils/dinero';
 import { showToast } from '../Toast';
+import { useProductContext } from '../../context/ProductContext';
+import { FinancialEngine } from '../../core/FinancialEngine';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -25,6 +27,7 @@ export function TableQueuePanel({ onCheckoutTable }) {
     const paidHoursOffsets = useTablesStore(s => s.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(s => s.paidRoundsOffsets);
     const cachedUsers = useAuthStore(s => s.cachedUsers);
+    const { products } = useProductContext();
 
     // Ensure realtime is active while this panel is mounted
     useEffect(() => {
@@ -68,13 +71,40 @@ export function TableQueuePanel({ onCheckoutTable }) {
                     const elapsed = session.started_at ? calculateElapsedTime(session.started_at) : 0;
                     const isTimeFree = table.type === 'NORMAL';
                     const timeCost = isTimeFree ? 0 : calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, (paidHoursOffsets || {})[session.id] || 0, (paidRoundsOffsets || {})[session.id] || 0, session.seats);
+                    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+                    const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+                    const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+                    const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
                     const seatTimeCost = isTimeFree ? 0 : (session.seats || []).filter(s => !s.paid).reduce((sum, s) => {
                         const tc = (s.timeCharges || []);
                         const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
                         const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
-                        return sum + (h * (config.pricePerHour || 0)) + (p * (config.pricePina || 0));
+                        return sum + (h * finalHora) + (p * finalPina);
                     }, 0);
-                    const grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+                    let grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+                    try {
+                        const tableCheckoutData = {
+                            table,
+                            session,
+                            elapsed,
+                            timeCost,
+                            totalConsumption,
+                            currentItems: items,
+                            config,
+                            hoursOffset: (paidHoursOffsets || {})[session.id] || 0,
+                            roundsOffset: (paidRoundsOffsets || {})[session.id] || 0,
+                            paidHoursOffsets: {},
+                            paidRoundsOffsets: {}
+                        };
+                        const result = buildTableSyntheticCart(tableCheckoutData, config, products);
+                        if (result && result.syntheticCart) {
+                            const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
+                            grandTotal = totals.totalUsd || 0;
+                        }
+                    } catch (e) {
+                        console.error("Error calculating TableQueuePanel grand total:", e);
+                    }
                     const mesero = session.opened_by && cachedUsers?.length
                         ? cachedUsers.find(u => u.id === session.opened_by)
                         : null;

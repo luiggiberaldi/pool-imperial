@@ -56,7 +56,7 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
 
         const tableName = get().tables.find(t => t.id === tableId)?.name ?? tableId;
         const parts = [];
-        if (gameMode === 'PINA' || includePina) parts.push('Piña');
+        if (gameMode === 'PINA' || includePina) parts.push('Jugada');
         if (hoursPaid > 0) parts.push(`${hoursPaid}h`);
         else if (gameMode !== 'PINA') parts.push('Libre');
         const modeLabel = parts.join(' + ') || 'Normal';

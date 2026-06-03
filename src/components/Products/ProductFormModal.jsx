@@ -35,7 +35,12 @@ export default function ProductFormModal({
     products,
     linkedProductId,
     linkedQty,
-    isCombo
+    isCombo,
+    tasaCop,
+    taxType,
+    setTaxType,
+    taxMode,
+    setTaxMode
 }) {
     const fileInputRef = useRef(null);
     const [showSummary, setShowSummary] = useState(false);
@@ -183,6 +188,26 @@ export default function ProductFormModal({
                         )}
                     </div>
 
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="text-xs font-bold text-slate-400 ml-1 mb-1 block uppercase">Impuesto</label>
+                            <select value={taxType} onChange={e => setTaxType(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50">
+                                <option value="exento">Exento (0%)</option>
+                                <option value="iva_19">IVA (19%)</option>
+                                <option value="impoconsumo_8">Impoconsumo (8%)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-400 ml-1 mb-1 block uppercase">Modo Impuesto</label>
+                            <select value={taxMode} onChange={e => setTaxMode(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50">
+                                <option value="inclusive">Incluido en precio</option>
+                                <option value="exclusive">Más impuesto</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-3" data-tour="pf-cost">
                         <div className="col-span-2 sm:col-span-1">
                             <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 ml-1 mb-1 block uppercase tracking-wider">
@@ -288,6 +313,27 @@ export default function ProductFormModal({
                                 className="w-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 p-3.5 pr-10 sm:p-4 sm:pr-10 rounded-xl font-black text-emerald-800 dark:text-emerald-400 outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all text-sm sm:text-base" />
                             {parseFloat(priceUsd) > 0 && (
                                 <CheckCircle size={18} className="absolute right-3 top-[38px] sm:top-[42px] text-emerald-500 transition-all duration-300" />
+                            )}
+                            {parseFloat(priceUsd) > 0 && (
+                                <div className="mt-1.5 ml-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <span>≈ ${(parseFloat(priceUsd) / (tasaCop || 4150)).toFixed(2)} USD</span>
+                                        <span className="text-[9px] text-slate-400 font-medium">(tasa: {tasaCop || 4150})</span>
+                                    </div>
+                                    {(() => {
+                                        const taxRate = taxType === 'iva_19' ? 0.19 : taxType === 'impoconsumo_8' ? 0.08 : 0;
+                                        if (taxMode === 'exclusive' && taxRate > 0) {
+                                            const label = taxType === 'iva_19' ? '19% IVA' : '8% Impoconsumo';
+                                            return (
+                                                <div className="bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-black mt-1 flex justify-between items-center w-full">
+                                                    <span>Precio Final Cliente (+ {label}):</span>
+                                                    <span className="text-sm">{formatCop(parseFloat(priceUsd) * (1 + taxRate))}</span>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                </div>
                             )}
                         </div>
                     </div>

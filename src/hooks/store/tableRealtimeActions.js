@@ -235,7 +235,11 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => ({
                     set(state => ({
                         config: {
                             pricePerHour: Number(payload.new.price_per_hour) || state.config.pricePerHour,
-                            pricePina: Number(payload.new.price_pina) || state.config.pricePina
+                            pricePerHourBs: payload.new.price_per_hour_bs !== undefined ? Number(payload.new.price_per_hour_bs) : state.config.pricePerHourBs,
+                            pricePina: Number(payload.new.price_pina) || state.config.pricePina,
+                            pricePinaBs: payload.new.price_pina_bs !== undefined ? Number(payload.new.price_pina_bs) : state.config.pricePinaBs,
+                            tableTaxType: payload.new.table_tax_type || state.config.tableTaxType || 'exento',
+                            tableTaxMode: payload.new.table_tax_mode || state.config.tableTaxMode || 'inclusive'
                         }
                     }));
                 }

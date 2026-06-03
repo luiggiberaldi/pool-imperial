@@ -43,7 +43,7 @@ export function BillSeatBreakdown({
                                     )}
                                     {seat.timeCharges.filter(tc => tc.type === 'pina').length > 0 && (
                                         <div className="flex justify-between text-slate-600 dark:text-slate-300">
-                                            <span>Piñas ({seat.timeCharges.filter(tc => tc.type === 'pina').reduce((s, tc) => s + tc.amount, 0)})</span>
+                                            <span>Jugadas ({seat.timeCharges.filter(tc => tc.type === 'pina').reduce((s, tc) => s + tc.amount, 0)})</span>
                                             <span className="font-bold">{formatCOP(sb.timeCost.pinaCost)}</span>
                                         </div>
                                     )}

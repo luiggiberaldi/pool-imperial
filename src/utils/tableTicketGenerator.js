@@ -1,6 +1,7 @@
 import { printPreCuentaEscPos, getWebSerialConfig } from '../services/webSerialPrinter';
-import { calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreakdown } from './tableBillingEngine';
+import { calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart } from './tableBillingEngine';
 import { round2 } from './dinero';
+import { FinancialEngine } from '../core/FinancialEngine';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -13,14 +14,14 @@ const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
  *   SIN abrir el cajón de dinero (el cajón solo debe abrirse en ventas exitosas).
  * - Sin impresora térmica: genera PDF via jsPDF + iframe o impresión de ventana directa.
  */
-export async function generatePartialSessionTicketPDF({ table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0 }) {
+export async function generatePartialSessionTicketPDF({ table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0, products = [] }) {
     // Intentar ESC/POS directo si hay impresora térmica configurada.
     const cfg = getWebSerialConfig();
     if (cfg.printerType !== 'system') {
         const hasWebSerialConfigured = cfg.printerType && cfg.printerType !== 'system';
         if (hasWebSerialConfigured) {
             try {
-                const printed = await printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset, roundsOffset });
+                const printed = await printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset, roundsOffset, products });
                 if (printed) return;
                 throw new Error('Puerto no disponible. Ve a Configuración → Impresora y pulsa "Detectar impresora".');
             } catch (err) {
@@ -30,7 +31,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         const tryEscPos = 'serial' in navigator;
         if (tryEscPos) {
             try {
-                const printed = await printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset, roundsOffset });
+                const printed = await printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset, roundsOffset, products });
                 if (printed) return;
             } catch (err) {
                 console.warn('[PreCuenta] ESC/POS falló, usando fallback PDF:', err.message);
@@ -75,7 +76,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
                 push(`<div class="bold accent">COMPARTIDO</div>`);
                 if (hasPinas) {
                     const pp = config?.pricePina || 0;
-                    push(`<div class="row"><span>${pinaCount} piña${pinaCount !== 1 ? 's' : ''} x ${formatCOP(pp)}</span><span>${formatCOP(pinaCount * pp)}</span></div>`);
+                    push(`<div class="row"><span>${pinaCount} jugada${pinaCount !== 1 ? 's' : ''} x ${formatCOP(pp)}</span><span>${formatCOP(pinaCount * pp)}</span></div>`);
                 }
                 if (hasHours) {
                     const ph = config?.pricePerHour || 0;
@@ -95,7 +96,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
                     if (sb.timeCost.hasPinas) {
                         const tc = sb.seat.timeCharges?.filter(tc => tc.type === 'pina') || [];
                         const pp = config?.pricePina || 0;
-                        push(`<div class="row"><span>${tc.length} piña${tc.length !== 1 ? 's' : ''} x ${formatCOP(pp)}</span><span>${formatCOP(sb.timeCost.pinaCost)}</span></div>`);
+                        push(`<div class="row"><span>${tc.length} jugada${tc.length !== 1 ? 's' : ''} x ${formatCOP(pp)}</span><span>${formatCOP(sb.timeCost.pinaCost)}</span></div>`);
                     }
                     if (sb.timeCost.hasHours) {
                         const tc = sb.seat.timeCharges?.filter(tc => tc.type === 'hora') || [];
@@ -123,10 +124,10 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
             const totalPinas = pinaCount + seatPinas;
             const fullCost = round2(totalPinas * pricePerPina);
             const paidCost = round2(roundsOffset * pricePerPina);
-            push(`<div class="bold">Partidas (La Piña)</div>`);
-            push(`<div class="row"><span>${totalPinas} piña${totalPinas !== 1 ? 's' : ''} x ${formatCOP(pricePerPina)}</span><span>${formatCOP(fullCost)}</span></div>`);
+            push(`<div class="bold">Partidas (La Jugada)</div>`);
+            push(`<div class="row"><span>${totalPinas} jugada${totalPinas !== 1 ? 's' : ''} x ${formatCOP(pricePerPina)}</span><span>${formatCOP(fullCost)}</span></div>`);
             if (roundsOffset > 0) {
-                push(`<div class="row muted"><span>Pagado (${roundsOffset} piña${roundsOffset !== 1 ? 's' : ''})</span><span>-${formatCOP(paidCost)}</span></div>`);
+                push(`<div class="row muted"><span>Pagado (${roundsOffset} jugada${roundsOffset !== 1 ? 's' : ''})</span><span>-${formatCOP(paidCost)}</span></div>`);
             }
         }
 
@@ -154,9 +155,43 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         }
     }
 
+    let baseBeforeTaxes = grandTotal;
+    let totalTax = 0;
+    let taxBreakdown = {};
+
+    try {
+        const { syntheticCart } = buildTableSyntheticCart(
+            { table, session, elapsed, currentItems, grandTotal, paidHoursOffsets: { [session?.id]: hoursOffset }, paidRoundsOffsets: { [session?.id]: roundsOffset } },
+            config,
+            products || []
+        );
+        const totals = FinancialEngine.buildCartTotals(syntheticCart, { active: false }, 1, 1);
+        totalTax = totals.totalTax;
+        baseBeforeTaxes = grandTotal - totalTax;
+        taxBreakdown = totals.taxBreakdown;
+    } catch (e) {
+        console.error('[generatePartialSessionTicketPDF] Error building synthetic cart taxes:', e);
+    }
+
     push(`<hr>`);
+    if (totalTax > 0) {
+        push(`<div class="row small"><span>Base Gravable:</span><span>${formatCOP(baseBeforeTaxes)}</span></div>`);
+        Object.entries(taxBreakdown).forEach(([taxKey, taxVal]) => {
+            if (taxVal > 0) {
+                const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                push(`<div class="row small"><span>${taxLabel}:</span><span>${formatCOP(taxVal)}</span></div>`);
+            }
+        });
+        push(`<hr>`);
+    }
+
     const totalLabel = hasPaidBefore ? "TOTAL PENDIENTE:" : "TOTAL ESTIMADO:";
     push(`<div class="row total"><span>${totalLabel}</span><span>${formatCOP(grandTotal)}</span></div>`);
+    if (tasaUSD && tasaUSD > 1) {
+        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
+        push(`<div class="row small"><span>Tasa de cambio:</span><span>${formatCOP(tasaUSD)}</span></div>`);
+        push(`<div class="row bold"><span>Equivalente USD:</span><span>${formatUsdVal(grandTotal / tasaUSD)}</span></div>`);
+    }
     push(`<div class="center disclaimer">*** NO ES RECIBO DE PAGO ***</div>`);
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>

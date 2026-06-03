@@ -18,6 +18,15 @@ export function OpenWizardModal({
     config, tableName,
     onFinish,
 }) {
+    const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
+        style: 'currency', currency: 'COP', minimumFractionDigits: 0
+    }).format(Math.round(val || 0));
+
+    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+    const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+    const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
     const title = wizardStep === 1 ? (tableName ? `Abrir ${tableName}` : 'Abrir Mesa')
         : wizardStep === 2 ? (tableName ? `Modo de Juego — ${tableName}` : 'Modo de Juego')
         : wizardStep === 3 ? '¿A quién cobrar?'
@@ -85,11 +94,16 @@ export function OpenWizardModal({
                                 </div>
                                 <div className="flex-1 text-left">
                                     <div className={`font-black text-sm ${modePina ? 'text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}>
-                                        La Piña
+                                        Jugada
                                     </div>
                                     <div className="text-xs text-slate-500 dark:text-slate-400">
-                                        ${config.pricePina || 0} por partida
+                                        {formatCOP(finalPina)} por partida
                                     </div>
+                                    {isExclusive && (
+                                        <div className="text-[9px] text-slate-400 mt-0.5 font-bold">
+                                            Base: {formatCOP(config.pricePina || 0)} + {config.tableTaxType === 'iva_19' ? 'IVA' : 'Impo.'}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                                     modePina ? 'bg-amber-500 border-amber-500' : 'border-slate-300 dark:border-slate-600'
@@ -117,8 +131,13 @@ export function OpenWizardModal({
                                         Por Hora
                                     </div>
                                     <div className="text-xs text-slate-500 dark:text-slate-400">
-                                        ${config.pricePerHour || 0}/hora · Prepago
+                                        {formatCOP(finalHora)}/hora · Prepago
                                     </div>
+                                    {isExclusive && (
+                                        <div className="text-[9px] text-slate-400 mt-0.5 font-bold">
+                                            Base: {formatCOP(config.pricePerHour || 0)} + {config.tableTaxType === 'iva_19' ? 'IVA' : 'Impo.'}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                                     modeHora ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600'
@@ -156,7 +175,7 @@ export function OpenWizardModal({
                             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
                                 <span>Modo:</span>
                                 <div className="flex gap-1.5">
-                                    {modePina && <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">Piña</span>}
+                                    {modePina && <span className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full">Jugada</span>}
                                     {modePina && modeHora && <span>+</span>}
                                     {modeHora && selectedHours > 0 && <span className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-full">{selectedHours === 0.5 ? '30 min' : `${selectedHours}h`}</span>}
                                     {modeHora && !selectedHours && <span className="bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">Selecciona tiempo</span>}
@@ -196,7 +215,7 @@ export function OpenWizardModal({
                     <>
                         <p className="text-xs text-slate-500">
                             {modePina && !modeHora
-                                ? '¿Quién paga la primera piña?'
+                                ? '¿Quién paga la primera jugada?'
                                 : '¿Quién paga las primeras horas?'
                             }
                         </p>
@@ -261,8 +280,8 @@ export function OpenWizardModal({
                 {/* ── Step 4: Confirmar ── */}
                 {wizardStep === 4 && (() => {
                     const modeLabel = modePina && modeHora
-                        ? `Piña + ${selectedHours === 0.5 ? '30 min' : `${selectedHours}h`}`
-                        : modePina ? 'La Piña'
+                        ? `Jugada + ${selectedHours === 0.5 ? '30 min' : `${selectedHours}h`}`
+                        : modePina ? 'Jugada'
                         : selectedHours === 0.5 ? 'Prepago 30 min'
                         : `Prepago ${selectedHours}h`;
                     const clientsLabel = sessionSeats.length > 0

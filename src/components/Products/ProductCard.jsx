@@ -145,24 +145,39 @@ export default function ProductCard({
                     </div>
                 )}
 
-                <div className="flex justify-between items-end mb-3">
-                    <div>
-                        <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                            {formatCop(p.priceUsdt)} <span className="text-[10px] sm:text-xs font-bold text-emerald-600/50 dark:text-emerald-400/50">{(p.unit === 'kg' || p.unit === 'litro') ? `/ ${unitInfo?.short || 'ud'}` : ''}</span>
-                        </p>
-                        {p.unit === 'paquete' && p.sellByUnit && (
-                            <p className="text-[10px] sm:text-xs font-bold text-indigo-500 dark:text-indigo-400 mt-0.5 flex items-center gap-0.5">
-                                <Layers size={10} />
-                                {formatCop(p.unitPriceUsd ?? p.priceUsdt / (p.unitsPerPackage || 1))} / ud
-                            </p>
-                        )}
-                    </div>
-                    {!readOnly && margin !== null && (
-                        <span className={`text-[10px] sm:text-xs font-black px-2 py-1 rounded-lg ${margin >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'}`}>
-                            {margin >= 0 ? '+' : ''}{margin.toFixed(0)}%
-                        </span>
-                    )}
-                </div>
+                {(() => {
+                    const taxRate = p.taxType === 'iva_19' ? 0.19 : p.taxType === 'impoconsumo_8' ? 0.08 : 0;
+                    const isExclusiveTax = p.taxMode === 'exclusive' && taxRate > 0;
+                    const finalPrice = isExclusiveTax ? (p.priceUsdt || 0) * (1 + taxRate) : (p.priceUsdt || 0);
+                    return (
+                        <div className="flex justify-between items-end mb-3 w-full">
+                            <div>
+                                <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 leading-none">
+                                    {formatCop(finalPrice)} <span className="text-[10px] sm:text-xs font-bold text-emerald-600/50 dark:text-emerald-400/50">{(p.unit === 'kg' || p.unit === 'litro') ? `/ ${unitInfo?.short || 'ud'}` : ''}</span>
+                                </p>
+                                <p className="text-[10px] sm:text-[11px] font-extrabold text-slate-500 dark:text-slate-400 mt-1.5 leading-none">
+                                    ≈ ${(finalPrice / (tasaCop || 4150)).toFixed(2)} USD
+                                </p>
+                                {isExclusiveTax && (
+                                    <p className="text-[9px] font-bold text-slate-450 dark:text-slate-500 mt-1.5 leading-none">
+                                        Base: {formatCop(p.priceUsdt)} + {p.taxType === 'iva_19' ? 'IVA' : 'Impo.'}
+                                    </p>
+                                )}
+                                {p.unit === 'paquete' && p.sellByUnit && (
+                                    <p className="text-[10px] sm:text-xs font-bold text-indigo-500 dark:text-indigo-400 mt-0.5 flex items-center gap-0.5">
+                                        <Layers size={10} />
+                                        {formatCop(p.unitPriceUsd ?? p.priceUsdt / (p.unitsPerPackage || 1))} / ud
+                                    </p>
+                                )}
+                            </div>
+                            {!readOnly && margin !== null && (
+                                <span className={`text-[10px] sm:text-xs font-black px-2 py-1 rounded-lg ${margin >= 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'}`}>
+                                    {margin >= 0 ? '+' : ''}{margin.toFixed(0)}%
+                                </span>
+                            )}
+                        </div>
+                    );
+                })()}
 
                 {/* Stock Control — oculto para combos (su stock se calcula de los componentes) */}
                 {p.isCombo ? (

@@ -7,6 +7,7 @@ const PM_KEY = 'pool_imperial_payment_methods_v1';
 // Todos operan en COP (Pesos Colombianos).
 export const FACTORY_PAYMENT_METHODS = [
     { id: 'efectivo',      label: 'Efectivo',               icon: '💵', Icon: Banknote,    currency: 'COP', isFactory: true },
+    { id: 'efectivo_usd',  label: 'Efectivo USD',           icon: '💵', Icon: DollarSign,  currency: 'USD', isFactory: true },
     { id: 'nequi',         label: 'Nequi',                  icon: '📱', Icon: Smartphone,  currency: 'COP', isFactory: true },
     { id: 'daviplata',     label: 'Daviplata',              icon: '📲', Icon: Smartphone,  currency: 'COP', isFactory: true },
     { id: 'transferencia', label: 'Transferencia Bancaria',  icon: '🏦', Icon: Store,       currency: 'COP', isFactory: true },
@@ -177,6 +178,7 @@ export const getPaymentIcon = (id) => {
 // Icon lookup para React components
 export const PAYMENT_ICONS = {
     efectivo:      Banknote,
+    efectivo_usd:  DollarSign,
     nequi:         Smartphone,
     daviplata:     Smartphone,
     transferencia: Store,

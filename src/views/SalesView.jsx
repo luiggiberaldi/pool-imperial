@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo, useDeferredValue } from 'react';
 import { FinancialEngine } from '../core/FinancialEngine';
+import { round2 } from '../utils/dinero';
 import { storageService } from '../utils/storageService';
 import { processSaleTransaction } from '../utils/checkoutProcessor';
 import { useSounds } from '../hooks/useSounds';
 import { useVoiceSearch } from '../hooks/useVoiceSearch';
 import { useTablesStore } from '../hooks/store/useTablesStore';
-import { calculateFullTableBreakdown } from '../utils/tableBillingEngine';
+import { calculateFullTableBreakdown, buildTableSyntheticCart } from '../utils/tableBillingEngine';
 import { useOrdersStore } from '../hooks/store/useOrdersStore';
 import { useNotifications } from '../hooks/useNotifications';
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
@@ -82,7 +83,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
     const currentFloat = useMemo(() => buildCurrentFloat(salesData), [salesData, buildCurrentFloat]);
 
     // ── Cart totals ──
-    const { subtotalUsd: cartSubtotalUsd, discountAmountUsd, totalUsd: cartTotalUsd } = useMemo(() =>
+    const { subtotalUsd: cartSubtotalUsd, discountAmountUsd, totalUsd: cartTotalUsd, totalTax, taxBreakdown } = useMemo(() =>
         FinancialEngine.buildCartTotals(cart, discount, 1, 1),
         [cart, discount]);
 
@@ -346,6 +347,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             <CartPanel cart={cart} effectiveRate={1}
                                 cartSubtotalUsd={cartSubtotalUsd}
                                 cartTotalUsd={cartTotalUsd} cartItemCount={cartItemCount}
+                                totalTax={totalTax} taxBreakdown={taxBreakdown}
                                 discountData={discountData} onOpenDiscount={() => setShowDiscountModal(true)}
                                 updateQty={updateQty} removeFromCart={removeFromCart}
                                 onCheckout={() => { triggerHaptic && triggerHaptic(); setShowCheckout(true); }}
@@ -388,6 +390,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                                         <CartPanel cart={cart} effectiveRate={1}
                                             cartSubtotalUsd={cartSubtotalUsd}
                                             cartTotalUsd={cartTotalUsd} cartItemCount={cartItemCount}
+                                            totalTax={totalTax} taxBreakdown={taxBreakdown}
                                             discountData={discountData} onOpenDiscount={() => { setIsCartSheetOpen(false); setShowDiscountModal('sheet'); }}
                                             updateQty={updateQty} removeFromCart={removeFromCart}
                                             onCheckout={() => { triggerHaptic && triggerHaptic(); setShowCheckout(true); setIsCartSheetOpen(false); }}
@@ -405,10 +408,14 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                 <CheckoutModal onClose={() => { setShowCheckout(false); setSelectedCustomerId(''); }}
                     cartSubtotalUsd={cartSubtotalUsd}
                     cartTotalUsd={cartTotalUsd}
+                    totalTax={totalTax}
+                    taxBreakdown={taxBreakdown}
                     discountData={discountData} effectiveRate={1}
                     customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId}
                     paymentMethods={paymentMethods}
-                    onConfirmSale={(payments, change, splitMeta, tdcSurchargePercent, tdcSurcharge, ivaRate) => {
+                    tasaCop={tasaCop}
+                    copEnabled={copEnabled}
+                    onConfirmSale={(payments, change, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax) => {
                         triggerHaptic && triggerHaptic();
                         const finalCart = [...cart];
                         if (tdcSurcharge > 0) {
@@ -425,19 +432,18 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                                 stock: 9999
                             });
                         }
-                        const cleanIvaRate = Number(ivaRate) || 0;
-                        const ivaAmount = cleanIvaRate > 0 ? Math.round(cartTotalUsd * (cleanIvaRate / 100)) : 0;
-                        const finalTotal = cartTotalUsd + tdcSurcharge + ivaAmount;
+                        const finalTotal = cartTotalUsd + tdcSurcharge;
 
                         const opts = {
                             cart: finalCart,
                             cartTotalUsd: finalTotal,
                             cartTotalBs: 0,
-                            cartSubtotalUsd: cartSubtotalUsd + tdcSurcharge + ivaAmount,
+                            cartSubtotalUsd: cartSubtotalUsd + tdcSurcharge,
                             payments, changeBreakdown: change,
-                            selectedCustomerId, customers, products, effectiveRate: 1, tasaCop: 1, copEnabled: true,
+                            selectedCustomerId, customers, products, effectiveRate: 1, tasaCop: tasaCop, copEnabled: copEnabled,
                             discountData: discountData ? { ...discountData, amountBs: 0 } : null, useAutoRate: false, splitMeta,
-                            ivaRate: cleanIvaRate
+                            totalTax,
+                            taxBreakdown
                         };
                         processSaleTransaction(opts).then((result) => {
                             if (!result.success) {
@@ -565,20 +571,57 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
 
             {tableCheckoutData && showTablePayment && (() => {
                 const discData = tableCheckoutData.discountData || { active: false, amountUsd: 0, amountBs: 0, type: 'percentage', value: 0 };
-                const finalTotal = tableCheckoutData.grandTotal;
+                
+                const tableConfig = useTablesStore.getState().config;
+                const { paidHoursOffsets, paidRoundsOffsets } = useTablesStore.getState();
+                const tableCheckoutParams = {
+                    ...tableCheckoutData,
+                    paidHoursOffsets,
+                    paidRoundsOffsets
+                };
+                const { syntheticCart } = buildTableSyntheticCart(tableCheckoutParams, tableConfig, products);
+                
+                if (tableCheckoutData.includeServiceCharge && tableCheckoutData.serviceChargePercent > 0) {
+                    // 1. Calcular totales base con impuestos pero sin cargo de servicio
+                    const baseTotals = FinancialEngine.buildCartTotals(syntheticCart, discData, 1, 1);
+                    const svcPercent = tableCheckoutData.serviceChargePercent;
+                    // 2. Calcular cargo de servicio sobre el total con impuestos (tax-inclusive)
+                    const serviceChargePriceVal = Math.round(baseTotals.totalUsd * (svcPercent / 100));
+                    if (serviceChargePriceVal > 0) {
+                        syntheticCart.push({
+                            id: crypto.randomUUID(),
+                            name: `Servicio Voluntario (${svcPercent}%)`,
+                            priceUsdt: serviceChargePriceVal,
+                            priceUsd: serviceChargePriceVal,
+                            qty: 1,
+                            costUsd: 0,
+                            costBs: 0,
+                            category: 'servicios',
+                            unit: 'servicio',
+                            stock: 9999
+                        });
+                    }
+                }
+
+                const tableTotals = FinancialEngine.buildCartTotals(syntheticCart, discData, 1, 1);
+
                 return (
                 <CheckoutModal onClose={() => { setTableCheckoutData(null); setShowTablePayment(false); setSelectedCustomerId(''); }}
-                    cartSubtotalUsd={finalTotal}
-                    cartTotalUsd={finalTotal}
+                    cartSubtotalUsd={tableTotals.subtotalUsd}
+                    cartTotalUsd={tableTotals.totalUsd}
+                    totalTax={tableTotals.totalTax}
+                    taxBreakdown={tableTotals.taxBreakdown}
                     discountData={discData} effectiveRate={1}
                     customers={customers} selectedCustomerId={selectedCustomerId} setSelectedCustomerId={setSelectedCustomerId}
                     paymentMethods={paymentMethods}
                     tableContext={tableCheckoutData}
-                    onConfirmSale={(payments, change, splitMeta, tdcSurchargePercent, tdcSurcharge, ivaRate) => {
+                    tasaCop={tasaCop}
+                    copEnabled={copEnabled}
+                    onConfirmSale={(payments, change, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax) => {
                         const sessionId = tableCheckoutData.session?.id;
                         const tableName = tableCheckoutData.table?.name || 'Mesa';
                         const isSeatPayment = !!tableCheckoutData.seatId;
-                        handleTableCheckout(payments, change, selectedCustomerId, null, splitMeta, { tdcSurchargePercent, tdcSurcharge, ivaRate }).then((res) => {
+                        handleTableCheckout(payments, change, selectedCustomerId, null, splitMeta, { tdcSurchargePercent, tdcSurcharge, totalTax }).then((res) => {
                             if (res && res.success === false) return; // checkout failed — don't show success dialog
                             setShowTablePayment(false);
                             // Solo mostrar diálogo liberar/mantener cuando es cobro completo o todos los asientos pagados

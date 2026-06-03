@@ -81,12 +81,15 @@ function _printThermalHTML(sale, _bcvRate) {
 
     // Generar filas de pagos
     const paymentsHtml = (sale.payments || []).map(p => {
-        // En Pool Imperial, todos los pagos y montos están en COP
-        const amount = p.amountUsd || 0; // Almacenado como amountUsd por compatibilidad
+        const isUsd = p.amountOriginalCurrency === 'USD';
+        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
+        const amountStr = isUsd 
+            ? `${formatUsdVal(p.amountOriginal)} USD` 
+            : `${formatCOP(p.amountUsd || p.amountCOP || 0)} COP`;
         return `
             <tr>
                 <td style="font-size:11px;padding:2px 0;">${p.methodLabel || 'Pago'}</td>
-                <td style="font-size:11px;font-weight:bold;text-align:right;padding:2px 0;">${formatCOP(amount)}</td>
+                <td style="font-size:11px;font-weight:bold;text-align:right;padding:2px 0;">${amountStr}</td>
             </tr>`;
     }).join('');
 
@@ -98,9 +101,41 @@ function _printThermalHTML(sale, _bcvRate) {
             </tr></table>
         </div>` : '';
 
-    // Generar bloque de totales con desglose de IVA (inclusivo)
-    const hasIva = (sale.ivaRate || 0) > 0;
-    const baseBeforeIva = sale.totalUsd - (sale.ivaAmount || 0);
+    // Generar bloque de totales con desglose de IVA y otros impuestos dinámico
+    const hasTaxes = (sale.ivaAmount || 0) > 0;
+    const baseBeforeTaxes = sale.totalUsd - (sale.ivaAmount || 0);
+
+    let taxesHtml = '';
+    if (hasTaxes) {
+        if (sale.taxBreakdown && Object.keys(sale.taxBreakdown).length > 0) {
+            taxesHtml = `
+            <tr>
+                <td style="text-align:left; padding:2px 0; color:#555;">Base Gravable:</td>
+                <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(baseBeforeTaxes)}</td>
+            </tr>`;
+            Object.entries(sale.taxBreakdown).forEach(([taxKey, taxVal]) => {
+                if (taxVal > 0) {
+                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                    taxesHtml += `
+                    <tr>
+                        <td style="text-align:left; padding:2px 0; color:#555;">${taxLabel}:</td>
+                        <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(taxVal)}</td>
+                    </tr>`;
+                }
+            });
+        } else {
+            // Fallback retrocompatible para ventas antiguas
+            taxesHtml = `
+            <tr>
+                <td style="text-align:left; padding:2px 0; color:#555;">Base Gravable:</td>
+                <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(baseBeforeTaxes)}</td>
+            </tr>
+            <tr>
+                <td style="text-align:left; padding:2px 0; color:#555;">IVA (${sale.ivaRate || 19}%):</td>
+                <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(sale.ivaAmount || 0)}</td>
+            </tr>`;
+        }
+    }
 
     const totalsBreakdownHtml = `
         <table style="width:100%; font-size:${fSmall}; margin-bottom:6px; border-collapse:collapse;">
@@ -115,18 +150,21 @@ function _printThermalHTML(sale, _bcvRate) {
             </tr>
             ` : ''}
             
-            ${hasIva ? `
-            <tr>
-                <td style="text-align:left; padding:2px 0; color:#555;">Base Gravable:</td>
-                <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(baseBeforeIva)}</td>
-            </tr>
-            <tr>
-                <td style="text-align:left; padding:2px 0; color:#555;">IVA (${sale.ivaRate}%):</td>
-                <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(sale.ivaAmount || 0)}</td>
-            </tr>
-            ` : ''}
+            ${taxesHtml}
         </table>
     `;
+
+    const totalDisplay = sale.totalUsd || 0;
+    const rateHtml = (sale.rate > 1) ? (() => {
+        const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);
+        return `
+            <table style="width:100%; font-size:${fSmall}; margin-top:4px; border-collapse:collapse;">
+                <tr>
+                    <td style="text-align:left; color:#555; padding:2px 0;">Tasa: ${formatCOP(sale.rate)}</td>
+                    <td style="text-align:right; font-weight:bold; padding:2px 0;">≈ ${formatUsdVal(totalDisplay / sale.rate)}</td>
+                </tr>
+            </table>`;
+    })() : '';
 
     const html = `<!DOCTYPE html>
 <html>
@@ -231,7 +269,8 @@ function _printThermalHTML(sale, _bcvRate) {
     <div style="margin:8px 0;">
         ${totalsBreakdownHtml}
         <div class="center bold" style="font-size:${fSmall};color:#000;margin-bottom:4px;">TOTAL A PAGAR</div>
-        <div class="total-usd">${formatCOP(sale.totalUsd || 0)}</div>
+        <div class="total-usd">${formatCOP(totalDisplay)}</div>
+        ${rateHtml}
     </div>
 
     <hr class="dash">

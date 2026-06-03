@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Move } from 'lucide-react';
-import { calculateElapsedTime, calculateSessionCost, calculateSessionCostBreakdown, calculateConsumptionBs } from '../../utils/tableBillingEngine';
+import { calculateElapsedTime, calculateSessionCost, calculateSessionCostBreakdown, calculateConsumptionBs, buildTableSyntheticCart } from '../../utils/tableBillingEngine';
+import { FinancialEngine } from '../../core/FinancialEngine';
 import { round2 } from '../../utils/dinero';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useAuthStore } from '../../hooks/store/authStore';
@@ -168,7 +169,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const handleStartNormal = async (hours = 0, clientName = '', guestCount = 0, clientId = null, includePina = false, seats = []) => {
         if (!currentUser) return;
         const parts = [];
-        if (includePina) parts.push('Piña');
+        if (includePina) parts.push('Jugada');
         if (hours === 0) parts.push('Libre');
         else if (hours === 0.5) parts.push('Prepago 30 min');
         else parts.push(`Prepago ${hours} hr${hours !== 1 ? 's' : ''}`);
@@ -181,7 +182,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
 
     const handleStartPina = async (clientName = '', guestCount = 0, clientId = null, seats = []) => {
         if (!currentUser) return;
-        const ok = await confirm({ title: `Abrir ${table.name}`, message: '¿Confirmar apertura en modo La Piña?', confirmText: 'Abrir Mesa', cancelText: 'Cancelar', variant: 'warning' });
+        const ok = await confirm({ title: `Abrir ${table.name}`, message: '¿Confirmar apertura en modo La Jugada?', confirmText: 'Abrir Mesa', cancelText: 'Cancelar', variant: 'warning' });
         if (!ok) return;
         await openSession(table.id, currentUser.id, 'PINA', 0, clientName, guestCount, clientId, false, seats);
     };
@@ -428,7 +429,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
         try {
             await generatePartialSessionTicketPDF({
                 table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config,
-                hoursOffset, roundsOffset
+                hoursOffset, roundsOffset, products
             });
             showToast('Pre-cuenta enviada a la impresora', 'success');
         } catch (err) {
@@ -447,14 +448,45 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const seatHasHours = (session?.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
     const hasPinas = (costBreakdown ? costBreakdown.hasPinas : (session?.game_mode === 'PINA')) || seatHasPinas;
     const hasHoursActive = (costBreakdown ? costBreakdown.hasHours : (session?.hours_paid > 0)) || seatHasHours;
+    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+    const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+    const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
     // Sumar costo de seat-level timeCharges (horas + piñas asignadas a clientes)
     const seatTimeCost = isPlaying && !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
         const tc = (s.timeCharges || []);
         const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
         const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
-        return sum + (h * (config.pricePerHour || 0)) + (p * (config.pricePina || 0));
+        return sum + (h * finalHora) + (p * finalPina);
     }, 0) : 0;
-    const grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+    const grandTotal = useMemo(() => {
+        const baseTotal = round2(timeCost + seatTimeCost + totalConsumption);
+        if (baseTotal <= 0 || !session) return 0;
+        try {
+            const tableCheckoutData = {
+                table,
+                session,
+                elapsed,
+                timeCost,
+                totalConsumption,
+                currentItems,
+                config,
+                hoursOffset,
+                roundsOffset,
+                paidHoursOffsets: {},
+                paidRoundsOffsets: {}
+            };
+            const result = buildTableSyntheticCart(tableCheckoutData, config, products);
+            if (result && result.syntheticCart) {
+                const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
+                return totals.totalUsd || 0;
+            }
+        } catch (e) {
+            console.error("Error calculating tax-inclusive table card grand total:", e);
+        }
+        return baseTotal;
+    }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, products]);
     // Mesa pagada sin cerrar y sin cargos nuevos agregados (ni tiempo ni consumo)
     const isPaidIdle = isPlaying && !!session?.paid_at && grandTotal === 0;
     const seatHoursTotal = (session?.seats || []).reduce((sum, s) =>
@@ -572,7 +604,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                 <div className={`px-2 py-1 rounded-md text-[9px] font-black tracking-widest uppercase shrink-0 ${
                     isAvailable ? 'bg-emerald-100 text-emerald-700' : isPaidIdle ? 'bg-emerald-400 text-white' : (hasLimit && isExceeded) ? 'bg-rose-500 text-white border border-rose-400' : hasLimit ? 'bg-amber-400 text-slate-900 border border-amber-300' : 'bg-white/20 text-white backdrop-blur-md'
                 }`}>
-                    {isAvailable ? 'LIBRE' : isPaidIdle ? 'PAGADO' : isMixedMode ? 'PIÑA + HORA' : session.game_mode === 'PINA' ? 'LA PIÑA' : session.game_mode === 'CONSUMO' ? 'BAR' : isTimeFree ? 'BAR' : (wasOpenedWithHours && isExceeded) ? 'SIN TIEMPO' : hasLimit ? (totalHoursPaid === 0.5 ? 'PREPAGO 30MIN' : `PREPAGO ${totalHoursPaid}h`) : hasPinas ? 'LA PIÑA' : 'JUG.'}
+                    {isAvailable ? 'LIBRE' : isPaidIdle ? 'PAGADO' : isMixedMode ? 'JUGADA + HORA' : session.game_mode === 'PINA' ? 'LA JUGADA' : session.game_mode === 'CONSUMO' ? 'BAR' : isTimeFree ? 'BAR' : (wasOpenedWithHours && isExceeded) ? 'SIN TIEMPO' : hasLimit ? (totalHoursPaid === 0.5 ? 'PREPAGO 30MIN' : `PREPAGO ${totalHoursPaid}h`) : hasPinas ? 'LA JUGADA' : 'JUG.'}
                 </div>
             </div>
 

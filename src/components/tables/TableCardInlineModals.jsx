@@ -139,7 +139,7 @@ export default function TableCardInlineModals({
                         }}
                         className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 font-black py-4 rounded-xl border border-amber-500/20 shadow-sm flex items-center justify-center gap-2 text-lg disabled:opacity-50 disabled:pointer-events-none"
                     >
-                        <TargetIcon size={20} /> + 1 Piña
+                        <TargetIcon size={20} /> + 1 Jugada
                     </button>
                 )}
 
@@ -219,16 +219,16 @@ export default function TableCardInlineModals({
         />
 
         {/* Confirmación Piña — solo para MESERO */}
-        <Modal isOpen={showPinaConfirm} onClose={() => setShowPinaConfirm(false)} title="Confirmar Piña">
+        <Modal isOpen={showPinaConfirm} onClose={() => setShowPinaConfirm(false)} title="Confirmar Jugada">
             <div className="flex flex-col gap-4 py-2">
                 <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
                     <span className="text-3xl">🎱</span>
                     <div>
                         <p className="font-black text-slate-800 text-sm">{table.name}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">Se abrirá en modo <strong>Piña</strong> (precio fijo por partida).</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Se abrirá en modo <strong>Jugada</strong> (precio fijo por partida).</p>
                     </div>
                 </div>
-                <p className="text-xs text-slate-500 text-center">¿Confirmas que quieres abrir esta mesa en modo Piña?</p>
+                <p className="text-xs text-slate-500 text-center">¿Confirmas que quieres abrir esta mesa en modo Jugada?</p>
                 <div className="flex gap-3">
                     <button
                         onClick={() => setShowPinaConfirm(false)}
@@ -240,7 +240,7 @@ export default function TableCardInlineModals({
                         onClick={() => { setShowPinaConfirm(false); handleStartPina(); }}
                         className="flex-1 py-3 text-sm font-bold text-white bg-amber-500 rounded-xl hover:bg-amber-400 active:scale-95 transition-all shadow-md shadow-amber-500/20"
                     >
-                        Sí, abrir Piña
+                        Sí, abrir Jugada
                     </button>
                 </div>
             </div>

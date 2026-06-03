@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock, Coffee, Percent, Tag, Trash2 } from 'lucide-react';
-import { formatElapsedTime, formatHoursPaid } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, formatHoursPaid, computeItemTax } from '../../utils/tableBillingEngine';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -23,7 +23,13 @@ export function BillClassicBreakdown({
     itemDiscounts, setItemDiscounts,
     discountPopoverItem, setDiscountPopoverItem,
     discountCustomValue, setDiscountCustomValue,
+    products,
 }) {
+    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+    const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+    const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
     return (
         <>
         {/* Piñas — visible si la sesión tiene piñas */}
@@ -32,15 +38,15 @@ export function BillClassicBreakdown({
                 <div className="flex items-center gap-2 px-4 py-2 border-b border-amber-100 dark:border-amber-900/30">
                     <TargetIcon size={13} />
                     <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                        Piñas jugadas
+                        Jugadas
                     </p>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3">
                     <div>
                         <p className="text-sm font-bold text-slate-700 dark:text-white">
-                            {pinaCount} piña{pinaCount !== 1 ? 's' : ''}
+                            {pinaCount} jugada{pinaCount !== 1 ? 's' : ''}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{formatCOP(config.pricePina || 0)} por piña</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{formatCOP(finalPina)} por jugada</p>
                     </div>
                     <div className="text-right">
                         <p className="text-base font-black text-slate-800 dark:text-white">{formatCOP(fullBreakdown.pinaCost)}</p>
@@ -48,8 +54,8 @@ export function BillClassicBreakdown({
                 </div>
                 {roundsOffset > 0 && (
                     <div className="flex items-center justify-between px-4 py-2 border-t border-amber-100 dark:border-amber-900/30 bg-amber-100/40 dark:bg-amber-900/20">
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Pagado ({roundsOffset} piña{roundsOffset !== 1 ? 's' : ''})</p>
-                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">-{formatCOP(roundsOffset * (config.pricePina || 0))}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Pagado ({roundsOffset} jugada{roundsOffset !== 1 ? 's' : ''})</p>
+                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">-{formatCOP(roundsOffset * finalPina)}</p>
                     </div>
                 )}
             </div>
@@ -67,7 +73,7 @@ export function BillClassicBreakdown({
                 <div className="flex items-center justify-between px-4 py-3">
                     <div>
                         <p className="text-sm font-bold text-slate-700 dark:text-white">{formatElapsedTime(elapsed)}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">{formatCOP(config.pricePerHour || 0)}/hora · {formatHoursPaid(Number(session.hours_paid) || 0)} pagadas</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">{formatCOP(finalHora)}/hora · {formatHoursPaid(Number(session.hours_paid) || 0)} pagadas</p>
                     </div>
                     <div className="text-right">
                         <p className="text-base font-black text-slate-800 dark:text-white">{formatCOP(fullBreakdown.hourCost)}</p>
@@ -76,7 +82,7 @@ export function BillClassicBreakdown({
                 {hoursOffset > 0 && (
                     <div className="flex items-center justify-between px-4 py-2 border-t border-blue-100 dark:border-blue-900/30 bg-blue-100/40 dark:bg-blue-900/20">
                         <p className="text-xs text-slate-500 dark:text-slate-400">Pagado ({formatHoursPaid(hoursOffset)})</p>
-                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">-{formatCOP(hoursOffset * (config.pricePerHour || 0))}</p>
+                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">-{formatCOP(hoursOffset * finalHora)}</p>
                     </div>
                 )}
             </div>
@@ -114,7 +120,10 @@ export function BillClassicBreakdown({
                 </div>
                 <div className="divide-y divide-amber-100 dark:divide-amber-900/20">
                     {currentItems.map((item, i) => {
-                        const lineTotal = Number(item.unit_price_usd) * Number(item.qty);
+                        const p = products?.find(prod => prod.id === item.product_id);
+                        const itemTaxDetail = computeItemTax(Number(item.unit_price_usd), p?.taxType || 'exento', p?.taxMode || 'inclusive');
+                        const finalUnitPrice = itemTaxDetail.total;
+                        const lineTotal = finalUnitPrice * Number(item.qty);
                         const disc = itemDiscounts[item.id];
                         const hasDisc = disc && disc.value > 0;
                         const discAmt = hasDisc ? (disc.type === 'percentage' ? lineTotal * (disc.value / 100) : Math.min(disc.value * Number(item.qty), lineTotal)) : 0;
@@ -135,6 +144,11 @@ export function BillClassicBreakdown({
                                                 <p className="text-[10px] text-slate-400">
                                                     {formatCOP(Number(item.unit_price_usd))} c/u
                                                 </p>
+                                                {p?.taxType !== 'exento' && p?.taxMode === 'exclusive' && (
+                                                    <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded">
+                                                        + {p.taxType === 'iva_19' ? '19% IVA' : '8% Impo.'}
+                                                    </span>
+                                                )}
                                                 {hasDisc && (
                                                     <span className="inline-flex items-center gap-0.5 bg-rose-100 dark:bg-rose-900/30 text-rose-500 text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none">
                                                         <Tag size={7} />
@@ -159,6 +173,9 @@ export function BillClassicBreakdown({
                                                 </>
                                             ) : (
                                                 <p className="text-sm font-black text-slate-800 dark:text-white">{formatCOP(lineTotal)}</p>
+                                            )}
+                                            {p?.taxType !== 'exento' && p?.taxMode === 'exclusive' && (
+                                                <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block text-right mt-0.5">+ IVA</span>
                                             )}
                                         </div>
                                     </div>

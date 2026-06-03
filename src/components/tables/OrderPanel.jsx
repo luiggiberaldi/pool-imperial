@@ -47,16 +47,24 @@ export function OrderPanel({ session, table, onClose }) {
     const hasSeats = seats.length > 1; // Only show seat UI when 2+ clients
     const [selectedSeatId, setSelectedSeatId] = useState(() => seats.length === 1 ? seats[0].id : null);
 
+    const getFinalPriceOfItem = (item) => {
+        const p = products.find(prod => prod.id === item.product_id);
+        if (!p) return Number(item.unit_price_usd);
+        const taxRate = p.taxType === 'iva_19' ? 0.19 : p.taxType === 'impoconsumo_8' ? 0.08 : 0;
+        const isExclusive = p.taxMode === 'exclusive' && taxRate > 0;
+        return isExclusive ? Number(item.unit_price_usd) * (1 + taxRate) : Number(item.unit_price_usd);
+    };
+
     // Derive order and items
     const order = allOrders.find(o => o.table_session_id === session.id) || null;
     const currentItems = order ? allItems.filter(i => i.order_id === order.id) : [];
-    const totalConsumed = currentItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0);
+    const totalConsumed = currentItems.reduce((acc, item) => acc + (getFinalPriceOfItem(item) * Number(item.qty)), 0);
 
     // Items filtered by selected seat (null = show all)
     const visibleItems = hasSeats && selectedSeatId !== null
         ? currentItems.filter(i => i.seat_id === selectedSeatId)
         : currentItems;
-    const visibleTotal = visibleItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0);
+    const visibleTotal = visibleItems.reduce((acc, item) => acc + (getFinalPriceOfItem(item) * Number(item.qty)), 0);
 
     // Categories derived from products
     const categories = ['Todos', ...new Set(products.map(p => p.category).filter(Boolean))];
@@ -263,7 +271,8 @@ export function OrderPanel({ session, table, onClose }) {
                 ) : (
                     <div className="space-y-2 max-h-44 overflow-y-auto pr-1 custom-scrollbar">
                         {visibleItems.map(item => {
-                            const lineTotal = Number(item.unit_price_usd) * Number(item.qty);
+                            const itemPrice = getFinalPriceOfItem(item);
+                            const lineTotal = itemPrice * Number(item.qty);
                             const seatLabel = (hasSeats && selectedSeatId === null) ? (item.seat_id ? (seats.find(s => s.id === item.seat_id)?.label || '?') : 'Compartido') : null;
                             return (
                             <div key={item.id}
@@ -289,7 +298,7 @@ export function OrderPanel({ session, table, onClose }) {
                                 <div className="flex-1 min-w-0">
                                     <div className="text-slate-800 font-bold text-sm truncate">{item.product_name}</div>
                                     <div className="text-slate-500 text-xs font-medium">
-                                        {formatCOP(Number(item.unit_price_usd))} c/u · <span className="text-emerald-500 font-bold">{formatCOP(lineTotal)}</span>
+                                        {formatCOP(itemPrice)} c/u · <span className="text-emerald-500 font-bold">{formatCOP(lineTotal)}</span>
                                         {seatLabel && <span className="ml-1.5 text-[10px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-md font-bold">{seatLabel}</span>}
                                     </div>
                                 </div>
@@ -409,7 +418,16 @@ export function OrderPanel({ session, table, onClose }) {
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between mt-auto">
-                                            <span className="text-emerald-500 font-black text-sm">{formatCOP(p.priceUsdt || p.priceUsd || p.price || 0)}</span>
+                                            {(() => {
+                                                const taxRate = p.taxType === 'iva_19' ? 0.19 : p.taxType === 'impoconsumo_8' ? 0.08 : 0;
+                                                const isExclusive = p.taxMode === 'exclusive' && taxRate > 0;
+                                                const finalPrice = isExclusive ? (p.priceUsdt || 0) * (1 + taxRate) : (p.priceUsdt || p.priceUsd || p.price || 0);
+                                                return (
+                                                    <span className="text-emerald-500 font-black text-sm">
+                                                        {formatCOP(finalPrice)}
+                                                    </span>
+                                                );
+                                            })()}
                                             {inOrder && (
                                                 <div className="flex items-center gap-1 ml-auto">
                                                     {currentUser?.role !== 'MESERO' && currentUser?.role !== 'BARRA' && (

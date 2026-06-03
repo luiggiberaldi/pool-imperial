@@ -201,7 +201,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const handleStartNormal = async (hours = 0, clientName = '', guestCount = 0, clientId = null, includePina = false, seats = []) => {
         if (!currentUser || isMutating) return;
         const parts = [];
-        if (includePina) parts.push('Piña');
+        if (includePina) parts.push('Jugada');
         if (hours === 0) parts.push('Libre');
         else if (hours === 0.5) parts.push('Prepago 30 min');
         else parts.push(`Prepago ${hours} hr${hours !== 1 ? 's' : ''}`);
@@ -230,7 +230,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
         if (!currentUser || isMutating) return;
         const ok = await confirm({ 
             title: `Abrir ${table.name}`, 
-            message: '¿Confirmar apertura en modo La Piña?', 
+            message: '¿Confirmar apertura en modo La Jugada?', 
             confirmText: 'Abrir Mesa', 
             cancelText: 'Cancelar', 
             variant: 'warning' 
@@ -241,7 +241,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
             await openSession(table.id, currentUser.id, 'PINA', 0, clientName, guestCount, clientId, false, seats);
         } catch (error) {
             console.error(error);
-            showToast("Error al abrir mesa en modo Piña", "error");
+            showToast("Error al abrir mesa en modo Jugada", "error");
         } finally {
             setIsMutating(false);
         }
@@ -412,7 +412,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
         try {
             await generatePartialSessionTicketPDF({
                 table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config,
-                hoursOffset, roundsOffset
+                hoursOffset, roundsOffset, products
             });
             showToast('Pre-cuenta enviada a la impresora', 'success');
         } catch (err) {
@@ -458,11 +458,16 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const hasPinas = (costBreakdown ? costBreakdown.hasPinas : (session?.game_mode === 'PINA')) || seatHasPinas;
     const hasHoursActive = (costBreakdown ? costBreakdown.hasHours : (session?.hours_paid > 0)) || seatHasHours;
 
+    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+    const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+    const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
     const seatTimeCost = isPlaying && !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
         const tc = (s.timeCharges || []);
         const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
         const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
-        return sum + (h * (config.pricePerHour || 0)) + (p * (config.pricePina || 0));
+        return sum + (h * finalHora) + (p * finalPina);
     }, 0) : 0;
 
     const grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
@@ -578,7 +583,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                     <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-sm relative flex items-center justify-between overflow-hidden">
                         <div>
                             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                                {session.game_mode === 'PINA' ? 'LA PIÑA' : hasLimit ? 'TIEMPO LÍMITE' : 'TIEMPO DE JUEGO'}
+                                {session.game_mode === 'PINA' ? 'LA JUGADA' : hasLimit ? 'TIEMPO LÍMITE' : 'TIEMPO DE JUEGO'}
                             </span>
                             <div className="text-3xl font-black tracking-tight font-mono mt-0.5 text-white">
                                 {fmtTimer(elapsed)}
@@ -754,7 +759,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                 className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center text-center transition-all group active:scale-[0.97]"
                             >
                                 <TargetIcon size={15} className="text-amber-500 mb-1 group-hover:scale-110 transition-transform" />
-                                <span className="text-[11px] font-black text-slate-700 dark:text-slate-300">La Piña</span>
+                                <span className="text-[11px] font-black text-slate-700 dark:text-slate-300">La Jugada</span>
                                 <span className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5">Por partidas fijas</span>
                             </button>
                         </div>
@@ -872,9 +877,9 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                                 try {
                                                     const { addRoundToSession } = useTablesStore.getState();
                                                     await addRoundToSession(session.id);
-                                                    showToast('1 Piña agregada a la mesa', 'success');
+                                                    showToast('1 Jugada agregada a la mesa', 'success');
                                                 } catch (e) {
-                                                    showToast('Error al agregar Piña', 'error');
+                                                    showToast('Error al agregar Jugada', 'error');
                                                 } finally {
                                                     setIsMutating(false);
                                                 }
@@ -882,7 +887,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                         }}
                                         className="bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 border border-amber-200 dark:border-amber-800/40 text-amber-700 dark:text-amber-350 font-black text-[11px] py-2 rounded-xl transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-0.5"
                                     >
-                                        <TargetIcon size={11} /> + Piña
+                                        <TargetIcon size={11} /> + Jugada
                                     </button>
                                 </div>
                             </div>
