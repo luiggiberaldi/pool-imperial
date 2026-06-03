@@ -10,6 +10,7 @@ export default function CustomSelect({
     placeholder = 'Seleccione una opción...'
 }) {
     const [isOpen, setIsOpen] = useState(false);
+    const [openUpward, setOpenUpward] = useState(false);
     const containerRef = useRef(null);
 
     // Extract options from children (which are expected to be <option> tags)
@@ -39,6 +40,20 @@ export default function CustomSelect({
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
+    }, [isOpen]);
+
+    // Check space below container to open upward if needed
+    useEffect(() => {
+        if (isOpen && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            // If space below is less than 220px and space above is larger, open upward
+            if (spaceBelow < 220 && rect.top > 220) {
+                setOpenUpward(true);
+            } else {
+                setOpenUpward(false);
+            }
+        }
     }, [isOpen]);
 
     const handleOptionSelect = (optValue, optDisabled) => {
@@ -74,7 +89,13 @@ export default function CustomSelect({
             </button>
 
             {isOpen && !disabled && (
-                <div className="absolute left-0 right-0 z-50 mt-1.5 max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl animate-in fade-in slide-in-from-top-2 duration-150 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700">
+                <div 
+                    className={`absolute left-0 right-0 z-[100] max-h-60 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-xl animate-in fade-in duration-150 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 ${
+                        openUpward 
+                            ? 'bottom-full mb-1.5 slide-in-from-bottom-2' 
+                            : 'top-full mt-1.5 slide-in-from-top-2'
+                    }`}
+                >
                     {options.length === 0 ? (
                         <div className="px-3 py-2 text-xs font-bold text-slate-400 dark:text-slate-500 text-center">
                             No hay opciones disponibles
@@ -88,7 +109,7 @@ export default function CustomSelect({
                                     type="button"
                                     disabled={opt.disabled}
                                     onClick={() => handleOptionSelect(opt.value, opt.disabled)}
-                                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold transition-colors ${
+                                    className={`w-full text-left px-3 py-2 rounded-lg text-xs sm:text-sm font-bold transition-colors ${
                                         opt.disabled
                                             ? 'opacity-40 cursor-not-allowed text-slate-400'
                                             : isSelected

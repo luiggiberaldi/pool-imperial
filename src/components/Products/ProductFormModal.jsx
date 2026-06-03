@@ -190,7 +190,7 @@ export default function ProductFormModal({
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label className="text-xs font-bold text-slate-400 ml-1 mb-1 block uppercase">Impuesto</label>
                             <CustomSelect value={taxType} onChange={e => setTaxType(e.target.value)}

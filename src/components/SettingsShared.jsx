@@ -20,7 +20,7 @@ export function Toggle({ enabled, onChange, color = 'emerald' }) {
 
 export function SectionCard({ icon: Icon, title, subtitle, iconColor = 'text-slate-500', onSubtitleClick, children }) {
     return (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
             <div className="px-5 py-4 border-b border-slate-50 dark:border-slate-800/50 flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center ${iconColor}`}>
                     <Icon size={18} />

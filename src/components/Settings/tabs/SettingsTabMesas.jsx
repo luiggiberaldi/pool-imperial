@@ -391,7 +391,7 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                             </div>
                             <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Impuesto Servicio de Mesa</span>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Tipo Impuesto</label>
                                 <CustomSelect
