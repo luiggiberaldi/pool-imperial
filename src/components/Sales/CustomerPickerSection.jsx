@@ -56,12 +56,12 @@ function CustomerPickerSheet({ customers, selectedCustomerId, onSelect, onClose,
 
     return (
         <div
-            className="fixed inset-0 z-[200] flex items-end justify-center"
+            className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center"
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150" />
 
-            <div className="relative z-10 w-full sm:max-w-sm bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom-4 duration-200 flex flex-col max-h-[82vh]">
+            <div className="relative z-10 w-full sm:max-w-sm bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200 flex flex-col max-h-[82vh]">
 
                 {/* Handle */}
                 <div className="flex justify-center pt-3 pb-1 shrink-0">

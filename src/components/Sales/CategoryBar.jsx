@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Package, Calculator, ChevronDown } from 'lucide-react';
+import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { BODEGA_CATEGORIES, CATEGORY_ICONS } from '../../config/categories';
 import { formatCop } from '../../utils/calculatorUtils';
 
@@ -100,7 +101,12 @@ export default function CategoryBar({
                                     </div>
                                     <p className="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 leading-tight line-clamp-2 mb-1">{p.name}</p>
                                     {(() => {
-                                        const taxRate = p.taxType === 'iva_19' ? 0.19 : p.taxType === 'impoconsumo_8' ? 0.08 : 0;
+                                        const config = useTablesStore.getState().config;
+                                        const taxRate = p.taxType === 'iva_19'
+                                            ? (config?.taxRateIva ?? 19) / 100
+                                            : p.taxType === 'impoconsumo_8'
+                                                ? (config?.taxRateImpoconsumo ?? 8) / 100
+                                                : 0;
                                         const isExclusive = p.taxMode === 'exclusive' && taxRate > 0;
                                         const finalPrice = isExclusive ? (p.priceUsdt || 0) * (1 + taxRate) : (p.priceUsdt || 0);
                                         return (

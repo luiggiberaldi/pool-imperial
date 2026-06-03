@@ -1,9 +1,22 @@
+import { useTablesStore } from '../hooks/store/useTablesStore';
 import { round2 } from './dinero';
 
-const TAX_RATES = { exento: 0, iva_19: 0.19, impoconsumo_8: 0.08 };
+export function getTaxRates() {
+    try {
+        const config = useTablesStore.getState().config;
+        return {
+            exento: 0,
+            iva_19: (config?.taxRateIva ?? 19) / 100,
+            impoconsumo_8: (config?.taxRateImpoconsumo ?? 8) / 100
+        };
+    } catch {
+        return { exento: 0, iva_19: 0.19, impoconsumo_8: 0.08 };
+    }
+}
 
 export function computeItemTax(priceCop, taxType = 'exento', taxMode = 'inclusive') {
-    const rate = TAX_RATES[taxType] || 0;
+    const rates = getTaxRates();
+    const rate = rates[taxType] || 0;
     if (rate === 0) return { base: priceCop, tax: 0, total: priceCop };
     if (taxMode === 'inclusive') {
         const base = priceCop / (1 + rate);

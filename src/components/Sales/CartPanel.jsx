@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ShoppingCart, Plus, Minus, X, CheckCircle, Package, Trash2, DollarSign, Percent } from 'lucide-react';
+import { useTablesStore } from '../../hooks/store/useTablesStore';
 
 
 
@@ -39,9 +40,10 @@ export default function CartPanel({
             const taxType = item.taxType || 'exento';
             const taxMode = item.taxMode || 'inclusive';
 
+            const config = useTablesStore.getState().config;
             let taxRate = 0;
-            if (taxType === 'iva_19') taxRate = 0.19;
-            else if (taxType === 'impoconsumo_8') taxRate = 0.08;
+            if (taxType === 'iva_19') taxRate = (config?.taxRateIva ?? 19) / 100;
+            else if (taxType === 'impoconsumo_8') taxRate = (config?.taxRateImpoconsumo ?? 8) / 100;
 
             let baseVal = price;
             if (taxType !== 'exento' && taxRate > 0) {
@@ -67,9 +69,10 @@ export default function CartPanel({
             const taxType = item.taxType || 'exento';
             const taxMode = item.taxMode || 'inclusive';
             
+            const config = useTablesStore.getState().config;
             let taxRate = 0;
-            if (taxType === 'iva_19') taxRate = 0.19;
-            else if (taxType === 'impoconsumo_8') taxRate = 0.08;
+            if (taxType === 'iva_19') taxRate = (config?.taxRateIva ?? 19) / 100;
+            else if (taxType === 'impoconsumo_8') taxRate = (config?.taxRateImpoconsumo ?? 8) / 100;
 
             let totalVal = price;
             if (taxType !== 'exento' && taxRate > 0 && taxMode === 'exclusive') {
@@ -175,7 +178,7 @@ export default function CartPanel({
                                                 <p className="text-[10px] sm:text-[11px] md:text-xs font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-1 sm:px-1.5 rounded">{formatCOP(item.priceUsd)}</p>
                                                 {item.taxType !== 'exento' && item.taxMode === 'exclusive' && (
                                                     <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded">
-                                                        + {item.taxType === 'iva_19' ? '19% IVA' : '8% Impo.'}
+                                                        + {item.taxType === 'iva_19' ? `${useTablesStore.getState().config?.taxRateIva ?? 19}% IVA` : `${useTablesStore.getState().config?.taxRateImpoconsumo ?? 8}% Impo.`}
                                                     </span>
                                                 )}
                                             </div>
@@ -273,7 +276,8 @@ export default function CartPanel({
                             </div>
                             {taxBreakdown && Object.entries(taxBreakdown).map(([taxKey, taxVal]) => {
                                 if (taxVal <= 0) return null;
-                                const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                                const config = useTablesStore.getState().config;
+                                const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
                                 return (
                                     <div key={taxKey} className="flex justify-between font-bold text-slate-650 dark:text-slate-300">
                                         <span>{taxLabel}:</span>

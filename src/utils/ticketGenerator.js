@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { capitalizeName } from './calculatorUtils';
+import { useTablesStore } from '../hooks/store/useTablesStore';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -204,7 +205,8 @@ export async function generateTicketPDF(sale, _bcvRate) {
         if (sale.taxBreakdown && Object.keys(sale.taxBreakdown).length > 0) {
             Object.entries(sale.taxBreakdown).forEach(([taxKey, taxVal]) => {
                 if (taxVal > 0) {
-                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                    const config = useTablesStore.getState().config;
+                    const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
                     doc.text(`${taxLabel}:`, M, y);
                     doc.text(formatCOP(taxVal), RIGHT, y, { align: 'right' });
                     y += 4.5;

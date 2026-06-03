@@ -1,8 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { Camera, X, AlertTriangle, Package, CheckCircle, Clock, ShoppingBag, CreditCard, ArrowUpRight, Plus, Minus, ChevronUp, ChevronDown } from 'lucide-react';
+import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { Modal } from '../Modal';
 import { useProductContext } from '../../context/ProductContext';
 import { formatCop } from '../../utils/calculatorUtils';
+import CustomSelect from '../CustomSelect';
 
 export default function ProductFormModal({
     isOpen,
@@ -179,32 +181,32 @@ export default function ProductFormModal({
                                 </button>
                             </div>
                         ) : (
-                            <select value={category} onChange={e => setCategory(e.target.value)}
+                            <CustomSelect value={category} onChange={e => setCategory(e.target.value)}
                                 className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50">
                                 {categories.filter(c => c.id !== 'todos').map(c => (
                                     <option key={c.id} value={c.id}>{c.label}</option>
                                 ))}
-                            </select>
+                            </CustomSelect>
                         )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="text-xs font-bold text-slate-400 ml-1 mb-1 block uppercase">Impuesto</label>
-                            <select value={taxType} onChange={e => setTaxType(e.target.value)}
+                            <CustomSelect value={taxType} onChange={e => setTaxType(e.target.value)}
                                 className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50">
                                 <option value="exento">Exento (0%)</option>
-                                <option value="iva_19">IVA (19%)</option>
-                                <option value="impoconsumo_8">Impoconsumo (8%)</option>
-                            </select>
+                                <option value="iva_19">IVA ({useTablesStore.getState().config?.taxRateIva ?? 19}%)</option>
+                                <option value="impoconsumo_8">Impoconsumo ({useTablesStore.getState().config?.taxRateImpoconsumo ?? 8}%)</option>
+                            </CustomSelect>
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-400 ml-1 mb-1 block uppercase">Modo Impuesto</label>
-                            <select value={taxMode} onChange={e => setTaxMode(e.target.value)}
+                            <CustomSelect value={taxMode} onChange={e => setTaxMode(e.target.value)}
                                 className="w-full bg-slate-50 dark:bg-slate-800 p-3.5 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/50">
                                 <option value="inclusive">Incluido en precio</option>
                                 <option value="exclusive">Más impuesto</option>
-                            </select>
+                            </CustomSelect>
                         </div>
                     </div>
 
@@ -321,9 +323,14 @@ export default function ProductFormModal({
                                         <span className="text-[9px] text-slate-400 font-medium">(tasa: {tasaCop || 4150})</span>
                                     </div>
                                     {(() => {
-                                        const taxRate = taxType === 'iva_19' ? 0.19 : taxType === 'impoconsumo_8' ? 0.08 : 0;
+                                        const config = useTablesStore.getState().config;
+                                        const taxRate = taxType === 'iva_19'
+                                            ? (config?.taxRateIva ?? 19) / 100
+                                            : taxType === 'impoconsumo_8'
+                                                ? (config?.taxRateImpoconsumo ?? 8) / 100
+                                                : 0;
                                         if (taxMode === 'exclusive' && taxRate > 0) {
-                                            const label = taxType === 'iva_19' ? '19% IVA' : '8% Impoconsumo';
+                                            const label = taxType === 'iva_19' ? `${config?.taxRateIva ?? 19}% IVA` : `${config?.taxRateImpoconsumo ?? 8}% Impoconsumo`;
                                             return (
                                                 <div className="bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-black mt-1 flex justify-between items-center w-full">
                                                     <span>Precio Final Cliente (+ {label}):</span>

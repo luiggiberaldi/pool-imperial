@@ -29,6 +29,8 @@ export const useTablesStore = create((set, get) => ({
         pricePinaBs: 0,
         tableTaxType: 'exento',
         tableTaxMode: 'inclusive',
+        taxRateIva: 19,
+        taxRateImpoconsumo: 8,
     },
 
     // Compose slices

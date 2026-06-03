@@ -4,6 +4,7 @@ import { useOrdersStore } from '../../hooks/store/useOrdersStore';
 import { useAuthStore } from '../../hooks/store/authStore';
 import { useProductContext } from '../../context/ProductContext';
 import { showToast } from '../Toast';
+import CustomSelect from '../CustomSelect';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -50,7 +51,12 @@ export function OrderPanel({ session, table, onClose }) {
     const getFinalPriceOfItem = (item) => {
         const p = products.find(prod => prod.id === item.product_id);
         if (!p) return Number(item.unit_price_usd);
-        const taxRate = p.taxType === 'iva_19' ? 0.19 : p.taxType === 'impoconsumo_8' ? 0.08 : 0;
+        const config = useTablesStore.getState().config;
+        const taxRate = p.taxType === 'iva_19'
+            ? (config?.taxRateIva ?? 19) / 100
+            : p.taxType === 'impoconsumo_8'
+                ? (config?.taxRateImpoconsumo ?? 8) / 100
+                : 0;
         const isExclusive = p.taxMode === 'exclusive' && taxRate > 0;
         return isExclusive ? Number(item.unit_price_usd) * (1 + taxRate) : Number(item.unit_price_usd);
     };
@@ -356,7 +362,7 @@ export function OrderPanel({ session, table, onClose }) {
                 {/* Category dropdown */}
                 {categories.length > 1 && (
                     <div className="relative mb-3 shrink-0">
-                        <select
+                        <CustomSelect
                             value={activeCategory}
                             onChange={e => setActiveCategory(e.target.value)}
                             className="w-full appearance-none bg-white border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm font-bold text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all shadow-sm cursor-pointer"
@@ -364,8 +370,7 @@ export function OrderPanel({ session, table, onClose }) {
                             {categories.map(cat => (
                                 <option key={cat} value={cat}>{cat}</option>
                             ))}
-                        </select>
-                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                        </CustomSelect>
                     </div>
                 )}
 
@@ -419,9 +424,14 @@ export function OrderPanel({ session, table, onClose }) {
                                         )}
                                         <div className="flex items-center justify-between mt-auto">
                                             {(() => {
-                                                const taxRate = p.taxType === 'iva_19' ? 0.19 : p.taxType === 'impoconsumo_8' ? 0.08 : 0;
-                                                const isExclusive = p.taxMode === 'exclusive' && taxRate > 0;
-                                                const finalPrice = isExclusive ? (p.priceUsdt || 0) * (1 + taxRate) : (p.priceUsdt || p.priceUsd || p.price || 0);
+                                                 const config = useTablesStore.getState().config;
+                                                 const taxRate = p.taxType === 'iva_19'
+                                                     ? (config?.taxRateIva ?? 19) / 100
+                                                     : p.taxType === 'impoconsumo_8'
+                                                         ? (config?.taxRateImpoconsumo ?? 8) / 100
+                                                         : 0;
+                                                 const isExclusive = p.taxMode === 'exclusive' && taxRate > 0;
+                                                 const finalPrice = isExclusive ? (p.priceUsdt || 0) * (1 + taxRate) : (p.priceUsdt || p.priceUsd || p.price || 0);
                                                 return (
                                                     <span className="text-emerald-500 font-black text-sm">
                                                         {formatCOP(finalPrice)}

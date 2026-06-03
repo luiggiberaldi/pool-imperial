@@ -38,7 +38,11 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const { products: allProducts, effectiveRate: tasaUSD } = useProductContext();
     const canDiscount = currentUser?.role === 'ADMIN' || currentUser?.role === 'CAJERO';
 
-    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const taxRate = config?.tableTaxType === 'iva_19'
+        ? (config?.taxRateIva ?? 19) / 100
+        : config?.tableTaxType === 'impoconsumo_8'
+            ? (config?.taxRateImpoconsumo ?? 8) / 100
+            : 0;
     const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
     const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
     const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
@@ -283,7 +287,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             <div className="space-y-1 border-t border-slate-100 dark:border-slate-800 pt-2 font-medium text-slate-500 dark:text-slate-400">
                                 {taxBreakdown && Object.entries(taxBreakdown).map(([taxKey, taxVal]) => {
                                     if (taxVal <= 0) return null;
-                                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                                    const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
                                     return (
                                         <div key={taxKey} className="flex justify-between">
                                             <span>{taxLabel}:</span>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { Share2 } from 'lucide-react';
 import { formatCop } from '../utils/calculatorUtils';
+import CustomSelect from './CustomSelect';
 
 export const ProductShareModal = ({ isOpen, onClose, product, accounts }) => {
     const [selectedAccountId, setSelectedAccountId] = useState(() =>
@@ -96,7 +97,7 @@ export const ProductShareModal = ({ isOpen, onClose, product, accounts }) => {
                             No tienes cuentas guardadas aún.
                         </div>
                     ) : (
-                        <select
+                        <CustomSelect
                             value={selectedAccountId}
                             onChange={(e) => setSelectedAccountId(e.target.value)}
                             className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl text-sm font-medium text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand/50 border border-slate-200 dark:border-slate-700"
@@ -107,7 +108,7 @@ export const ProductShareModal = ({ isOpen, onClose, product, accounts }) => {
                                     {acc.type === 'pago_movil' ? '📱' : acc.type === 'binance' ? '🟡' : '🏦'} {acc.alias}
                                 </option>
                             ))}
-                        </select>
+                        </CustomSelect>
                     )}
                 </div>
 

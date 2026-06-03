@@ -25,7 +25,11 @@ export function BillClassicBreakdown({
     discountCustomValue, setDiscountCustomValue,
     products,
 }) {
-    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const taxRate = config?.tableTaxType === 'iva_19'
+        ? (config?.taxRateIva ?? 19) / 100
+        : config?.tableTaxType === 'impoconsumo_8'
+            ? (config?.taxRateImpoconsumo ?? 8) / 100
+            : 0;
     const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
     const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
     const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);

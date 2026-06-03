@@ -1,7 +1,8 @@
-import React from 'react';
-import { Package, CreditCard, ShieldCheck, KeyRound } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Package, CreditCard, ShieldCheck, KeyRound, Layers } from 'lucide-react';
 import { SectionCard, Toggle } from '../../SettingsShared';
 import PaymentMethodsManager from '../PaymentMethodsManager';
+import { useTablesStore } from '../../../hooks/store/useTablesStore';
 
 export default function SettingsTabVentas({
     allowNegativeStock, setAllowNegativeStock,
@@ -11,8 +12,89 @@ export default function SettingsTabVentas({
     cajeroVeMesas, setCajeroVeMesas,
     forceHeartbeat, showToast, triggerHaptic
 }) {
+    const { config, updateConfig } = useTablesStore();
+
+    const [taxRateIva, setTaxRateIva] = useState(config?.taxRateIva ?? 19);
+    const [taxRateImpoconsumo, setTaxRateImpoconsumo] = useState(config?.taxRateImpoconsumo ?? 8);
+    const [isSavingTax, setIsSavingTax] = useState(false);
+
+    // Sync from store when config changes (cross-tab / cloud sync)
+    const configTaxRateIva = config?.taxRateIva;
+    const configTaxRateImpoconsumo = config?.taxRateImpoconsumo;
+    useEffect(() => {
+        const raf = requestAnimationFrame(() => {
+            if (configTaxRateIva != null) setTaxRateIva(configTaxRateIva);
+            if (configTaxRateImpoconsumo != null) setTaxRateImpoconsumo(configTaxRateImpoconsumo);
+        });
+        return () => cancelAnimationFrame(raf);
+    }, [configTaxRateIva, configTaxRateImpoconsumo]);
+
+    const handleSaveTaxRates = async () => {
+        const iva = parseFloat(taxRateIva);
+        const impo = parseFloat(taxRateImpoconsumo);
+        if (isNaN(iva) || iva < 0 || iva > 100 || isNaN(impo) || impo < 0 || impo > 100) {
+            showToast('Los porcentajes deben estar entre 0 y 100', 'error');
+            return;
+        }
+        setIsSavingTax(true);
+        try {
+            await updateConfig({ taxRateIva: iva, taxRateImpoconsumo: impo });
+            showToast('Tasas de impuestos guardadas', 'success');
+            triggerHaptic?.('light');
+        } catch {
+            showToast('Error al guardar tasas', 'error');
+        } finally {
+            setIsSavingTax(false);
+        }
+    };
     return (
         <>
+            {/* ── Tasas de Impuestos ── */}
+            <SectionCard icon={Layers} title="Tasas de Impuestos" subtitle="Porcentajes aplicados a productos y mesas" iconColor="text-emerald-500">
+                <div className="grid grid-cols-2 gap-3">
+                    <div>
+                        <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">IVA (%)</label>
+                        <div className="relative">
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={taxRateIva}
+                                onChange={e => setTaxRateIva(e.target.value)}
+                                onWheel={e => e.target.blur()}
+                                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 pr-8 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all dark:text-white outline-none"
+                            />
+                            <span className="absolute inset-y-0 right-3 flex items-center text-xs font-bold text-slate-400">%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Impoconsumo (%)</label>
+                        <div className="relative">
+                            <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={taxRateImpoconsumo}
+                                onChange={e => setTaxRateImpoconsumo(e.target.value)}
+                                onWheel={e => e.target.blur()}
+                                className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 pr-8 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all dark:text-white outline-none"
+                            />
+                            <span className="absolute inset-y-0 right-3 flex items-center text-xs font-bold text-slate-400">%</span>
+                        </div>
+                    </div>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2">
+                    Estos porcentajes se aplican globalmente a todos los productos y servicios de mesa que tengan IVA o Impoconsumo activado.
+                </p>
+                <button
+                    onClick={handleSaveTaxRates}
+                    disabled={isSavingTax}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 mt-3 font-bold text-xs uppercase tracking-wider rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors active:scale-[0.98] disabled:opacity-50"
+                >
+                    {isSavingTax ? 'Guardando...' : '✓ Guardar Tasas'}
+                </button>
+            </SectionCard>
+
             <div data-tour="settings-stock">
             <SectionCard icon={Package} title="Inventario" subtitle="Reglas de ventas" iconColor="text-emerald-500">
                 <div className="flex items-center justify-between">

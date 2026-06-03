@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
+import { useTablesStore } from '../hooks/store/useTablesStore';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -193,7 +194,8 @@ export async function generateDailyClosePDF({
 
         Object.entries(taxBreakdown || {}).forEach(([key, val]) => {
             if (val <= 0) return;
-            const label = key === 'iva_19' ? 'IVA 19%' : key === 'impoconsumo_8' ? 'Impoconsumo 8%' : key;
+            const config = useTablesStore.getState().config;
+            const label = key === 'iva_19' ? `IVA ${config?.taxRateIva ?? 19}%` : key === 'impoconsumo_8' ? `Impoconsumo ${config?.taxRateImpoconsumo ?? 8}%` : key;
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(7);
             doc.setTextColor(...BODY);

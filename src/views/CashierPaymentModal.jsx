@@ -99,7 +99,11 @@ export default function CashierPaymentModal({ session, table, config, currentUse
     const roundsOffset = (paidRoundsOffsets || {})[session?.id] || 0;
     const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
     
-    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+    const taxRate = config?.tableTaxType === 'iva_19'
+        ? (config?.taxRateIva ?? 19) / 100
+        : config?.tableTaxType === 'impoconsumo_8'
+            ? (config?.taxRateImpoconsumo ?? 8) / 100
+            : 0;
     const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
     const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
     const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);

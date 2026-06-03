@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Truck, Save, Pencil, FileText, CreditCard, Clock, Phone, Trash2, ArrowUpRight } from 'lucide-react';
 import { formatCop } from '../../utils/calculatorUtils';
 import { round2 } from '../../utils/dinero';
+import CustomSelect from '../CustomSelect';
 
 export function AddSupplierModal({ onClose, onSave, editingSupplier = null }) {
     const [name, setName] = useState(editingSupplier?.name || '');
@@ -174,11 +175,11 @@ export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, 
                     {/* Método de pago */}
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Método de Pago (Egreso)</label>
-                        <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full form-select border rounded-xl px-3 py-2 text-sm font-bold dark:bg-slate-950">
+                        <CustomSelect value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="w-full form-select border rounded-xl px-3 py-2 text-sm font-bold dark:bg-slate-950">
                             {filteredMethods.map(method => (
                                 <option key={method.id} value={method.id}>{method.label}</option>
                             ))}
-                        </select>
+                        </CustomSelect>
                     </div>
 
                     <button type="submit" disabled={!amount || parseFloat(amount) <= 0} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 text-white font-bold rounded-xl active:scale-95 transition-all text-sm flex justify-center items-center gap-2 mt-4">

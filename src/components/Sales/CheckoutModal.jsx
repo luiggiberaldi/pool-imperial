@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Receipt, Zap, Clock, Coffee, Layers, Users, CreditCard, Plus, Check } from 'lucide-react';
+import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { PAYMENT_ICONS, ICON_COMPONENTS } from '../../config/paymentMethods';
 import { divR } from '../../utils/dinero';
 import { useCheckoutPayments, EPSILON } from '../../hooks/useCheckoutPayments';
@@ -333,7 +334,8 @@ export default function CheckoutModal({
                         {/* Pill Base Gravable e IVA desglosados */}
                         {taxBreakdown && Object.entries(taxBreakdown).map(([taxKey, taxVal]) => {
                             if (taxVal <= 0) return null;
-                            const taxLabel = taxKey === 'iva_19' ? 'IVA 19%' : taxKey === 'impoconsumo_8' ? 'Impoconsumo 8%' : taxKey;
+                            const config = useTablesStore.getState().config;
+                            const taxLabel = taxKey === 'iva_19' ? `IVA ${config?.taxRateIva ?? 19}%` : taxKey === 'impoconsumo_8' ? `Impoconsumo ${config?.taxRateImpoconsumo ?? 8}%` : taxKey;
                             return (
                                 <div key={taxKey} className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-3.5 py-1.5 rounded-xl border border-blue-100/40 dark:border-blue-900/30 text-[11px] font-black uppercase tracking-wide">
                                     <span>{taxLabel}: {formatCOP(taxVal)}</span>

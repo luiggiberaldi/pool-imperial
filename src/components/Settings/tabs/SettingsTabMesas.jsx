@@ -3,6 +3,7 @@ import { Layers, Check, Plus, Trash2, Edit2, X, DollarSign, AlertTriangle, Searc
 import { SectionCard } from '../../SettingsShared';
 import { useTablesStore } from '../../../hooks/store/useTablesStore';
 import { useConfirm } from '../../../hooks/useConfirm';
+import CustomSelect from '../../CustomSelect';
 
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(val);
 const formatCOPDecimals = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
@@ -129,7 +130,7 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
             tableTaxType,
             tableTaxMode,
         });
-        showToast('Tarifas y configuración de impuestos guardadas', 'success');
+        showToast('Tarifas guardadas', 'success');
         triggerHaptic?.('light');
     };
 
@@ -329,9 +330,9 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                                 </span>
                             )}
                             {(() => {
-                                const taxRate = tableTaxType === 'iva_19' ? 0.19 : tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+                                const taxRate = tableTaxType === 'iva_19' ? (config?.taxRateIva ?? 19) / 100 : tableTaxType === 'impoconsumo_8' ? (config?.taxRateImpoconsumo ?? 8) / 100 : 0;
                                 if (tableTaxMode === 'exclusive' && taxRate > 0 && pricePerHour > 0) {
-                                    const label = tableTaxType === 'iva_19' ? '19% IVA' : '8% Impoconsumo';
+                                    const label = tableTaxType === 'iva_19' ? `${config?.taxRateIva ?? 19}% IVA` : `${config?.taxRateImpoconsumo ?? 8}% Impoconsumo`;
                                     const finalPerHour = parseFloat(pricePerHour) * (1 + taxRate);
                                     return (
                                         <div className="bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-black mt-1 flex justify-between items-center w-full">
@@ -367,9 +368,9 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                             </div>
                         </div>
                         {(() => {
-                            const taxRate = tableTaxType === 'iva_19' ? 0.19 : tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
-                            if (tableTaxMode === 'exclusive' && taxRate > 0 && pricePina > 0) {
-                                const label = tableTaxType === 'iva_19' ? '19% IVA' : '8% Impoconsumo';
+                             const taxRate = tableTaxType === 'iva_19' ? (config?.taxRateIva ?? 19) / 100 : tableTaxType === 'impoconsumo_8' ? (config?.taxRateImpoconsumo ?? 8) / 100 : 0;
+                             if (tableTaxMode === 'exclusive' && taxRate > 0 && pricePina > 0) {
+                                 const label = tableTaxType === 'iva_19' ? `${config?.taxRateIva ?? 19}% IVA` : `${config?.taxRateImpoconsumo ?? 8}% Impoconsumo`;
                                 const finalPina = parseFloat(pricePina) * (1 + taxRate);
                                 return (
                                     <div className="bg-emerald-500/10 dark:bg-emerald-500/5 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-3 py-2 rounded-xl text-xs font-black mt-2.5 flex justify-between items-center w-full">
@@ -393,26 +394,26 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Tipo Impuesto</label>
-                                <select
+                                <CustomSelect
                                     value={tableTaxType}
                                     onChange={e => setTableTaxType(e.target.value)}
                                     className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all dark:text-white outline-none"
                                 >
                                     <option value="exento">Exento (0%)</option>
-                                    <option value="iva_19">IVA (19%)</option>
-                                    <option value="impoconsumo_8">Impoconsumo (8%)</option>
-                                </select>
+                                    <option value="iva_19">IVA ({config?.taxRateIva ?? 19}%)</option>
+                                    <option value="impoconsumo_8">Impoconsumo ({config?.taxRateImpoconsumo ?? 8}%)</option>
+                                </CustomSelect>
                             </div>
                             <div>
                                 <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Modo Impuesto</label>
-                                <select
+                                <CustomSelect
                                     value={tableTaxMode}
                                     onChange={e => setTableTaxMode(e.target.value)}
                                     className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all dark:text-white outline-none"
                                 >
                                     <option value="inclusive">Incluido en precio</option>
                                     <option value="exclusive">Más impuesto</option>
-                                </select>
+                                </CustomSelect>
                             </div>
                         </div>
                     </div>

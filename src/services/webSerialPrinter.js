@@ -10,6 +10,7 @@
 
 import { capitalizeName } from '../utils/calculatorUtils';
 import { lookupPrinter } from './printerDatabase';
+import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart } from '../utils/tableBillingEngine';
 import { round2 } from '../utils/dinero';
 import { FinancialEngine } from '../core/FinancialEngine';
@@ -416,7 +417,8 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
         p.smallFont(true).row('Base Gravable:', formatCOP(baseBeforeTaxes), WS);
         Object.entries(taxBreakdown).forEach(([taxKey, taxVal]) => {
             if (taxVal > 0) {
-                const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                const config = useTablesStore.getState().config;
+                const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
                 p.smallFont(true).row(`${taxLabel}:`, formatCOP(taxVal), WS);
             }
         });
@@ -570,7 +572,8 @@ export async function printReceiptEscPos(sale, bcvRate) {
         if (sale.taxBreakdown && Object.keys(sale.taxBreakdown).length > 0) {
             Object.entries(sale.taxBreakdown).forEach(([taxKey, taxVal]) => {
                 if (taxVal > 0) {
-                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                    const config = useTablesStore.getState().config;
+                    const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
                     p.smallFont(true).row(`${taxLabel}:`, formatCOP(taxVal), WS);
                 }
             });

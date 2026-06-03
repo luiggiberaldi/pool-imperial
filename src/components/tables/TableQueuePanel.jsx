@@ -72,7 +72,11 @@ export function TableQueuePanel({ onCheckoutTable }) {
                     const elapsed = paused?.isPaused ? (paused.elapsedAtPause || 0) : (session.started_at ? calculateElapsedTime(session.started_at) : 0);
                     const isTimeFree = table.type === 'NORMAL';
                     const timeCost = isTimeFree ? 0 : calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, (paidHoursOffsets || {})[session.id] || 0, (paidRoundsOffsets || {})[session.id] || 0, session.seats, table.type);
-                    const taxRate = config?.tableTaxType === 'iva_19' ? 0.19 : config?.tableTaxType === 'impoconsumo_8' ? 0.08 : 0;
+                    const taxRate = config?.tableTaxType === 'iva_19'
+                        ? (config?.taxRateIva ?? 19) / 100
+                        : config?.tableTaxType === 'impoconsumo_8'
+                            ? (config?.taxRateImpoconsumo ?? 8) / 100
+                            : 0;
                     const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
                     const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
                     const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);

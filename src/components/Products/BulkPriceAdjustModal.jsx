@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { X, TrendingUp, TrendingDown, Percent, Check, AlertTriangle } from 'lucide-react';
 import { logEvent } from '../../services/auditService';
 import { useAuthStore } from '../../hooks/store/authStore';
+import CustomSelect from '../CustomSelect';
 
 export default function BulkPriceAdjustModal({
     isOpen,
@@ -213,7 +214,7 @@ export default function BulkPriceAdjustModal({
                     {/* Category filter */}
                     <div>
                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Aplicar a</label>
-                        <select
+                        <CustomSelect
                             value={selectedCategory}
                             onChange={e => setSelectedCategory(e.target.value)}
                             className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2.5 px-4 text-sm font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all appearance-none cursor-pointer"
@@ -229,7 +230,7 @@ export default function BulkPriceAdjustModal({
                                         </option>
                                     ) : null;
                                 })}
-                        </select>
+                        </CustomSelect>
                     </div>
 
                     {/* Preview */}

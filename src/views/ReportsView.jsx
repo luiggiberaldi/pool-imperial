@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent } from 'lucide-react';
+import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatCop, formatUsd } from '../utils/calculatorUtils';
 import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
@@ -259,7 +260,8 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                 </div>
                                 {Object.entries(taxBreakdown || {}).map(([key, val]) => {
                                     if (val <= 0) return null;
-                                    const label = key === 'iva_19' ? 'IVA 19%' : key === 'impoconsumo_8' ? 'Impoconsumo 8%' : key;
+                                    const config = useTablesStore.getState().config;
+                                    const label = key === 'iva_19' ? `IVA ${config?.taxRateIva ?? 19}%` : key === 'impoconsumo_8' ? `Impoconsumo ${config?.taxRateImpoconsumo ?? 8}%` : key;
                                     return (
                                         <div key={key} className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-3 border border-slate-100/50 dark:border-slate-800/50 flex flex-col">
                                             <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">{label}</span>

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Tag, AlertTriangle, Minus, Plus, Pencil, Trash2, Package, Layers, Clock, Printer, Check, Gift } from 'lucide-react';
+import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { CATEGORY_COLORS, CATEGORY_ICONS, UNITS } from '../../config/categories';
 import { formatCop, smartCashRounding } from '../../utils/calculatorUtils';
 
@@ -146,7 +147,12 @@ export default function ProductCard({
                 )}
 
                 {(() => {
-                    const taxRate = p.taxType === 'iva_19' ? 0.19 : p.taxType === 'impoconsumo_8' ? 0.08 : 0;
+                    const config = useTablesStore.getState().config;
+                    const taxRate = p.taxType === 'iva_19'
+                        ? (config?.taxRateIva ?? 19) / 100
+                        : p.taxType === 'impoconsumo_8'
+                            ? (config?.taxRateImpoconsumo ?? 8) / 100
+                            : 0;
                     const isExclusiveTax = p.taxMode === 'exclusive' && taxRate > 0;
                     const finalPrice = isExclusiveTax ? (p.priceUsdt || 0) * (1 + taxRate) : (p.priceUsdt || 0);
                     return (
@@ -160,7 +166,7 @@ export default function ProductCard({
                                 </p>
                                 {isExclusiveTax && (
                                     <p className="text-[9px] font-bold text-slate-450 dark:text-slate-500 mt-1.5 leading-none">
-                                        Base: {formatCop(p.priceUsdt)} + {p.taxType === 'iva_19' ? 'IVA' : 'Impo.'}
+                                        Base: {formatCop(p.priceUsdt)} + {p.taxType === 'iva_19' ? `${useTablesStore.getState().config?.taxRateIva ?? 19}% IVA` : `${useTablesStore.getState().config?.taxRateImpoconsumo ?? 8}% Impo.`}
                                     </p>
                                 )}
                                 {p.unit === 'paquete' && p.sellByUnit && (

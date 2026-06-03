@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 export default function CalculatorInput({ label, amount, currency, currencies, onAmountChange, onCurrencyChange, onClear, onFocus, onBlur, compact, children }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
   // LÓGICA DE FUENTE AGRESIVA (Escalado rápido para móviles)
   const getFontSize = (val) => {
@@ -26,6 +28,21 @@ export default function CalculatorInput({ label, amount, currency, currencies, o
   // Visualmente mostramos USD
   const displayCurrency = ['BCV', 'USD', '$ BCV', 'Dolar'].includes(currency) ? 'USD' : currency;
 
+  // Cierre al hacer clic fuera del componente
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
   return (
     <div className={`${compact ? 'p-2' : 'p-4'} bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-200 dark:border-slate-700 relative transition-all focus-within:border-brand focus-within:ring-1 focus-within:ring-brand/20`}>
 
@@ -36,21 +53,48 @@ export default function CalculatorInput({ label, amount, currency, currencies, o
 
       <div className="flex items-center gap-4 relative">
 
-        {/* Selector de Moneda */}
-        <div className="relative shrink-0 z-10">
-          <div className="flex items-center gap-1 bg-white dark:bg-slate-700 py-2 px-3 rounded-xl shadow-sm border border-slate-100 dark:border-slate-600">
+        {/* Selector de Moneda Personalizado */}
+        <div className="relative shrink-0 z-20" ref={dropdownRef}>
+          <button
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center gap-1 bg-white dark:bg-slate-700 py-2 px-3 rounded-xl shadow-sm border border-slate-100 dark:border-slate-600 transition-colors hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer"
+          >
             <span className="font-black text-slate-700 dark:text-white text-sm">
               {displayCurrency}
             </span>
-            <span className="text-[8px] text-slate-400">▼</span>
-          </div>
-          <select
-            value={currency}
-            onChange={(e) => onCurrencyChange(e.target.value)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          >
-            {currencies.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-          </select>
+            <span 
+              className="text-[8px] text-slate-400 transition-transform duration-200"
+              style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }}
+            >
+              ▼
+            </span>
+          </button>
+          
+          {isOpen && (
+            <div className="absolute left-0 top-full mt-1.5 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-1 animate-in fade-in slide-in-from-top-1 duration-150 min-w-[120px] max-h-48 overflow-y-auto">
+              {currencies.map(c => {
+                const isSelected = c.id === currency;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      onCurrencyChange(c.id);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                      isSelected
+                        ? 'bg-emerald-500 text-white'
+                        : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Input Numérico con Tracking Tighter (Letras más pegadas) */}
@@ -83,3 +127,4 @@ export default function CalculatorInput({ label, amount, currency, currencies, o
     </div>
   );
 }
+

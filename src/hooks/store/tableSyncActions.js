@@ -143,12 +143,18 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                 price_pina_bs: merged.pricePinaBs || 0,
                 table_tax_type: merged.tableTaxType || 'exento',
                 table_tax_mode: merged.tableTaxMode || 'inclusive',
+                tax_rate_iva: merged.taxRateIva ?? 19,
+                tax_rate_impoconsumo: merged.taxRateImpoconsumo ?? 8,
                 updated_at: new Date().toISOString()
             }).eq('id', 1);
             if (error && error.message?.includes('column')) {
                 await supabaseCloud.from('pool_config').update({
                     price_per_hour: merged.pricePerHour,
+                    price_per_hour_bs: merged.pricePerHourBs || 0,
                     price_pina: merged.pricePina,
+                    price_pina_bs: merged.pricePinaBs || 0,
+                    table_tax_type: merged.tableTaxType || 'exento',
+                    table_tax_mode: merged.tableTaxMode || 'inclusive',
                     updated_at: new Date().toISOString()
                 }).eq('id', 1);
             }
@@ -186,6 +192,8 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                     pricePinaBs: cloudPinaBs ?? get().config.pricePinaBs ?? 0,
                     tableTaxType: configData.table_tax_type || 'exento',
                     tableTaxMode: configData.table_tax_mode || 'inclusive',
+                    taxRateIva: configData.tax_rate_iva != null ? Number(configData.tax_rate_iva) : (get().config.taxRateIva ?? 19),
+                    taxRateImpoconsumo: configData.tax_rate_impoconsumo != null ? Number(configData.tax_rate_impoconsumo) : (get().config.taxRateImpoconsumo ?? 8),
                 };
                 set({ config: cloudConfig });
                 await tablesCache.setItem(scopedKey('pool_config'), cloudConfig);

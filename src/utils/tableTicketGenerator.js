@@ -1,4 +1,5 @@
 import { printPreCuentaEscPos, getWebSerialConfig } from '../services/webSerialPrinter';
+import { useTablesStore } from '../hooks/store/useTablesStore';
 import { calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart } from './tableBillingEngine';
 import { round2 } from './dinero';
 import { FinancialEngine } from '../core/FinancialEngine';
@@ -178,7 +179,8 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         push(`<div class="row small"><span>Base Gravable:</span><span>${formatCOP(baseBeforeTaxes)}</span></div>`);
         Object.entries(taxBreakdown).forEach(([taxKey, taxVal]) => {
             if (taxVal > 0) {
-                const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                const config = useTablesStore.getState().config;
+                const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
                 push(`<div class="row small"><span>${taxLabel}:</span><span>${formatCOP(taxVal)}</span></div>`);
             }
         });

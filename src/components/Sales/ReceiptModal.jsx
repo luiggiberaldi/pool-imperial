@@ -1,5 +1,6 @@
 import React from 'react';
 import { CheckCircle, Wallet, Send, X, Printer } from 'lucide-react';
+import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { formatCop, formatPaymentAmount } from '../../utils/calculatorUtils';
 import { printThermalTicket } from '../../utils/ticketGenerator';
 
@@ -73,7 +74,8 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                                 </div>
                                 {receipt.taxBreakdown && Object.entries(receipt.taxBreakdown).map(([taxKey, taxVal]) => {
                                     if (taxVal <= 0) return null;
-                                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                                    const config = useTablesStore.getState().config;
+                                    const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
                                     return (
                                         <div key={taxKey} className="flex justify-between font-black text-slate-700 dark:text-slate-300">
                                             <span>{taxLabel}:</span>

@@ -10,6 +10,7 @@ import CalculatorInput from '../../components/CalculatorInput';
 import { AccountSelector } from './AccountSelector';
 import { Modal } from '../../components/Modal';
 import { MessageService } from '../../services/MessageService';
+import CustomSelect from '../CustomSelect';
 // PaymentSummaryChat removed
 
 export const ManualMode = ({ rates, accounts, theme, triggerHaptic, isKeyboardOpen }) => {
@@ -211,7 +212,7 @@ export const ManualMode = ({ rates, accounts, theme, triggerHaptic, isKeyboardOp
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Mostrar Total en</label>
-                            <select
+                            <CustomSelect
                                 value={mainCurrency}
                                 onChange={(e) => setMainCurrency(e.target.value)}
                                 className="w-full bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl font-bold text-slate-700 dark:text-white outline-none text-xs"
@@ -221,7 +222,7 @@ export const ManualMode = ({ rates, accounts, theme, triggerHaptic, isKeyboardOp
                                 <option value="USDT">USD</option>
                                 <option value="BCV">Dólar BCV ($)</option>
                                 <option value="EUR">Euros (€)</option>
-                            </select>
+                            </CustomSelect>
                         </div>
                         <div className="flex flex-col justify-end pb-1">
                             <button

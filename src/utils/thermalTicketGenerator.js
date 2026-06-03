@@ -1,5 +1,6 @@
 import { capitalizeName } from './calculatorUtils';
 import { printReceiptEscPos, getWebSerialConfig } from '../services/webSerialPrinter';
+import { useTablesStore } from '../hooks/store/useTablesStore';
 import { showToast } from '../components/Toast';
 
 // Formatea un número como peso colombiano: $ 12.500
@@ -115,7 +116,8 @@ function _printThermalHTML(sale, _bcvRate) {
             </tr>`;
             Object.entries(sale.taxBreakdown).forEach(([taxKey, taxVal]) => {
                 if (taxVal > 0) {
-                    const taxLabel = taxKey === 'iva_19' ? 'IVA (19%)' : taxKey === 'impoconsumo_8' ? 'Impoconsumo (8%)' : taxKey;
+                    const config = useTablesStore.getState().config;
+                    const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
                     taxesHtml += `
                     <tr>
                         <td style="text-align:left; padding:2px 0; color:#555;">${taxLabel}:</td>

@@ -11,11 +11,26 @@
  */
 
 import { round2, mulR, divR, subR, sumR } from '../utils/dinero';
+import { useTablesStore } from '../hooks/store/useTablesStore';
+
+export function getTaxRates() {
+    try {
+        const config = useTablesStore.getState().config;
+        return {
+            exento: 0,
+            iva_19: (config?.taxRateIva ?? 19) / 100,
+            impoconsumo_8: (config?.taxRateImpoconsumo ?? 8) / 100
+        };
+    } catch {
+        return { exento: 0, iva_19: 0.19, impoconsumo_8: 0.08 };
+    }
+}
 
 export const TAX_RATES = { exento: 0, iva_19: 0.19, impoconsumo_8: 0.08 };
 
 export function computeItemTax(priceCop, taxType = 'exento', taxMode = 'inclusive') {
-    const rate = TAX_RATES[taxType] || 0;
+    const rates = getTaxRates();
+    const rate = rates[taxType] || 0;
     if (rate === 0) return { base: priceCop, tax: 0, total: priceCop };
     if (taxMode === 'inclusive') {
         const base = priceCop / (1 + rate);
@@ -100,7 +115,7 @@ export class FinancialEngine {
             const taxType = item.taxType || 'exento';
             const taxMode = item.taxMode || 'inclusive';
             if (taxType !== 'exento' && taxMode === 'inclusive') {
-                const rate = TAX_RATES[taxType] || 0;
+                const rate = getTaxRates()[taxType] || 0;
                 priceBeforeTax = priceBeforeTax / (1 + rate);
             }
             const itemRevenueCop = mulR(priceBeforeTax, qty);
