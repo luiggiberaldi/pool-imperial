@@ -39,6 +39,7 @@ import { useAppInit } from './hooks/useAppInit';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import { useGlobalTableAlerts } from './hooks/useGlobalTableAlerts';
 import AppVersionLock from './components/AppVersionLock';
+import { initServerClock } from './utils/serverClock';
 
 // Nombre del negocio fijo para todos los dispositivos (module-level, runs once on import)
 if (!localStorage.getItem('business_name')) {
@@ -72,8 +73,18 @@ export default function App() {
   useAutoLock(); // Auto-lock for ADMINs
   useGlobalTableAlerts(); // Global timer alerts across all views + broadcast to all devices
 
-  // Purge old audit log entries on startup
-  useEffect(() => { purgeOldEntries(); }, []);
+  // Purge old audit log entries on startup and sync server clock
+  useEffect(() => {
+    initServerClock();
+    purgeOldEntries();
+  }, []);
+
+  // Re-sync server clock when the device comes back online
+  useEffect(() => {
+    if (isOnline) {
+      initServerClock();
+    }
+  }, [isOnline]);
 
   // Cache rates whenever they update
   useEffect(() => { if (rates) cacheRates(rates); }, [rates, cacheRates]);

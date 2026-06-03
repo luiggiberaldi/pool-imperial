@@ -1,5 +1,6 @@
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { round2 } from './dinero';
+import { getServerNow } from './serverClock';
 
 export function getTaxRates() {
     try {
@@ -30,7 +31,7 @@ export function computeItemTax(priceCop, taxType = 'exento', taxMode = 'inclusiv
 
 export function calculateElapsedTime(startTimeISO) {
     const start = new Date(startTimeISO);
-    const now = new Date();
+    const now = new Date(getServerNow());
     const diffMs = now - start;
     const diffMinutes = Math.floor(diffMs / 60000);
     return diffMinutes;

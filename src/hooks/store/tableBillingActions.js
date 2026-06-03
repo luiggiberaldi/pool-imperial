@@ -1,6 +1,7 @@
 import { supabaseCloud } from '../../config/supabaseCloud';
 import { logEvent } from '../../services/auditService';
 import { useAuthStore } from './authStore';
+import { getServerNow } from '../../utils/serverClock';
 
 const getUser = () => useAuthStore.getState().currentUser;
 
@@ -12,7 +13,7 @@ export const createBillingActions = (set, get, tablesCache, scopedKey) => ({
         // Fix: si el tiempo prepagado ya expiró, ajustar el elapsedOffset
         // para que la nueva hora arranque completa desde este momento.
         if (additionalHours > 0 && session.started_at) {
-            const nowElapsed = Math.max(0, Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000));
+            const nowElapsed = Math.max(0, Math.floor((getServerNow() - new Date(session.started_at).getTime()) / 60000));
             const currentElapsedOffset = (get().paidElapsedOffsets || {})[sessionId] || 0;
             const effectiveElapsed = currentElapsedOffset > 0 ? Math.max(0, nowElapsed - currentElapsedOffset) : nowElapsed;
 

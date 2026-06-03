@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ShoppingBag, X, Plus, Minus, Trash2, Loader2, Search, ChevronDown, UtensilsCrossed, Users } from 'lucide-react';
 import { useOrdersStore } from '../../hooks/store/useOrdersStore';
+import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useAuthStore } from '../../hooks/store/authStore';
 import { useProductContext } from '../../context/ProductContext';
 import { showToast } from '../Toast';

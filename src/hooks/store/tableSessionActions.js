@@ -3,6 +3,7 @@ import { logEvent } from '../../services/auditService';
 import { useAuthStore } from './authStore';
 import { useOrdersStore } from './useOrdersStore';
 import { calculateElapsedTime } from '../../utils/tableBillingEngine';
+import { getServerNow } from '../../utils/serverClock';
 
 const getUser = () => useAuthStore.getState().currentUser;
 const getAuthUserId = async () => {
@@ -26,7 +27,7 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
             for (const orphan of orphans) {
                 try {
                     await supabaseCloud.from('table_sessions')
-                        .update({ status: 'CLOSED', closed_at: new Date().toISOString(), total_cost_usd: 0 })
+                        .update({ status: 'CLOSED', closed_at: new Date(getServerNow()).toISOString(), total_cost_usd: 0 })
                         .eq('id', orphan.id);
                 } catch { /* ignorar */ }
             }
@@ -38,7 +39,7 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
             game_mode: gameMode,
             hours_paid: hoursPaid,
             status: 'ACTIVE',
-            started_at: new Date().toISOString(),
+            started_at: new Date(getServerNow()).toISOString(),
             ...(clientName ? { client_name: clientName } : {}),
             ...(guestCount > 0 ? { guest_count: guestCount } : {}),
             ...(clientId ? { client_id: clientId } : {}),
@@ -139,7 +140,7 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
 
         const updatePayload = {
             status: 'CLOSED',
-            closed_at: new Date().toISOString(),
+            closed_at: new Date(getServerNow()).toISOString(),
             total_cost_usd: totalCost
         };
         if (paymentMethod) updatePayload.payment_method = paymentMethod;

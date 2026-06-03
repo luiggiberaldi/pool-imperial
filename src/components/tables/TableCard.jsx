@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Move } from 'lucide-react';
 import { calculateElapsedTime, calculateSessionCost, calculateSessionCostBreakdown, calculateConsumptionBs, buildTableSyntheticCart } from '../../utils/tableBillingEngine';
+import { getServerNow } from '../../utils/serverClock';
 import { FinancialEngine } from '../../core/FinancialEngine';
 import { round2 } from '../../utils/dinero';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
@@ -185,7 +186,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
         if (!isPlaying || !session?.started_at) return 0;
         if (isPaused) return (pausedData?.elapsedAtPause || 0) * 60;
         const start = new Date(session.started_at).getTime();
-        const now = Date.now();
+        const now = getServerNow();
         const rawSecs = Math.max(0, Math.floor((now - start) / 1000));
         if (hasLimit) {
             const limitSecs = totalHoursPaid * 3600;
