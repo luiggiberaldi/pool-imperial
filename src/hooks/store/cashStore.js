@@ -37,15 +37,18 @@ export const useCashStore = create((set, get) => ({
     init: async () => {
         set({ loading: true });
         try {
-            // 1. Mostrar caché local inmediatamente — UI no bloquea al usuario
+            // 1. Leer caché local primero (para mostrar algo mientras esperamos la nube)
             const cachedSession = await cashCache.getItem(scopedKey('active_cash_session'));
-            set({ activeCashSession: cachedSession, loading: false });
+            // Ponemos el caché local PERO mantenemos loading:true hasta confirmar con la nube
+            set({ activeCashSession: cachedSession });
 
             // 2. Intentar subir apertura pendiente (si hubo falla offline previa)
             await get()._retryPendingOpen();
 
             // 3. Sincronizar desde la nube para obtener el estado real
+            // loading: false recién aquí — el Guard espera este momento para decidir
             await get().syncCashSession(true);
+            set({ loading: false });
 
             // 4. Triple redundancia para multi-dispositivo:
             get()._subscribeRealtime();   // Capa A: Broadcast + postgres_changes

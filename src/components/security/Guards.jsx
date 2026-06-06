@@ -15,12 +15,15 @@ export function AdminRoute({ children }) {
 
 export function CashierRoute({ children }) {
     const { role } = useAuthStore();
-    const { activeCashSession } = useCashStore();
+    const { activeCashSession, loading: cashLoading } = useCashStore();
     const cajeroAbreCaja = localStorage.getItem('cajero_puede_abrir_caja') === 'true';
 
     if (role !== 'CAJERO' && role !== 'ADMIN') {
         return <UnauthMessage message="Acceso restringido a Cajeros y Administradores." />;
     }
+
+    // Esperar a que el store termine de sincronizar antes de bloquear
+    if (cashLoading) return null;
 
     // Role is CAJERO or ADMIN. Admin can always pass.
     if (role === 'CAJERO' && !activeCashSession && !cajeroAbreCaja) {
@@ -32,12 +35,15 @@ export function CashierRoute({ children }) {
 
 export function AnyStaffRoute({ children }) {
     const { role } = useAuthStore();
-    const { activeCashSession } = useCashStore();
+    const { activeCashSession, loading: cashLoading } = useCashStore();
     const cajeroAbreCaja = localStorage.getItem('cajero_puede_abrir_caja') === 'true';
 
     if (!role) {
         return <UnauthMessage message="Debe iniciar sesión." />;
     }
+
+    // Esperar a que el store termine de sincronizar antes de bloquear
+    if (cashLoading) return null;
 
     // If role is CAJERO, MESERO or BARRA and NO box is open: Block them (unless cajero has open-caja permission).
     if (role !== 'ADMIN' && !activeCashSession && !(role === 'CAJERO' && cajeroAbreCaja)) {
