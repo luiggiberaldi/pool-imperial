@@ -3,7 +3,6 @@ import localforage from 'localforage';
 import { supabaseCloud } from '../../config/supabaseCloud';
 import { logEvent } from '../../services/auditService';
 import { scopedKey } from './accountScope';
-import { useAuthStore } from './authStore';
 
 // Helper: obtener user_id del usuario Supabase autenticado
 const getAuthUserId = async () => {
@@ -60,18 +59,16 @@ export const useCashStore = create((set, get) => ({
         lastSyncTime = now;
 
         try {
-            const userId = await getAuthUserId();
-            let query = supabaseCloud
+            // ⚠️ NO filtrar por user_id aquí: la caja es compartida entre todos
+            // los dispositivos del negocio. La RLS de Supabase ya aísla por cuenta.
+            // Filtrar por user_id causaba que otros dispositivos no vieran la caja abierta.
+            const { data, error } = await supabaseCloud
                 .from('cash_sessions')
                 .select('*')
                 .eq('status', 'OPEN')
                 .order('opened_at', { ascending: false })
-                .limit(1);
-
-            // Filtrar por user_id si la columna existe (nueva funcionalidad)
-            if (userId) query = query.eq('user_id', userId);
-
-            const { data, error } = await query.maybeSingle();
+                .limit(1)
+                .maybeSingle();
 
             // Si hay error, mantener estado local (puede ser RLS, offline, etc.)
             if (error) throw error;
@@ -145,16 +142,16 @@ export const useCashStore = create((set, get) => ({
     // Capa A: Realtime de Supabase — instantáneo si la tabla tiene replication activo
     _subscribeRealtime: () => {
         if (cashRealtimeChannel) return;
-        const userId = useAuthStore.getState().cloudSession?.user?.id;
-        const channelName = userId ? `cash_sessions_realtime:${userId}` : 'cash_sessions_realtime';
+        // Canal compartido — todos los dispositivos escuchan cualquier cambio en cash_sessions
+        // (RLS garantiza que solo ven las de su cuenta)
         cashRealtimeChannel = supabaseCloud
-            .channel(channelName)
+            .channel('cash_sessions_realtime')
             .on('postgres_changes', {
                 event: '*',
                 schema: 'public',
                 table: 'cash_sessions',
             }, async () => {
-                await get().syncCashSession();
+                await get().syncCashSession(true); // force=true para ignorar debounce
             })
             .subscribe();
     },
