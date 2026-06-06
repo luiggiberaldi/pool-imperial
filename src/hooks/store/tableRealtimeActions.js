@@ -201,18 +201,27 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => ({
                     return { paidElapsedOffsets: rest };
                 });
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'table_sessions', filter: 'status=in.(ACTIVE,CHECKOUT)' }, (payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'table_sessions' }, (payload) => {
                 console.log("[REALTIME] table_sessions change received:", payload);
                 if (payload.eventType === 'UPDATE') {
-                    set(state => ({ activeSessions: state.activeSessions.map(s => {
-                        if (s.id !== payload.new.id) return s;
-                        // Preserve local-only field paid_at (not a DB column)
-                        const merged = { ...payload.new };
-                        if (s.paid_at && !merged.paid_at) merged.paid_at = s.paid_at;
-                        return merged;
-                    }) }));
+                    const newStatus = payload.new?.status;
+                    if (newStatus === 'CLOSED') {
+                        // Mesa cerrada desde otro dispositivo → eliminarla del estado local
+                        set(state => ({ activeSessions: state.activeSessions.filter(s => s.id !== payload.new.id) }));
+                    } else {
+                        set(state => ({ activeSessions: state.activeSessions.map(s => {
+                            if (s.id !== payload.new.id) return s;
+                            // Preserve local-only field paid_at (not a DB column)
+                            const merged = { ...payload.new };
+                            if (s.paid_at && !merged.paid_at) merged.paid_at = s.paid_at;
+                            return merged;
+                        }) }));
+                    }
                 } else if (payload.eventType === 'INSERT') {
-                    set(state => ({ activeSessions: [...state.activeSessions.filter(s => s.id !== payload.new.id), payload.new] }));
+                    // Solo agregar si está activa (no insertar sesiones cerradas)
+                    if (payload.new?.status === 'ACTIVE' || payload.new?.status === 'CHECKOUT') {
+                        set(state => ({ activeSessions: [...state.activeSessions.filter(s => s.id !== payload.new.id), payload.new] }));
+                    }
                 } else if (payload.eventType === 'DELETE') {
                     set(state => ({ activeSessions: state.activeSessions.filter(s => s.id !== payload.old.id) }));
                 }

@@ -40,5 +40,3 @@ export const useTablesStore = create((set, get) => ({
     ...createRealtimeActions(set, get, tablesCache, scopedKey),
 }));
 
-// Initialize
-useTablesStore.getState().init();

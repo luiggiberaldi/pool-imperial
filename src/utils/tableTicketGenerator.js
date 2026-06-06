@@ -4,10 +4,11 @@ import { calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreak
 import { round2 } from './dinero';
 import { FinancialEngine } from '../core/FinancialEngine';
 
-// Formatea un número como peso colombiano: $ 12.500
-const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
-    style: 'currency', currency: 'COP', minimumFractionDigits: 0
-}).format(Math.round(val || 0));
+const formatCOP = (val) => {
+    const rawVal = Math.round(val || 0);
+    const absVal = Math.abs(rawVal).toLocaleString('es-CO');
+    return rawVal < 0 ? `-$ ${absVal}` : `$ ${absVal}`;
+};
 
 /**
  * Genera e imprime una pre-cuenta para mesa de pool.

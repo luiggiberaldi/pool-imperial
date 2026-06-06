@@ -27,6 +27,9 @@ let cashVisibilityHandler = null;
 let lastSyncTime = 0;
 const SYNC_DEBOUNCE = 3000; // No sincronizar más de una vez cada 3s
 
+// Clave para reintentar el insert de apertura de caja offline
+const PENDING_CASH_KEY = 'poolbar_pending_cash_open';
+
 export const useCashStore = create((set, get) => ({
     activeCashSession: null,
     loading: true,
@@ -38,12 +41,15 @@ export const useCashStore = create((set, get) => ({
             const cachedSession = await cashCache.getItem(scopedKey('active_cash_session'));
             set({ activeCashSession: cachedSession, loading: false });
 
-            // 2. Sincronizar desde la nube para obtener el estado real
-            await get().syncCashSession();
+            // 2. Intentar subir apertura pendiente (si hubo falla offline previa)
+            await get()._retryPendingOpen();
 
-            // 3. Triple redundancia para multi-dispositivo:
-            get()._subscribeRealtime();   // Capa A: Realtime Supabase (instantáneo si habilitado)
-            get()._startPolling();        // Capa B: Polling cada 45s (fallback garantizado)
+            // 3. Sincronizar desde la nube para obtener el estado real
+            await get().syncCashSession(true);
+
+            // 4. Triple redundancia para multi-dispositivo:
+            get()._subscribeRealtime();   // Capa A: Broadcast + postgres_changes
+            get()._startPolling();        // Capa B: Polling cada 30s (fallback garantizado)
             get()._subscribeVisibility(); // Capa C: Al volver al primer plano (clave en móviles)
         } catch (error) {
             console.error('[Caja] Error de inicialización:', error);
@@ -139,25 +145,35 @@ export const useCashStore = create((set, get) => ({
         }
     },
 
-    // Capa A: Realtime de Supabase — instantáneo si la tabla tiene replication activo
+    // Capa A: Broadcast (instantáneo) + postgres_changes (si la tabla está en la publicación)
     _subscribeRealtime: () => {
         if (cashRealtimeChannel) return;
         getAuthUserId().then(userId => {
             if (!userId) return;
             if (cashRealtimeChannel) return; // Guard double check después de async
-            
-            // Canal compartido — todos los dispositivos escuchan cualquier cambio en cash_sessions
-            // (RLS garantiza que solo ven las de su cuenta)
+
+            // Nombre de canal con scope de usuario para evitar cross-account leaks
+            const channelName = `cash_sessions_realtime:${userId}`;
+
             cashRealtimeChannel = supabaseCloud
-                .channel('cash_sessions_realtime')
+                .channel(channelName)
+                // Broadcast: notificación inmediata entre dispositivos (no requiere publicación DB)
+                .on('broadcast', { event: 'cash_session_changed' }, async () => {
+                    console.log('[Caja] Broadcast recibido — sincronizando...');
+                    await get().syncCashSession(true);
+                })
+                // postgres_changes: backup por si la tabla está en la publicación de realtime
                 .on('postgres_changes', {
                     event: '*',
                     schema: 'public',
                     table: 'cash_sessions',
                 }, async () => {
-                    await get().syncCashSession(true); // force=true para ignorar debounce
+                    console.log('[Caja] DB change recibido — sincronizando...');
+                    await get().syncCashSession(true);
                 })
-                .subscribe();
+                .subscribe((status) => {
+                    console.log('[Caja] Realtime status:', status);
+                });
         });
     },
 
@@ -167,11 +183,35 @@ export const useCashStore = create((set, get) => ({
         getAuthUserId().then(userId => {
             if (!userId) return;
             if (cashPollingInterval) return; // Guard double check después de async
-            
+
             cashPollingInterval = setInterval(() => {
                 get().syncCashSession();
             }, 30_000);
         });
+    },
+
+    // Reintento de insert de apertura de caja que falló por estar offline
+    _retryPendingOpen: async () => {
+        try {
+            const pending = await cashCache.getItem(PENDING_CASH_KEY);
+            if (!pending) return;
+            console.log('[Caja] Reintentando apertura pendiente...');
+            const { error } = await supabaseCloud.from('cash_sessions').insert(pending);
+            if (!error) {
+                console.log('[Caja] Apertura pendiente sincronizada en la nube ✓');
+                await cashCache.removeItem(PENDING_CASH_KEY);
+                // Notificar a otros dispositivos via broadcast
+                cashRealtimeChannel?.send({
+                    type: 'broadcast',
+                    event: 'cash_session_changed',
+                    payload: { action: 'open' }
+                });
+            } else {
+                console.warn('[Caja] Reintento fallido (aún offline):', error.message);
+            }
+        } catch (err) {
+            console.warn('[Caja] Error en reintento de apertura:', err);
+        }
     },
 
     // Capa C: Al volver al primer plano — crítico para PWA en móvil
@@ -182,12 +222,21 @@ export const useCashStore = create((set, get) => ({
             if (document.visibilityState === 'visible') {
                 // Sincronizar inmediatamente al volver al primer plano (force=true)
                 if (cashVisibilityTimer) clearTimeout(cashVisibilityTimer);
-                cashVisibilityTimer = setTimeout(() => {
-                    get().syncCashSession(true);
+                cashVisibilityTimer = setTimeout(async () => {
+                    await get()._retryPendingOpen(); // Reintento si hubo apertura offline
+                    await get().syncCashSession(true);
                 }, 500);
             }
         };
         document.addEventListener('visibilitychange', cashVisibilityHandler);
+
+        // Capa D: Al recuperar conexión a internet — reintento automático offline→online
+        const onlineHandler = async () => {
+            console.log('[Caja] Reconexión detectada — reintentando pendientes...');
+            await get()._retryPendingOpen();
+            await get().syncCashSession(true);
+        };
+        window.addEventListener('online', onlineHandler);
     },
 
     openCashSession: async (baseUsd, baseBs, openedBy, openedByRole) => {
@@ -219,10 +268,23 @@ export const useCashStore = create((set, get) => ({
 
         try {
             const { error } = await supabaseCloud.from('cash_sessions').insert(supabasePayload);
-            if (error) console.warn('[Caja] Error al subir apertura a nube:', error.message);
-            else console.log('[Caja] Apertura sincronizada en la nube ✓');
+            if (error) {
+                console.warn('[Caja] Error al subir apertura a nube:', error.message);
+                // Guardar para reintento automático al reconectarse
+                await cashCache.setItem(PENDING_CASH_KEY, supabasePayload);
+            } else {
+                console.log('[Caja] Apertura sincronizada en la nube ✓');
+                await cashCache.removeItem(PENDING_CASH_KEY);
+                // Notificar a todos los dispositivos conectados via broadcast
+                cashRealtimeChannel?.send({
+                    type: 'broadcast',
+                    event: 'cash_session_changed',
+                    payload: { action: 'open' }
+                });
+            }
         } catch (err) {
-            console.warn('[Caja] Sin conexión — apertura guardada localmente:', err);
+            console.warn('[Caja] Sin conexión — apertura guardada localmente para reintento:', err);
+            await cashCache.setItem(PENDING_CASH_KEY, supabasePayload);
         }
 
         logEvent('VENTA', 'APERTURA_CAJA', `Caja abierta — Base: $${baseUsd} / Bs${baseBs}`, { nombre: openedBy, rol: openedByRole || 'DESCONOCIDO' }, { baseUsd, baseBs, sessionId: sessionPayload.id, openedByRole });
@@ -246,8 +308,17 @@ export const useCashStore = create((set, get) => ({
                 })
                 .eq('id', active.id);
 
-            if (error) console.warn('[Caja] Error al cerrar sesión en nube:', error.message);
-            else console.log('[Caja] Cierre sincronizado en la nube ✓');
+            if (error) {
+                console.warn('[Caja] Error al cerrar sesión en nube:', error.message);
+            } else {
+                console.log('[Caja] Cierre sincronizado en la nube ✓');
+                // Notificar a todos los dispositivos conectados via broadcast
+                cashRealtimeChannel?.send({
+                    type: 'broadcast',
+                    event: 'cash_session_changed',
+                    payload: { action: 'close' }
+                });
+            }
         } catch (err) {
             console.warn('[Caja] Sin conexión al cerrar caja:', err);
         }
@@ -279,6 +350,5 @@ export const useCashStore = create((set, get) => ({
         }
     }
 }));
-
-// Inicializar al cargar el módulo
-useCashStore.getState().init();
+// NO inicializar aquí: se llama desde useAppInit.js cuando hay sesión autenticada
+// para evitar suscripciones anónimas que Supabase RLS bloquea silenciosamente.

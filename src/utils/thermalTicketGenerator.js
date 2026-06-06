@@ -3,10 +3,11 @@ import { printReceiptEscPos, getWebSerialConfig } from '../services/webSerialPri
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { showToast } from '../components/Toast';
 
-// Formatea un número como peso colombiano: $ 12.500
-const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
-    style: 'currency', currency: 'COP', minimumFractionDigits: 0
-}).format(Math.round(val || 0));
+const formatCOP = (val) => {
+    const rawVal = Math.round(val || 0);
+    const absVal = Math.abs(rawVal).toLocaleString('es-CO');
+    return rawVal < 0 ? `-$ ${absVal}` : `$ ${absVal}`;
+};
 
 /**
  * Imprime un ticket de venta en COP.
