@@ -142,26 +142,36 @@ export const useCashStore = create((set, get) => ({
     // Capa A: Realtime de Supabase — instantáneo si la tabla tiene replication activo
     _subscribeRealtime: () => {
         if (cashRealtimeChannel) return;
-        // Canal compartido — todos los dispositivos escuchan cualquier cambio en cash_sessions
-        // (RLS garantiza que solo ven las de su cuenta)
-        cashRealtimeChannel = supabaseCloud
-            .channel('cash_sessions_realtime')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'cash_sessions',
-            }, async () => {
-                await get().syncCashSession(true); // force=true para ignorar debounce
-            })
-            .subscribe();
+        getAuthUserId().then(userId => {
+            if (!userId) return;
+            if (cashRealtimeChannel) return; // Guard double check después de async
+            
+            // Canal compartido — todos los dispositivos escuchan cualquier cambio en cash_sessions
+            // (RLS garantiza que solo ven las de su cuenta)
+            cashRealtimeChannel = supabaseCloud
+                .channel('cash_sessions_realtime')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'cash_sessions',
+                }, async () => {
+                    await get().syncCashSession(true); // force=true para ignorar debounce
+                })
+                .subscribe();
+        });
     },
 
-    // Capa B: Polling cada 15s — garantiza sync aunque el realtime falle
+    // Capa B: Polling cada 30s — garantiza sync aunque el realtime falle
     _startPolling: () => {
         if (cashPollingInterval) return;
-        cashPollingInterval = setInterval(() => {
-            get().syncCashSession();
-        }, 60_000);
+        getAuthUserId().then(userId => {
+            if (!userId) return;
+            if (cashPollingInterval) return; // Guard double check después de async
+            
+            cashPollingInterval = setInterval(() => {
+                get().syncCashSession();
+            }, 30_000);
+        });
     },
 
     // Capa C: Al volver al primer plano — crítico para PWA en móvil
@@ -226,16 +236,6 @@ export const useCashStore = create((set, get) => ({
         await cashCache.removeItem(scopedKey('active_cash_session'));
         set({ activeCashSession: null });
 
-        // Cleanup: detener polling y realtime para no sincronizar data fantasma
-        if (cashPollingInterval) {
-            clearInterval(cashPollingInterval);
-            cashPollingInterval = null;
-        }
-        if (cashRealtimeChannel) {
-            cashRealtimeChannel.unsubscribe();
-            cashRealtimeChannel = null;
-        }
-
         try {
             const { error } = await supabaseCloud
                 .from('cash_sessions')
@@ -261,7 +261,11 @@ export const useCashStore = create((set, get) => ({
             cashPollingInterval = null;
         }
         if (cashRealtimeChannel) {
-            cashRealtimeChannel.unsubscribe();
+            try {
+                supabaseCloud.removeChannel(cashRealtimeChannel);
+            } catch (_) {
+                try { cashRealtimeChannel.unsubscribe(); } catch (__) {}
+            }
             cashRealtimeChannel = null;
         }
         if (cashVisibilityTimer) {

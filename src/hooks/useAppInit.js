@@ -33,6 +33,7 @@ export function useAppInit() {
         return () => {
             unsubscribeFromTablesRealtime();
             unsubscribeFromOrdersRealtime();
+            useCashStore.getState().destroy();
         };
     }, [cloudSession, syncTablesAndSessionsGlobal, subscribeToTablesRealtime, subscribeToOrdersRealtime, unsubscribeFromTablesRealtime, unsubscribeFromOrdersRealtime]);
 
