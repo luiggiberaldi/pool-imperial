@@ -595,15 +595,23 @@ const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, st
                     className="absolute inset-0 z-10 pointer-events-none transition-colors duration-300 rounded-full"
                     style={{ backgroundColor: overlayBg }}
                 />
-                <span
-                    className="absolute z-20 leading-none text-center font-black text-white drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]"
+                
+                {/* Centered text container inside the circle */}
+                <div
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-0.5 text-center leading-none select-none px-1 pointer-events-none w-full"
                     style={{
-                        fontSize: '10.5px',
                         transform: isCanvasRotated ? 'rotate(90deg)' : undefined,
                     }}
                 >
-                    {item.label}
-                </span>
+                    <span className="font-black text-white text-[10px] sm:text-[11px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]">
+                        {item.label}
+                    </span>
+                    {session?.client_name && (
+                        <span className="text-white/95 font-extrabold text-[7.5px] sm:text-[8px] truncate max-w-full drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]">
+                            {session.client_name}
+                        </span>
+                    )}
+                </div>
             </div>
         </button>
     );
@@ -689,15 +697,23 @@ const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, status
                     className="absolute inset-0 z-10 pointer-events-none transition-colors duration-300 rounded-full"
                     style={{ backgroundColor: overlayBg }}
                 />
-                <span
-                    className="absolute z-20 leading-none text-center font-black text-white drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]"
+                
+                {/* Centered text container inside the circle */}
+                <div
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-0.5 text-center leading-none select-none px-1 pointer-events-none w-full"
                     style={{
-                        fontSize: '9.5px',
                         transform: isCanvasRotated ? 'rotate(90deg)' : undefined,
                     }}
                 >
-                    {item.label}
-                </span>
+                    <span className="font-black text-white text-[9.5px] sm:text-[10px] drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]">
+                        {item.label}
+                    </span>
+                    {session?.client_name && (
+                        <span className="text-white/95 font-extrabold text-[7.5px] sm:text-[8px] truncate max-w-full drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.95)]">
+                            {session.client_name}
+                        </span>
+                    )}
+                </div>
             </div>
         </button>
     );
