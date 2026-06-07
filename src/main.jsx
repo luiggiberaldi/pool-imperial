@@ -64,6 +64,183 @@ import './index.css'
       console.error('❌ [Diagnóstico] Error:', diagErr);
     }
 
+    // --- PLAN B: RECONSTRUCCIÓN DE CLIENTES DESDE VENTAS ---
+    try {
+      const round2 = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
+      const subR = (a, b) => round2(a - b);
+      const procesarImpactoClienteLocal = (clienteInicial, transaccion) => {
+        let cliente = { ...clienteInicial };
+        const { usaSaldoFavor = 0, esCredito = false, deudaGenerada = 0, vueltoParaMonedero = 0 } = transaccion;
+
+        if (usaSaldoFavor > 0) {
+          const disponible = round2(cliente.favor || 0);
+          const efectivo = Math.min(usaSaldoFavor, disponible);
+          cliente.favor = round2(subR(disponible, efectivo));
+        }
+
+        if (esCredito) {
+          cliente.deuda = round2((cliente.deuda || 0) + deudaGenerada);
+        }
+
+        if (vueltoParaMonedero > 0) {
+          const deudaActual = round2(cliente.deuda || 0);
+
+          if (deudaActual > 0.001) {
+            if (deudaActual >= vueltoParaMonedero) {
+              cliente.deuda = round2(subR(deudaActual, vueltoParaMonedero));
+            } else {
+              const sobra = round2(subR(vueltoParaMonedero, deudaActual));
+              cliente.deuda = 0;
+              cliente.favor = round2((cliente.favor || 0) + sobra);
+            }
+          } else {
+            cliente.favor = round2((cliente.favor || 0) + vueltoParaMonedero);
+          }
+        }
+
+        const saldoNeto = subR((cliente.favor || 0), (cliente.deuda || 0));
+
+        if (saldoNeto >= 0) {
+          cliente.favor = round2(saldoNeto);
+          cliente.deuda = 0;
+        } else {
+          cliente.favor = 0;
+          cliente.deuda = round2(Math.abs(saldoNeto));
+        }
+
+        return cliente;
+      };
+
+      const CUSTOMERS_KEY = 'bodega_customers_v1';
+      const localCustomers = await storageService.getItem(CUSTOMERS_KEY, []);
+      
+      // Solo reconstruir si no hay clientes en la base de datos local
+      if (!Array.isArray(localCustomers) || localCustomers.length === 0) {
+        console.log('🔄 [Plan B] No se encontraron clientes locales. Escaneando historial de ventas...');
+        
+        const SALES_KEY = 'bodega_sales_v1';
+        const sales = await storageService.getItem(SALES_KEY, []);
+        
+        if (Array.isArray(sales) && sales.length > 0) {
+          // Filtrar ventas que tengan clienteId o customerId
+          const customerSales = sales.filter(s => s && (s.customerId || s.clienteId));
+          
+          if (customerSales.length > 0) {
+            console.log(`📥 [Plan B] Encontradas ${customerSales.length} ventas asociadas a clientes.`);
+            
+            // Agrupar ventas por cliente ID
+            const salesByCustomer = {};
+            customerSales.forEach(s => {
+              const cId = s.customerId || s.clienteId;
+              if (!salesByCustomer[cId]) {
+                salesByCustomer[cId] = [];
+              }
+              salesByCustomer[cId].push(s);
+            });
+
+            const reconstructedCustomers = [];
+
+            // Procesar cada cliente
+            for (const [cId, cSales] of Object.entries(salesByCustomer)) {
+              // Ordenar cronológicamente (más antiguo primero)
+              cSales.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+              // Encontrar los datos básicos del cliente en alguna de las ventas
+              let name = 'Cliente sin nombre';
+              let phone = null;
+              let documentId = null;
+              let firstTimestamp = new Date().toISOString();
+
+              for (const s of cSales) {
+                const sName = s.customerName || s.clienteName;
+                if (sName && sName !== 'Consumidor Final') {
+                  name = sName;
+                }
+                const sPhone = s.customerPhone || s.clientePhone;
+                if (sPhone) phone = sPhone;
+
+                const sDoc = s.customerDocument || s.clienteDocument;
+                if (sDoc) documentId = sDoc;
+
+                if (s.timestamp && new Date(s.timestamp) < new Date(firstTimestamp)) {
+                  firstTimestamp = s.timestamp;
+                }
+              }
+
+              // Inicializar cliente
+              let client = {
+                id: cId,
+                name: name.trim(),
+                phone: phone ? phone.trim() : null,
+                documentId: documentId ? documentId.trim() : null,
+                deuda: 0,
+                favor: 0,
+                createdAt: firstTimestamp
+              };
+
+              // Re-correr cada venta cronológicamente aplicando el impacto financiero
+              cSales.forEach(s => {
+                let transaccion = {};
+                
+                if (s.tipo === 'COBRO_DEUDA') {
+                  const paymentAmount = s.totalCop || s.totalUsd || 0;
+                  transaccion = { costoTotal: 0, pagoReal: paymentAmount, vueltoParaMonedero: paymentAmount };
+                } else if (s.tipo === 'VENTA_FIADA') {
+                  const debtAmount = s.fiadoUsd || s.fiado_usd || 0;
+                  transaccion = { esCredito: true, deudaGenerada: debtAmount };
+                } else {
+                  // Venta normal, verificar si usó saldo a favor
+                  const saldoFavorUsed = s.payments?.find(p => p.methodId === 'saldo_favor')?.amountUsd || 0;
+                  if (saldoFavorUsed > 0) {
+                    transaccion = { usaSaldoFavor: saldoFavorUsed };
+                  }
+                }
+
+                client = procesarImpactoClienteLocal(client, transaccion);
+              });
+
+              console.log(`👤 [Plan B] Reconstruido: ${client.name} | Deuda: $${client.deuda} | Favor: $${client.favor}`);
+              reconstructedCustomers.push(client);
+            }
+
+            if (reconstructedCustomers.length > 0) {
+              // Ordenar alfabéticamente
+              reconstructedCustomers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+              // Guardar localmente
+              await storageService.setItem(CUSTOMERS_KEY, reconstructedCustomers);
+              window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: CUSTOMERS_KEY } }));
+
+              // Subir a la nube
+              const { data: { session } } = await supabaseCloud.auth.getSession();
+              if (session?.user?.id) {
+                const { error: upsertErr } = await supabaseCloud
+                  .from('sync_documents')
+                  .upsert({
+                    user_id: session.user.id,
+                    collection: 'store',
+                    doc_id: 'bodega_customers_v1',
+                    data: { payload: reconstructedCustomers },
+                    updated_at: new Date().toISOString()
+                  }, { onConflict: 'user_id,collection,doc_id' });
+
+                if (upsertErr) {
+                  console.error('❌ [Plan B] Error al subir clientes reconstruidos a Supabase:', upsertErr.message);
+                } else {
+                  console.log('✅ [Plan B] Clientes reconstruidos subidos a Supabase.');
+                }
+              }
+
+              alert(`¡Reconstrucción exitosa! Se recuperaron ${reconstructedCustomers.length} clientes y sus deudas desde el historial de ventas.`);
+              window.location.reload();
+            }
+          }
+        }
+      }
+    } catch (planBErr) {
+      console.error('❌ [Plan B] Error durante la reconstrucción:', planBErr);
+    }
+
     // 1. Borrar venta 7 si existe
     const SALES_KEY = 'bodega_sales_v1';
     const sales = await storageService.getItem(SALES_KEY, []);
