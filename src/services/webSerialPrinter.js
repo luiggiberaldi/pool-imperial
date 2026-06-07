@@ -66,18 +66,8 @@ export async function requestPrinterPort() {
 }
 
 export async function getConnectedPrinter() {
-    if (!('serial' in navigator)) return null;
-    try {
-        const ports = await navigator.serial.getPorts();
-        if (ports.length > 0) {
-            activePort = ports[0];
-            return activePort;
-        }
-        return null;
-    } catch (err) {
-        console.error('Error recuperando puertos', err);
-        return null;
-    }
+    // Retorno inmediato de null para evitar invocar a navigator.serial.getPorts() y prevenir interferencias de Bluetooth
+    return null;
 }
 
 // ── Auto-detección ────────────────────────────────────────────────────────────

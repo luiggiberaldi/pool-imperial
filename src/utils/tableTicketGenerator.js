@@ -17,29 +17,7 @@ const formatCOP = (val) => {
  * - Sin impresora térmica: genera PDF via jsPDF + iframe o impresión de ventana directa.
  */
 export async function generatePartialSessionTicketPDF({ table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0, products = [] }) {
-    // Intentar ESC/POS directo si hay impresora térmica configurada.
-    const cfg = getWebSerialConfig();
-    if (cfg.printerType !== 'system') {
-        const hasWebSerialConfigured = cfg.printerType && cfg.printerType !== 'system';
-        if (hasWebSerialConfigured) {
-            try {
-                const printed = await printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset, roundsOffset, products });
-                if (printed) return;
-                throw new Error('Puerto no disponible. Ve a Configuración → Impresora y pulsa "Detectar impresora".');
-            } catch (err) {
-                throw err;
-            }
-        }
-        const tryEscPos = 'serial' in navigator;
-        if (tryEscPos) {
-            try {
-                const printed = await printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset, roundsOffset, products });
-                if (printed) return;
-            } catch (err) {
-                console.warn('[PreCuenta] ESC/POS falló, usando fallback PDF:', err.message);
-            }
-        }
-    }
+    // Impresión exclusiva a través de diálogo del sistema (HTML / PDF)
 
     const seats = session?.seats || [];
     const isMultiClient = seats.length > 1;

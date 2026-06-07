@@ -15,24 +15,8 @@ const formatCOP = (val) => {
  * - Impresora térmica configurada: ESC/POS directo, sin diálogo
  */
 export async function printThermalTicket(sale, bcvRate) {
-    const cfg = getWebSerialConfig();
-
-    // Impresora del sistema → diálogo del sistema
-    if (cfg.printerType === 'system') {
-        _printThermalHTML(sale, bcvRate);
-        return;
-    }
-
-    // Impresora térmica → ESC/POS directo
-    try {
-        const printed = await printReceiptEscPos(sale, bcvRate);
-        if (printed) return;
-        // printReceiptEscPos retornó false → no hay puerto autorizado
-        showToast('Sin impresora conectada. Ve a Configuración → Impresora y pulsa Detectar.', 'error');
-    } catch (err) {
-        showToast(`Error de impresora: ${err.message}`, 'error');
-        console.error('[Ticket] ESC/POS error:', err);
-    }
+    // Impresión exclusiva a través del diálogo estándar del sistema (HTML / PDF)
+    _printThermalHTML(sale, bcvRate);
 }
 
 function _printThermalHTML(sale, _bcvRate) {
