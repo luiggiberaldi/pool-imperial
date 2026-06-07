@@ -63,7 +63,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
         const notes = session?.notes || '';
         const match = notes.match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
         if (match) return match[1] === '1';
-        return config?.defaultTipEnabled ?? true;
+        return config?.defaultTipEnabled ?? false;
     });
     const [tipPercent, setTipPercent] = useState(() => config?.defaultTipPercent ?? 8);
 

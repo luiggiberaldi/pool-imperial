@@ -35,7 +35,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
     // Service charge & tip toggles
     const [includeServiceCharge, setIncludeServiceCharge] = useState(() => config?.defaultServiceChargeEnabled ?? true);
     const [serviceChargePercent, setServiceChargePercent] = useState(() => config?.defaultServiceChargePercent ?? 10);
-    const [includeTip, setIncludeTip] = useState(() => config?.defaultTipEnabled ?? true);
+    const [includeTip, setIncludeTip] = useState(() => config?.defaultTipEnabled ?? false);
     const [tipPercent, setTipPercent] = useState(() => config?.defaultTipPercent ?? 8);
 
     // Customer selection state

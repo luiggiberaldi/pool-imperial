@@ -33,7 +33,7 @@ export const useTablesStore = create((set, get) => ({
         taxRateImpoconsumo: 8,
         defaultServiceChargeEnabled: true,
         defaultServiceChargePercent: 10,
-        defaultTipEnabled: true,
+        defaultTipEnabled: false,
         defaultTipPercent: 8,
     },
 

@@ -13,6 +13,11 @@ const getAuthUserId = async () => {
     } catch { return null; }
 };
 
+const buildTipNotes = (notes, tipEnabled) => {
+    const cleanNotes = (notes || '').replace(/\|\|\|TIP_ENABLED:[01]\|\|\|/g, '').trim();
+    return `${cleanNotes}${cleanNotes ? ' ' : ''}|||TIP_ENABLED:${tipEnabled ? '1' : '0'}|||`;
+};
+
 export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
     openSession: async (tableId, staffId, gameMode = 'NORMAL', hoursPaid = 0, clientName = '', guestCount = 0, clientId = null, includePina = false, seats = []) => {
         const userId = await getAuthUserId();
@@ -211,6 +216,27 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         }
     },
 
+    updateSessionTipEnabled: async (sessionId, tipEnabled) => {
+        const session = get().activeSessions.find(s => s.id === sessionId);
+        if (!session) return;
+
+        const updatedNotes = buildTipNotes(session.notes, tipEnabled);
+        const payload = { notes: updatedNotes };
+
+        const newSessions = get().activeSessions.map(s =>
+            s.id === sessionId ? { ...s, notes: updatedNotes } : s
+        );
+        set({ activeSessions: newSessions });
+        await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
+
+        try {
+            const { error } = await supabaseCloud.from('table_sessions').update(payload).eq('id', sessionId);
+            if (error) throw error;
+        } catch (e) {
+            await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload });
+        }
+    },
+
     requestCheckout: async (sessionId, tipEnabled) => {
         const session = get().activeSessions.find(s => s.id === sessionId);
         if (!session) return;
@@ -231,12 +257,9 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
             s => s.id !== sessionId && s.table_id === tableId && s.status === 'CHECKOUT'
         );
 
-        // Build updated notes: strip any previous TIP_ENABLED flag, then append new one
-        let updatedNotes = session.notes || '';
-        updatedNotes = updatedNotes.replace(/\|\|\|TIP_ENABLED:[01]\|\|\|/g, '').trim();
-        if (tipEnabled !== undefined) {
-            updatedNotes = updatedNotes + `|||TIP_ENABLED:${tipEnabled ? '1' : '0'}|||`;
-        }
+        const updatedNotes = tipEnabled !== undefined
+            ? buildTipNotes(session.notes, tipEnabled)
+            : (session.notes || '');
 
         const newSessions = get().activeSessions.map(s => {
             if (s.id === sessionId) return { ...s, status: 'CHECKOUT', notes: updatedNotes };

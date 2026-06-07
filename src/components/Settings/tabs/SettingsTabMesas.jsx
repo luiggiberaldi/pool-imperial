@@ -19,7 +19,7 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
     const [tableTaxMode, setTableTaxMode] = useState(config?.tableTaxMode || 'inclusive');
     const [defaultServiceChargeEnabled, setDefaultServiceChargeEnabled] = useState(config?.defaultServiceChargeEnabled ?? true);
     const [defaultServiceChargePercent, setDefaultServiceChargePercent] = useState(config?.defaultServiceChargePercent ?? 10);
-    const [defaultTipEnabled, setDefaultTipEnabled] = useState(config?.defaultTipEnabled ?? true);
+    const [defaultTipEnabled, setDefaultTipEnabled] = useState(config?.defaultTipEnabled ?? false);
     const [defaultTipPercent, setDefaultTipPercent] = useState(config?.defaultTipPercent ?? 8);
 
     // Sync local state when external config changes (e.g., from another tab/device)

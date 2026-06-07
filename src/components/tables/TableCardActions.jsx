@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Play, ShoppingBag, CreditCard, Clock, Lock, Check, X, DollarSign } from 'lucide-react';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useCashStore } from '../../hooks/store/cashStore';
 import { TargetIcon } from './TargetIcon';
 import { showToast } from '../Toast';
+
+const getSessionTipEnabled = (session, config) => {
+    const match = (session?.notes || '').match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
+    if (match) return match[1] === '1';
+    return config?.defaultTipEnabled ?? false;
+};
 
 export default function TableCardActions({
     table, session, grandTotal,
@@ -17,7 +23,22 @@ export default function TableCardActions({
 }) {
     const activeCashSession = useCashStore(s => s.activeCashSession);
     const config = useTablesStore(s => s.config);
-    const [tipEnabled, setTipEnabled] = useState(() => config?.defaultTipEnabled ?? true);
+    const updateSessionTipEnabled = useTablesStore(s => s.updateSessionTipEnabled);
+    const [tipEnabled, setTipEnabled] = useState(() => getSessionTipEnabled(session, config));
+
+    useEffect(() => {
+        setTipEnabled(getSessionTipEnabled(session, config));
+    }, [session?.id, session?.notes, config?.defaultTipEnabled]);
+
+    const handleTipToggle = async (checked) => {
+        setTipEnabled(checked);
+        if (!session?.id) return;
+        try {
+            await updateSessionTipEnabled(session.id, checked);
+        } catch (error) {
+            showToast('No se pudo guardar la propina de la mesa', 'error');
+        }
+    };
 
     const handleRequestCheckout = () => {
         if (!activeCashSession) {
@@ -157,7 +178,7 @@ export default function TableCardActions({
                                     <input
                                         type="checkbox"
                                         checked={tipEnabled}
-                                        onChange={(e) => setTipEnabled(e.target.checked)}
+                                        onChange={(e) => handleTipToggle(e.target.checked)}
                                         className="sr-only peer"
                                     />
                                     <div className="relative w-10 h-5 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:outline-none peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-slate-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5 shrink-0" />

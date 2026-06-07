@@ -206,7 +206,7 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                         : (get().config.defaultServiceChargePercent ?? 10),
                     defaultTipEnabled: configData.default_tip_enabled !== undefined && configData.default_tip_enabled !== null 
                         ? configData.default_tip_enabled 
-                        : (get().config.defaultTipEnabled ?? true),
+                        : (get().config.defaultTipEnabled ?? false),
                     defaultTipPercent: configData.default_tip_percent != null 
                         ? Number(configData.default_tip_percent) 
                         : (get().config.defaultTipPercent ?? 8),
