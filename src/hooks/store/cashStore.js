@@ -27,6 +27,9 @@ let cashVisibilityHandler = null;
 let lastSyncTime = 0;
 const SYNC_DEBOUNCE = 3000; // No sincronizar más de una vez cada 3s
 
+// userId cacheado al hacer init() para acceso síncrono en _subscribeRealtime
+let cachedUserId = null;
+
 // Clave para reintentar el insert de apertura de caja offline
 const PENDING_CASH_KEY = 'poolbar_pending_cash_open';
 
@@ -37,6 +40,9 @@ export const useCashStore = create((set, get) => ({
     init: async () => {
         set({ loading: true });
         try {
+            // 0. Resolver userId y cachearlo para acceso síncrono posterior
+            cachedUserId = await getAuthUserId();
+
             // 1. Leer caché local primero (para mostrar algo mientras esperamos la nube)
             const cachedSession = await cashCache.getItem(scopedKey('active_cash_session'));
             // Ponemos el caché local PERO mantenemos loading:true hasta confirmar con la nube
@@ -68,36 +74,34 @@ export const useCashStore = create((set, get) => ({
         lastSyncTime = now;
 
         try {
-            // ⚠️ NO filtrar por user_id aquí: la caja es compartida entre todos
-            // los dispositivos del negocio. La RLS de Supabase ya aísla por cuenta.
-            // Filtrar por user_id causaba que otros dispositivos no vieran la caja abierta.
-            const { data, error } = await supabaseCloud
+            const userId = await getAuthUserId();
+            let query = supabaseCloud
                 .from('cash_sessions')
                 .select('*')
                 .eq('status', 'OPEN')
                 .order('opened_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+                .limit(1);
+
+            // Filtrar por user_id — misma cuenta, cualquier dispositivo
+            if (userId) query = query.eq('user_id', userId);
+
+            const { data, error } = await query.maybeSingle();
 
             // Si hay error, mantener estado local (puede ser RLS, offline, etc.)
             if (error) throw error;
 
             if (data) {
                 // Hay sesión activa en la nube — sincronizar
-                // Restaurar base_bs: preferir columna directa, fallback a notes (legacy)
-                let enrichedData = { ...data };
-                if (data.base_bs !== undefined && data.base_bs !== null) {
-                    // Columna base_bs existe — usar directamente
-                } else if (data.notes) {
-                    try {
-                        const parsed = typeof data.notes === 'string' ? JSON.parse(data.notes) : data.notes;
-                        if (parsed?.base_bs !== undefined) {
-                            enrichedData.base_bs = parsed.base_bs;
-                        }
-                    } catch {
-                        // notes no es JSON válido — ignorar
-                    }
-                }
+                const enrichedData = {
+                    id: data.id,
+                    opened_at: data.opened_at,
+                    closed_at: data.closed_at,
+                    status: data.status,
+                    user_id: data.user_id,
+                    base_usd: data.initial_cash_usd || 0, // Almacena COP por compatibilidad
+                    base_bs: 0,                           // Bs no existe en Pool Imperial
+                    opened_by: 'Caja'                     // Por defecto, ya que no se almacena en la DB
+                };
                 await cashCache.setItem(scopedKey('active_cash_session'), enrichedData);
                 set({ activeCashSession: enrichedData });
             } else {
@@ -151,46 +155,36 @@ export const useCashStore = create((set, get) => ({
     // Capa A: Broadcast (instantáneo) + postgres_changes (si la tabla está en la publicación)
     _subscribeRealtime: () => {
         if (cashRealtimeChannel) return;
-        getAuthUserId().then(userId => {
-            if (!userId) return;
-            if (cashRealtimeChannel) return; // Guard double check después de async
+        // Usar userId cacheado en init() (síncrono) — mismo patrón que Pool Los Dias
+        const channelName = cachedUserId ? `cash_sessions_realtime:${cachedUserId}` : 'cash_sessions_realtime';
 
-            // Nombre de canal con scope de usuario para evitar cross-account leaks
-            const channelName = `cash_sessions_realtime:${userId}`;
-
-            cashRealtimeChannel = supabaseCloud
-                .channel(channelName)
-                // Broadcast: notificación inmediata entre dispositivos (no requiere publicación DB)
-                .on('broadcast', { event: 'cash_session_changed' }, async () => {
-                    console.log('[Caja] Broadcast recibido — sincronizando...');
-                    await get().syncCashSession(true);
-                })
-                // postgres_changes: backup por si la tabla está en la publicación de realtime
-                .on('postgres_changes', {
-                    event: '*',
-                    schema: 'public',
-                    table: 'cash_sessions',
-                }, async () => {
-                    console.log('[Caja] DB change recibido — sincronizando...');
-                    await get().syncCashSession(true);
-                })
-                .subscribe((status) => {
-                    console.log('[Caja] Realtime status:', status);
-                });
-        });
+        cashRealtimeChannel = supabaseCloud
+            .channel(channelName)
+            // Broadcast: notificación inmediata entre dispositivos (no requiere publicación DB)
+            .on('broadcast', { event: 'cash_session_changed' }, async () => {
+                console.log('[Caja] Broadcast recibido — sincronizando...');
+                await get().syncCashSession(true);
+            })
+            // postgres_changes: backup por si la tabla está en la publicación de realtime
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'cash_sessions',
+            }, async () => {
+                console.log('[Caja] DB change recibido — sincronizando...');
+                await get().syncCashSession(true);
+            })
+            .subscribe((status) => {
+                console.log('[Caja] Realtime status:', status);
+            });
     },
 
     // Capa B: Polling cada 30s — garantiza sync aunque el realtime falle
     _startPolling: () => {
         if (cashPollingInterval) return;
-        getAuthUserId().then(userId => {
-            if (!userId) return;
-            if (cashPollingInterval) return; // Guard double check después de async
-
-            cashPollingInterval = setInterval(() => {
-                get().syncCashSession();
-            }, 30_000);
-        });
+        cashPollingInterval = setInterval(() => {
+            get().syncCashSession();
+        }, 30_000);
     },
 
     // Reintento de insert de apertura de caja que falló por estar offline
@@ -199,7 +193,18 @@ export const useCashStore = create((set, get) => ({
             const pending = await cashCache.getItem(PENDING_CASH_KEY);
             if (!pending) return;
             console.log('[Caja] Reintentando apertura pendiente...');
-            const { error } = await supabaseCloud.from('cash_sessions').insert(pending);
+
+            // Sanitizar el payload pendiente para eliminar columnas viejas o inexistentes
+            const cleanPayload = {
+                id: pending.id,
+                opened_at: pending.opened_at,
+                status: pending.status || 'OPEN',
+                initial_cash_usd: pending.initial_cash_usd || pending.base_usd || 0,
+                final_cash_usd: pending.final_cash_usd || 0
+            };
+            if (pending.user_id) cleanPayload.user_id = pending.user_id;
+
+            const { error } = await supabaseCloud.from('cash_sessions').insert(cleanPayload);
             if (!error) {
                 console.log('[Caja] Apertura pendiente sincronizada en la nube ✓');
                 await cashCache.removeItem(PENDING_CASH_KEY);
@@ -210,7 +215,7 @@ export const useCashStore = create((set, get) => ({
                     payload: { action: 'open' }
                 });
             } else {
-                console.warn('[Caja] Reintento fallido (aún offline):', error.message);
+                console.warn('[Caja] Reintento fallido:', error.message);
             }
         } catch (err) {
             console.warn('[Caja] Error en reintento de apertura:', err);
@@ -248,8 +253,8 @@ export const useCashStore = create((set, get) => ({
             id: crypto.randomUUID(),
             opened_at: new Date().toISOString(),
             opened_by: openedBy,
-            base_usd: baseUsd || 0,
-            base_bs: baseBs || 0,
+            base_usd: baseUsd || 0, // En Pool Imperial esto es COP
+            base_bs: baseBs || 0,   // En Pool Imperial esto es USD
             status: 'OPEN'
         };
 
@@ -257,15 +262,13 @@ export const useCashStore = create((set, get) => ({
         await cashCache.setItem(scopedKey('active_cash_session'), sessionPayload);
         set({ activeCashSession: sessionPayload });
 
-        // Payload para Supabase: incluye base_bs como columna directa + notes como fallback
+        // Payload para Supabase con columnas correctas de la DB
         const supabasePayload = {
             id: sessionPayload.id,
             opened_at: sessionPayload.opened_at,
-            opened_by: sessionPayload.opened_by,
-            base_usd: sessionPayload.base_usd,
-            base_bs: sessionPayload.base_bs,
             status: sessionPayload.status,
-            notes: JSON.stringify({ base_bs: sessionPayload.base_bs }),
+            initial_cash_usd: baseUsd || 0, // Almacena COP por compatibilidad
+            final_cash_usd: 0
         };
         if (userId) supabasePayload.user_id = userId;
 
@@ -273,12 +276,10 @@ export const useCashStore = create((set, get) => ({
             const { error } = await supabaseCloud.from('cash_sessions').insert(supabasePayload);
             if (error) {
                 console.warn('[Caja] Error al subir apertura a nube:', error.message);
-                // Guardar para reintento automático al reconectarse
                 await cashCache.setItem(PENDING_CASH_KEY, supabasePayload);
             } else {
                 console.log('[Caja] Apertura sincronizada en la nube ✓');
                 await cashCache.removeItem(PENDING_CASH_KEY);
-                // Notificar a todos los dispositivos conectados via broadcast
                 cashRealtimeChannel?.send({
                     type: 'broadcast',
                     event: 'cash_session_changed',
@@ -290,7 +291,7 @@ export const useCashStore = create((set, get) => ({
             await cashCache.setItem(PENDING_CASH_KEY, supabasePayload);
         }
 
-        logEvent('VENTA', 'APERTURA_CAJA', `Caja abierta — Base: $${baseUsd} / Bs${baseBs}`, { nombre: openedBy, rol: openedByRole || 'DESCONOCIDO' }, { baseUsd, baseBs, sessionId: sessionPayload.id, openedByRole });
+        logEvent('VENTA', 'APERTURA_CAJA', `Caja abierta — Base: $${baseUsd} / USD ${baseBs}`, { nombre: openedBy, rol: openedByRole || 'DESCONOCIDO' }, { baseUsd, baseBs, sessionId: sessionPayload.id, openedByRole });
     },
 
     closeCashSession: async (stats, closedBy) => {
@@ -302,12 +303,13 @@ export const useCashStore = create((set, get) => ({
         set({ activeCashSession: null });
 
         try {
+            const finalCashCop = stats ? (stats.declaredCop || stats.declaredCOP || 0) : 0;
             const { error } = await supabaseCloud
                 .from('cash_sessions')
                 .update({
                     closed_at: new Date().toISOString(),
-                    closed_by: closedBy,
                     status: 'CLOSED',
+                    final_cash_usd: finalCashCop
                 })
                 .eq('id', active.id);
 
