@@ -58,7 +58,13 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const [customSharedAmounts, setCustomSharedAmounts] = useState({});
     const [includeServiceCharge, setIncludeServiceCharge] = useState(() => config?.defaultServiceChargeEnabled ?? true);
     const [serviceChargePercent, setServiceChargePercent] = useState(() => config?.defaultServiceChargePercent ?? 10);
-    const [includeTip, setIncludeTip] = useState(() => config?.defaultTipEnabled ?? true);
+    const [includeTip, setIncludeTip] = useState(() => {
+        // Lee el flag guardado por el mesero en session.notes (|||TIP_ENABLED:1||| o |||TIP_ENABLED:0|||)
+        const notes = session?.notes || '';
+        const match = notes.match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
+        if (match) return match[1] === '1';
+        return config?.defaultTipEnabled ?? true;
+    });
     const [tipPercent, setTipPercent] = useState(() => config?.defaultTipPercent ?? 8);
 
     // Seats mode

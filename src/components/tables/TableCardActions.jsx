@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Play, ShoppingBag, CreditCard, Clock, Lock, Check, X, DollarSign } from 'lucide-react';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useCashStore } from '../../hooks/store/cashStore';
@@ -16,13 +16,15 @@ export default function TableCardActions({
     requestAttribution, addPinaToSession,
 }) {
     const activeCashSession = useCashStore(s => s.activeCashSession);
+    const config = useTablesStore(s => s.config);
+    const [tipEnabled, setTipEnabled] = useState(() => config?.defaultTipEnabled ?? true);
 
     const handleRequestCheckout = () => {
         if (!activeCashSession) {
             showToast('Abre la caja primero para poder cobrar', 'error');
             return;
         }
-        onRequestCheckout(session.id);
+        onRequestCheckout(session.id, tipEnabled);
         onNotifyMesaCobrar(table.name, grandTotal);
     };
 
@@ -135,6 +137,32 @@ export default function TableCardActions({
                         </div>
                     ) : (
                         <div className="flex flex-col gap-1.5">
+                            {/* Toggle de propina — solo visible cuando hay saldo */}
+                            {grandTotal > 0 && (
+                                <label className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50 cursor-pointer select-none">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center shrink-0">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 dark:text-emerald-400">
+                                                <circle cx="12" cy="8" r="3"/>
+                                                <path d="M6.5 17.5C6.5 15 9 13 12 13s5.5 2 5.5 4.5"/>
+                                                <path d="M17 15h2.5a1.5 1.5 0 0 1 0 3H14l-2-1"/>
+                                                <path d="M8 17H5.5a1.5 1.5 0 0 0 0 3H10"/>
+                                            </svg>
+                                        </span>
+                                        <div>
+                                            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-tight">Propina del Personal</p>
+                                            <p className="text-[9px] text-slate-400 leading-tight">{tipEnabled ? 'Activada' : 'No aplica'}</p>
+                                        </div>
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        checked={tipEnabled}
+                                        onChange={(e) => setTipEnabled(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="relative w-10 h-5 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:outline-none peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-slate-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5 shrink-0" />
+                                </label>
+                            )}
                             <div className={`grid gap-1.5 ${grandTotal > 0 ? 'grid-cols-3' : 'grid-cols-1'}`}>
                                 <button
                                     onClick={onShowOrderPanel}

@@ -211,7 +211,7 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         }
     },
 
-    requestCheckout: async (sessionId) => {
+    requestCheckout: async (sessionId, tipEnabled) => {
         const session = get().activeSessions.find(s => s.id === sessionId);
         if (!session) return;
 
@@ -231,8 +231,15 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
             s => s.id !== sessionId && s.table_id === tableId && s.status === 'CHECKOUT'
         );
 
+        // Build updated notes: strip any previous TIP_ENABLED flag, then append new one
+        let updatedNotes = session.notes || '';
+        updatedNotes = updatedNotes.replace(/\|\|\|TIP_ENABLED:[01]\|\|\|/g, '').trim();
+        if (tipEnabled !== undefined) {
+            updatedNotes = updatedNotes + `|||TIP_ENABLED:${tipEnabled ? '1' : '0'}|||`;
+        }
+
         const newSessions = get().activeSessions.map(s => {
-            if (s.id === sessionId) return { ...s, status: 'CHECKOUT' };
+            if (s.id === sessionId) return { ...s, status: 'CHECKOUT', notes: updatedNotes };
             if (s.table_id === tableId && s.status === 'CHECKOUT') return { ...s, status: 'ACTIVE' };
             return s;
         });
@@ -245,11 +252,13 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
             } catch { /* ignorar */ }
         }
 
+        const dbPayload = { status: 'CHECKOUT' };
+        if (tipEnabled !== undefined) dbPayload.notes = updatedNotes;
         try {
-            const { error } = await supabaseCloud.from('table_sessions').update({ status: 'CHECKOUT' }).eq('id', sessionId);
+            const { error } = await supabaseCloud.from('table_sessions').update(dbPayload).eq('id', sessionId);
             if (error) throw error;
         } catch (e) {
-            await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload: { status: 'CHECKOUT' } });
+            await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload: dbPayload });
         }
     },
 
