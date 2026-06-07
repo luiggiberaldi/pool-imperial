@@ -10,6 +10,60 @@ import './index.css'
 // ── ELIMINACIÓN TEMPORAL CORRELATIVO 7 Y HOMOLOGACIÓN EN LA NUBE ──
 (async () => {
   try {
+    // --- DIAGNÓSTICO EN CONSOLA ---
+    try {
+      const sessionData = await supabaseCloud.auth.getSession();
+      if (sessionData.data?.session?.user) {
+        const email = sessionData.data.session.user.email;
+        const uid = sessionData.data.session.user.id;
+        console.log('🔑 [Diagnóstico] Usuario:', email, 'ID:', uid);
+
+        // 1. Consultar sync_documents
+        const { data: syncDocs } = await supabaseCloud
+          .from('sync_documents')
+          .select('doc_id, collection, updated_at')
+          .eq('user_id', uid);
+        console.log('📂 [Diagnóstico] Keys en sync_documents:', syncDocs?.map(d => d.doc_id));
+
+        // 2. Consultar cloud_backups
+        const { data: backup } = await supabaseCloud
+          .from('cloud_backups')
+          .select('email, updated_at, backup_data')
+          .eq('email', email)
+          .maybeSingle();
+        if (backup?.backup_data) {
+          const keys = Object.keys(backup.backup_data.data?.idb || {});
+          console.log('📦 [Diagnóstico] Keys en cloud_backups:', keys);
+          const backupCust = backup.backup_data.data?.idb?.bodega_customers_v1 || 
+                             backup.backup_data.data?.idb?.pool_imperial_customers_v1 ||
+                             backup.backup_data.data?.idb?.my_customers_v1;
+          console.log('👥 [Diagnóstico] Clientes en cloud_backup:', backupCust?.length, backupCust);
+        } else {
+          console.log('📦 [Diagnóstico] No se encontró backup en cloud_backups');
+        }
+
+        // 3. Consultar tabla pool_customers
+        const { data: poolCustRows, error: poolCustErr } = await supabaseCloud
+          .from('pool_customers')
+          .select('*');
+        console.log('👥 [Diagnóstico] Tabla pool_customers rows:', poolCustRows, poolCustErr);
+
+        // 4. Consultar IndexedDB local
+        const localKeys = [
+          'bodega_customers_v1',
+          'pool_imperial_customers_v1',
+          'my_customers_v1',
+          'customers'
+        ];
+        for (const k of localKeys) {
+          const val = await storageService.getItem(k);
+          console.log(`🏠 [Diagnóstico] Local IndexedDB key "${k}":`, val?.length, val);
+        }
+      }
+    } catch (diagErr) {
+      console.error('❌ [Diagnóstico] Error:', diagErr);
+    }
+
     // 1. Borrar venta 7 si existe
     const SALES_KEY = 'bodega_sales_v1';
     const sales = await storageService.getItem(SALES_KEY, []);
