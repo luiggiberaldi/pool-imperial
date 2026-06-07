@@ -296,9 +296,10 @@ export const calculateSeatTimeCostBs = () => 0;
 export const calculateBreakdownTotalBs = () => 0;
 
 export function buildTableSyntheticCart(tableCheckoutData, config, products) {
-    const seatId = tableCheckoutData.seatId || null;
+    const isPartial = !!tableCheckoutData.isPartial;
+    const seatId = isPartial ? null : (tableCheckoutData.seatId || null);
     const session = tableCheckoutData.session;
-    const seats = session?.seats || [];
+    const seats = isPartial ? [] : (session?.seats || []);
     const paidHoursOffsets = tableCheckoutData.paidHoursOffsets || {};
     const paidRoundsOffsets = tableCheckoutData.paidRoundsOffsets || {};
     const hoursOff = paidHoursOffsets[session?.id] || 0;
@@ -448,7 +449,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
     } else {
         // CLASSIC FULL TABLE
         const breakdown = calculateSessionCostBreakdown(tableCheckoutData.elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOff, roundsOff, null, tableCheckoutData.table?.type || 'POOL');
-        if (breakdown.pinaCost > 0) {
+        if (!isPartial && breakdown.pinaCost > 0) {
             const pinaCount = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
             const billableRounds = Math.max(0, pinaCount - roundsOff);
             syntheticCart.push({
@@ -460,7 +461,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 taxMode: config.tableTaxMode || 'inclusive'
             });
         }
-        if (breakdown.hourCost > 0) {
+        if (!isPartial && breakdown.hourCost > 0) {
             const billableHours = Math.max(0, (Number(session.hours_paid) || 0) - hoursOff);
             syntheticCart.push({
                 id: crypto.randomUUID(),
@@ -471,7 +472,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 taxMode: config.tableTaxMode || 'inclusive'
             });
         }
-        if (breakdown.libreCost > 0) {
+        if (!isPartial && breakdown.libreCost > 0) {
             const billableMinutes = Math.max(0, tableCheckoutData.elapsed - (hoursOff * 60));
             const billableHours = billableMinutes / 60;
             syntheticCart.push({
@@ -482,6 +483,22 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 taxType: config.tableTaxType || 'exento',
                 taxMode: config.tableTaxMode || 'inclusive'
             });
+        }
+        if (isPartial && session?.notes?.includes('|||ABONO_MONTO:')) {
+            let abonoMontoVal = 0;
+            try {
+                abonoMontoVal = JSON.parse(session.notes.split('|||ABONO_MONTO:')[1].split('|||')[0].trim()).amount;
+            } catch (_) {}
+            if (abonoMontoVal > 0) {
+                syntheticCart.push({
+                    id: 'abono-monto-libre',
+                    name: 'Abono Parcial (Monto Libre)',
+                    priceUsdt: abonoMontoVal, priceUsd: abonoMontoVal,
+                    qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                    taxType: 'exento',
+                    taxMode: 'inclusive'
+                });
+            }
         }
         if (tableCheckoutData.currentItems?.length > 0) {
             tableCheckoutData.currentItems.forEach(item => {

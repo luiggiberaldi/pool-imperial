@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSharedTick } from '../../hooks/useSharedTick';
 import { 
     Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Play, 
-    ShoppingBag, CreditCard, Clock, Check, Plus, Trash2, CheckCircle2, ChevronRight
+    ShoppingBag, CreditCard, Clock, Check, Plus, Trash2, CheckCircle2, ChevronRight,
+    DollarSign
 } from 'lucide-react';
 import { 
     calculateElapsedTime, 
@@ -73,6 +74,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const [showOrderPanel, setShowOrderPanel] = useState(false);
 
     const [showCancelModal, setShowCancelModal] = useState(false);
+    const [showAbonoModal, setShowAbonoModal] = useState(false);
     const [showAdjustModal, setShowAdjustModal] = useState(false);
     const [showModeModal, setShowModeModal] = useState(false);
     const [showTotalDetails, setShowTotalDetails] = useState(false);
@@ -542,7 +544,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                     setEditClientName(session.client_name || '');
                                     setEditGuestCount(session.guest_count > 0 ? String(session.guest_count) : '');
                                     setEditClientId(session.client_id || null);
-                                    setEditNotes(session.notes || '');
+                                    setEditNotes((session.notes || '').split('|||')[0].trim());
                                     setEditSeats(session.seats || []);
                                     setShowEditMetaModal(true);
                                 }}
@@ -560,7 +562,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                     setEditClientName('');
                                     setEditGuestCount('');
                                     setEditClientId(null);
-                                    setEditNotes(session?.notes || '');
+                                    setEditNotes((session?.notes || '').split('|||')[0].trim());
                                     setEditSeats(session?.seats || []);
                                     setShowEditMetaModal(true);
                                 }}
@@ -573,12 +575,16 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                 )}
 
                 {/* Notas de Mesa */}
-                {isPlaying && session?.notes && (
-                    <div className="flex items-center gap-1.5 text-[11px] font-medium bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border border-amber-100 dark:border-amber-900/30 rounded-lg p-2 mt-2">
-                        <MessageSquare size={12} className="shrink-0 text-amber-500" />
-                        <span className="italic truncate">{session.notes}</span>
-                    </div>
-                )}
+                {(() => {
+                    const cleanNote = (session?.notes || '').split('|||')[0].trim();
+                    if (!cleanNote) return null;
+                    return (
+                        <div className="flex items-center gap-1.5 text-[11px] font-medium bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 border border-amber-100 dark:border-amber-900/30 rounded-lg p-2 mt-2">
+                            <MessageSquare size={12} className="shrink-0 text-amber-500" />
+                            <span className="italic truncate">{cleanNote}</span>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Panel de Datos Vivos de Sesión */}
@@ -692,8 +698,25 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                         {((timeCost + seatTimeCost) * tasaUSD + consumptionBs).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs
                                     </span>
                                 </div>
-                            )}
                         </div>
+
+                        {(() => {
+                            if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return null;
+                            try {
+                                const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+                                const list = JSON.parse(histStr);
+                                const total = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                                if (total <= 0) return null;
+                                return (
+                                    <div className="mt-2 p-2.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl flex items-center justify-between animate-in fade-in duration-200">
+                                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-black uppercase tracking-wider">Historial Abonado</span>
+                                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-450">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(total))}</span>
+                                    </div>
+                                );
+                            } catch (_) {
+                                return null;
+                            }
+                        })()}
 
                         {/* Utility buttons row (Fase 2C) */}
                         <div className="grid grid-cols-3 gap-1.5 mt-1">
@@ -963,7 +986,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                             </div>
                         ) : (
                             <div className="flex flex-col gap-2">
-                                <div className={`grid gap-2 ${grandTotal > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                <div className={`grid gap-2 ${grandTotal > 0 ? 'grid-cols-3' : 'grid-cols-1'}`}>
                                     <button
                                         disabled={isMutating}
                                         onClick={() => setShowOrderPanel(true)}
@@ -974,14 +997,24 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                     </button>
 
                                     {grandTotal > 0 && (
-                                        <button
-                                            disabled={isMutating}
-                                            onClick={handleRequestCheckout}
-                                            className="bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-                                        >
-                                            <CreditCard size={14} />
-                                            {isMutating ? 'Procesando...' : 'Cerrar / Cobrar'}
-                                        </button>
+                                        <>
+                                            <button
+                                                disabled={isMutating}
+                                                onClick={() => setShowAbonoModal(true)}
+                                                className="bg-amber-500 hover:bg-amber-400 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                            >
+                                                <DollarSign size={14} />
+                                                Registrar Abono
+                                            </button>
+                                            <button
+                                                disabled={isMutating}
+                                                onClick={handleRequestCheckout}
+                                                className="bg-orange-500 hover:bg-orange-400 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                                            >
+                                                <CreditCard size={14} />
+                                                {isMutating ? 'Procesando...' : 'Cerrar / Cobrar'}
+                                            </button>
+                                        </>
                                     )}
                                 </div>
 
@@ -1077,6 +1110,11 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                 hasLimit={hasLimit}
                 isProcessingCharge={isProcessingCharge || isMutating}
                 
+                showAbonoModal={showAbonoModal}
+                setShowAbonoModal={setShowAbonoModal}
+                showCashierPaymentModal={showCashierPaymentModal}
+                setShowCashierPaymentModal={setShowCashierPaymentModal}
+
                 showCancelModal={showCancelModal}
                 setShowCancelModal={setShowCancelModal}
                 handleCancelTable={handleCancelTable}
@@ -1151,22 +1189,6 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                 editClientIdSetter={setEditClientId}
                 handleCreateCustomer={handleCreateCustomer}
             />
-
-            {/* Modal de cobro de caja directo desde panel (Fase 3) */}
-            {showCashierPaymentModal && (
-                <CashierPaymentModal
-                    session={session}
-                    table={table}
-                    config={config}
-                    rates={tasaUSD}
-                    currentUser={currentUser}
-                    onClose={() => setShowCashierPaymentModal(false)}
-                    onSuccess={() => { 
-                        setShowCashierPaymentModal(false); 
-                        useTablesStore.getState().syncTablesAndSessions(); 
-                    }}
-                />
-            )}
         </div>
     );
 }

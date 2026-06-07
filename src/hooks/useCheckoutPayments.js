@@ -35,9 +35,36 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
 
     const ivaAmount = totalTax || 0;
 
+    // ── Detectar abonos previos de la sesión de mesa ──
+    const priorAbonoTotal = useMemo(() => {
+        if (!tableContext || tableContext.isPartial) return 0; // En abonos parciales no hay previos
+        const notes = tableContext.session?.notes || '';
+        if (!notes.includes('|||HISTORIAL_ABONOS:')) return 0;
+        try {
+            const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
+            if (!Array.isArray(hist) || hist.length === 0) return 0;
+            return hist.reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+        } catch (_) { return 0; }
+    }, [tableContext]);
+
+    // ── Historial de abonos previos (para inyectar en payments al confirmar) ──
+    const priorAbonoHistory = useMemo(() => {
+        if (priorAbonoTotal <= 0) return [];
+        const notes = tableContext?.session?.notes || '';
+        try {
+            const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
+            return Array.isArray(hist) ? hist : [];
+        } catch (_) { return []; }
+    }, [priorAbonoTotal, tableContext]);
+
     const adjustedTotal = useMemo(() => {
         return cartTotalUsd + tdcSurcharge;
     }, [cartTotalUsd, tdcSurcharge]);
+
+    // Neto real a cobrar en este cierre (descontando abonos previos)
+    const netTotalToPay = useMemo(() => {
+        return Math.max(0, adjustedTotal - priorAbonoTotal);
+    }, [adjustedTotal, priorAbonoTotal]);
 
     // En Pool Imperial, cartTotalUsd almacena en realidad el total en COP.
     // Los inputs de métodos en USD se multiplican por la tasa.
@@ -68,15 +95,15 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     // remainingUsd: cuánto falta por cobrar. Se considera 0 si la diferencia
     // está dentro del epsilon (brecha de redondeo USD↔COP aceptable).
     const remainingUsd = useMemo(() => {
-        const diff = adjustedTotal - totalPaidUsd;
+        const diff = netTotalToPay - totalPaidUsd;
         return diff > epsilon ? Math.round(diff) : 0;
-    }, [adjustedTotal, totalPaidUsd, epsilon]);
+    }, [netTotalToPay, totalPaidUsd, epsilon]);
 
     const remainingBs = 0;
     // changeUsd: vuelto. Solo se muestra si el pago supera el total real (no el epsilon).
     const changeUsd = useMemo(() => {
-        return Math.max(0, Math.round(totalPaidUsd - adjustedTotal));
-    }, [totalPaidUsd, adjustedTotal]);
+        return Math.max(0, Math.round(totalPaidUsd - netTotalToPay));
+    }, [totalPaidUsd, netTotalToPay]);
     const changeBs = 0;
 
     const hasUnappliedTdcSurcharge = useMemo(() => {
@@ -84,7 +111,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     }, [barValues, tdcSurchargePercent, applyTdcSurcharge]);
 
     // isPaid: se permite una brecha de hasta epsilon COP (1 centavo USD en pagos mixtos)
-    const isPaid = (adjustedTotal < EPSILON_COP || totalPaidUsd >= (adjustedTotal - epsilon)) && !hasUnappliedTdcSurcharge;
+    const isPaid = (netTotalToPay < EPSILON_COP || totalPaidUsd >= (netTotalToPay - epsilon)) && !hasUnappliedTdcSurcharge;
 
     const remainingRef = useRef({ usd: remainingUsd });
     remainingRef.current = { usd: remainingUsd };
@@ -185,9 +212,26 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
                     };
                 });
 
+            // Inyectar abonos previos con flag isAbonoPrevio antes de confirmar
+            const priorPayments = priorAbonoHistory.map(h => ({
+                id: crypto.randomUUID(),
+                methodId: (h.method || 'efectivo').toLowerCase(),
+                methodLabel: `${(h.method || 'Efectivo')} (Abono)`,
+                currency: 'COP',
+                amountInput: Number(h.amount),
+                amountInputCurrency: 'COP',
+                amountUsd: Number(h.amount),
+                amountOriginal: Number(h.amount),
+                amountOriginalCurrency: 'COP',
+                amountBs: 0,
+                isAbonoPrevio: true,
+            }));
+
+            const allPayments = [...priorPayments, ...payments];
+
             const manualChangeGiven = changeUsdGiven ? Math.round(parseFloat(changeUsdGiven)) : changeUsd;
 
-            await onConfirmSale(payments, {
+            await onConfirmSale(allPayments, {
                 changeUsdGiven: Math.min(manualChangeGiven, changeUsd),
                 changeBsGiven: 0,
             }, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax);
@@ -218,7 +262,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         changeBsGiven, setChangeBsGiven,
         confirmFiar, setConfirmFiar,
         overpayAlertData, setOverpayAlertData, confirmOverpay,
-        tdcSurcharge, adjustedTotal, ivaAmount,
+        tdcSurcharge, adjustedTotal, netTotalToPay, priorAbonoTotal, ivaAmount,
         applyTdcSurcharge, setApplyTdcSurcharge,
         tdcSurchargePercent, setTdcSurchargePercent,
         toggleTdcSurcharge, handleSurchargePercentChange,

@@ -102,12 +102,15 @@ export default function CheckoutModal({
         changeUsdGiven, setChangeUsdGiven,
         confirmFiar, setConfirmFiar,
         overpayAlertData, setOverpayAlertData, confirmOverpay,
-        tdcSurcharge, adjustedTotal, ivaAmount,
+        tdcSurcharge, adjustedTotal, netTotalToPay, priorAbonoTotal, ivaAmount,
         applyTdcSurcharge, setApplyTdcSurcharge,
         tdcSurchargePercent, setTdcSurchargePercent,
         toggleTdcSurcharge, handleSurchargePercentChange,
         hasUnappliedTdcSurcharge,
     } = useCheckoutPayments({ paymentMethods, effectiveRate: 1, tasaCop: tasaCop || 4150, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta, tdcSurchargePercent: 5, totalTax, tableContext });
+
+    const priorAbonoTotal_display = (priorAbonoTotal > 0) ? priorAbonoTotal : 0;
+    const netDisplay = (priorAbonoTotal_display > 0) ? (netTotalToPay ?? adjustedTotal) : adjustedTotal;
 
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
     const activePaymentMethods = paymentMethods.filter(m => m.isEnabled !== false);
@@ -319,14 +322,20 @@ export default function CheckoutModal({
                     {/* Left: Total */}
                     <div className="flex flex-col text-left">
                         <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                            {discountData?.active || tdcSurcharge > 0 ? 'Total Final' : 'Total a Pagar'}
+                            {priorAbonoTotal_display > 0 ? 'Neto a Cobrar' : (discountData?.active || tdcSurcharge > 0 ? 'Total Final' : 'Total a Pagar')}
                         </span>
-                        <span className={`text-3xl sm:text-4xl font-black ${discountData?.active || tdcSurcharge > 0 ? 'text-emerald-600 dark:text-emerald-450' : 'text-slate-950 dark:text-white'} leading-tight`}>
-                            {formatCOP(adjustedTotal)}
+                        <span className={`text-3xl sm:text-4xl font-black ${(priorAbonoTotal_display > 0 || discountData?.active || tdcSurcharge > 0) ? 'text-emerald-600 dark:text-emerald-450' : 'text-slate-950 dark:text-white'} leading-tight`}>
+                            {formatCOP(netDisplay)}
                         </span>
-                        <span className="text-[13px] font-bold text-slate-500 dark:text-slate-400 mt-1">
-                            ≈ ${(adjustedTotal / (tasaCop || 4150)).toFixed(2)} USD <span className="text-[10px] text-slate-400 font-medium">(Tasa: {tasaCop})</span>
-                        </span>
+                        {priorAbonoTotal_display > 0 ? (
+                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                                Consumo: {formatCOP(adjustedTotal)} &nbsp;·&nbsp; Abonos: -{formatCOP(priorAbonoTotal_display)}
+                            </span>
+                        ) : (
+                            <span className="text-[13px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                                ≈ ${(adjustedTotal / (tasaCop || 4150)).toFixed(2)} USD <span className="text-[10px] text-slate-400 font-medium">(Tasa: {tasaCop})</span>
+                            </span>
+                        )}
                     </div>
 
                     {/* Right: Desglose en Pills */}

@@ -13,7 +13,7 @@ import { broadcastNewSale } from './salesSyncService';
 // Los campos con nombre "Usd" son heredados del esquema original y
 // ahora almacenan valores COP directamente. NO renombrar — el RPC depende de ellos.
 
-const SALES_KEY = 'pool_imperial_sales_v1';
+const SALES_KEY = 'bodega_sales_v1';
 const EPSILON = 1; // 1 peso colombiano de tolerancia (antes era $0.01)
 
 // UUID v4 regex - productos sin formato UUID no se envían al RPC de Supabase
@@ -33,6 +33,7 @@ export async function processSaleTransaction({
     meseroId = null,
     meseroNombre = null,
     tableName = null,
+    tableSessionId = null,
     splitMeta = null,
     skipStockDeduction = false,
     // Alias de compatibilidad (llamadores legacy pueden pasar cartTotalUsd)
@@ -184,6 +185,7 @@ export async function processSaleTransaction({
         meseroId: meseroId || null,
         meseroNombre: capitalizeName(meseroNombre) || null,
         tableName: tableName || null,
+        tableSessionId: tableSessionId || null,
         // Campos de items — priceUsd almacena precio COP (campo heredado)
         items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costUsd: i.costUsd || 0, isWeight: i.isWeight, taxType: i.taxType || 'exento', taxMode: i.taxMode || 'inclusive' })),
         cartSubtotalUsd: subtotalCOP,   // heredado — ahora COP
@@ -267,7 +269,7 @@ export async function processSaleTransaction({
             return p;
         });
 
-        await storageService.setItem('pool_imperial_products_v1', updatedProducts);
+        await storageService.setItem('bodega_products_v1', updatedProducts);
     }
 
     let updatedCustomer = null;
@@ -286,7 +288,7 @@ export async function processSaleTransaction({
         updatedCustomer = procesarImpactoCliente(selectedCustomer, transaccionOpts);
         updatedCustomers = customers.map(c => c.id === selectedCustomer.id ? updatedCustomer : c);
 
-        await storageService.setItem('pool_imperial_customers_v1', updatedCustomers);
+        await storageService.setItem('bodega_customers_v1', updatedCustomers);
     }
 
     return {

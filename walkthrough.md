@@ -38,6 +38,34 @@ Se reemplazaron los selectores nativos por `<CustomSelect>` en los siguientes m�
   - Se eliminó el selector `<select>` nativo invisible (`opacity-0`) que cubría el badge de moneda.
   - Se integró un dropdown flotante personalizado con control de estado `isOpen` y `Ref` para el cierre automático al hacer clic fuera del componente, logrando un menú de monedas con bordes perfectamente redondeados (`rounded-xl`), animado y con estética premium.
 
+## 3. Validación de Compilación Realizada
+* Se ejecutó el comando de compilación del proyecto (`npm run build`), completando con éxito y generando el bundle de producción de la PWA sin ningún error o advertencia:
+  ```bash
+  ✓ built in 30.85s
+  PWA v1.2.0
+  mode      generateSW
+  precache  31 entries (2507.74 KiB)
+  files generated: dist/sw.js, dist/workbox-1d305bb8.js
+  ```
+
+---
+
+## PARTE 3: Homologación de Claves en la Nube (Supabase)
+
+### 1. El Problema Corregido
+* **Desincronización de Clientes:** En una actualización anterior, se cambiaron las claves en IndexedDB de `pool_imperial_...` a `bodega_...`. Se añadió una migración local al vuelo, pero los datos históricos de la nube en Supabase quedaron intactos.
+* Como un equipo subía datos de clientes bajo `pool_imperial_customers_v1` y el otro consultaba solo `bodega_customers_v1`, la lista de clientes aparecía vacía ("Sin Clientes") y las deudas asociadas a ventas fiadas no se mostraban.
+
+### 2. Solución y Homologación Implementada
+* **Script de Autohomologación:** Se integró un bloque auto-ejecutable en [main.jsx](file:///c:/Users/luigg/Desktop/URO/LOS%20DIAZ/pool%20imperial/src/main.jsx) que se activa cuando la aplicación se inicia con una sesión autenticada.
+* **Proceso de Fusión:**
+  1. Descarga el documento antiguo (`pool_imperial_customers_v1`) y el nuevo (`bodega_customers_v1`) de la nube, y los combina con los del IndexedDB local actual.
+  2. Elimina los registros duplicados por ID de cliente, preservando las deudas registradas.
+  3. Sube la lista consolidada bajo la clave definitiva `bodega_customers_v1` a Supabase y actualiza IndexedDB local.
+  4. Borra la clave obsoleta `pool_imperial_customers_v1` de la nube.
+  5. Repite el mismo proceso para `pool_imperial_products_v1` / `bodega_products_v1`.
+* Una vez finalizado el proceso de fusión en el navegador del cliente, la aplicación se recarga automáticamente para aplicar los cambios unificados en todos los dispositivos.
+
 ---
 
 ## 📈 Cambios de Configuración de Porcentajes de Impuestos Dinámicos

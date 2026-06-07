@@ -271,8 +271,9 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
     if (session?.client_name) {
         p.bold(true).text(`Cliente: ${session.client_name}`).bold(true).newline();
     }
-    if (session?.notes) {
-        p.text(`Nota: ${session.notes.substring(0, W - 6)}`).newline();
+    const cleanNotes = (session?.notes || '').split('|||')[0].trim();
+    if (cleanNotes) {
+        p.text(`Nota: ${cleanNotes.substring(0, W - 6)}`).newline();
     }
     p.line('-', W);
 
@@ -574,9 +575,26 @@ export async function printReceiptEscPos(sale, bcvRate) {
         p.smallFont(false).line('-', W);
     }
 
+    const priorAbonoPayments = (sale.payments || []).filter(p => p.isAbonoPrevio === true);
+    const hasPriorAbonos = priorAbonoPayments.length > 0;
+    const priorAbonoTotal = hasPriorAbonos
+        ? priorAbonoPayments.reduce((s, p) => s + (p.amountUsd || 0), 0)
+        : 0;
+
     // Totales
-    p.align(1).bigText(true).bold(true);
-    p.text(formatCOP(sale.totalUsd || 0)).newline();
+    if (hasPriorAbonos) {
+        const consumoBruto = sale.totalUsd || 0;
+        const netoPagado = Math.max(0, consumoBruto - priorAbonoTotal);
+        p.align(0).bold(true);
+        p.row('TOTAL CONSUMO:', formatCOP(consumoBruto), W);
+        p.row('ABONOS PREVIOS:', '-' + formatCOP(priorAbonoTotal), W);
+        p.newline();
+        p.align(1).text('NETO PAGADO EN CIERRE').newline();
+        p.bigText(true).text(formatCOP(netoPagado)).newline();
+    } else {
+        p.align(1).bigText(true).bold(true);
+        p.text(formatCOP(sale.totalUsd || 0)).newline();
+    }
     p.bigText(false).bold(true);
     if (sale.rate > 1) {
         const formatUsdVal = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(val);

@@ -31,6 +31,11 @@ function _printThermalHTML(sale, _bcvRate) {
     const fTitle = '14px';   // Nombre negocio
     const fTotalU = '22px';  // Total COP
     const hasFiado = (sale.fiadoUsd || 0) > 0;
+    const priorAbonoPayments = (sale.payments || []).filter(p => p.isAbonoPrevio === true);
+    const hasPriorAbonos = priorAbonoPayments.length > 0;
+    const priorAbonoTotal = hasPriorAbonos
+        ? priorAbonoPayments.reduce((s, p) => s + (p.amountUsd || 0), 0)
+        : 0;
 
     // ── OBTENER CONFIGURACIÓN DEL NEGOCIO ──
     const settings = {
@@ -72,10 +77,11 @@ function _printThermalHTML(sale, _bcvRate) {
         const amountStr = isUsd 
             ? `${formatUsdVal(p.amountOriginal)} USD` 
             : `${formatCOP(p.amountUsd || p.amountCOP || 0)} COP`;
+        const labelStyle = p.isAbonoPrevio ? 'color:#dc3545;' : '';
         return `
             <tr>
-                <td style="font-size:11px;padding:2px 0;">${p.methodLabel || 'Pago'}</td>
-                <td style="font-size:11px;font-weight:bold;text-align:right;padding:2px 0;">${amountStr}</td>
+                <td style="font-size:11px;padding:2px 0;${labelStyle}">${p.methodLabel || 'Pago'}</td>
+                <td style="font-size:11px;font-weight:bold;text-align:right;padding:2px 0;${labelStyle}">${amountStr}</td>
             </tr>`;
     }).join('');
 
@@ -141,8 +147,31 @@ function _printThermalHTML(sale, _bcvRate) {
         </table>
     `;
 
-    const totalDisplay = sale.totalUsd || 0;
-    const rateHtml = '';
+    // Totales consolidando abonos previos si existen
+    let totalsBlockHtml = '';
+    if (hasPriorAbonos) {
+        const consumoBruto = sale.totalCop || sale.totalUsd || 0;
+        const netoPagado = Math.max(0, consumoBruto - priorAbonoTotal);
+        totalsBlockHtml = `
+            <table style="width:100%; font-size:${fSmall}; margin-bottom:6px; border-collapse:collapse;">
+                <tr>
+                    <td style="text-align:left; padding:2px 0; color:#555;">TOTAL CONSUMO:</td>
+                    <td style="text-align:right; padding:2px 0; font-weight:bold;">${formatCOP(consumoBruto)}</td>
+                </tr>
+                <tr>
+                    <td style="text-align:left; padding:2px 0; color:#dc3545;">ABONOS PREVIOS:</td>
+                    <td style="text-align:right; padding:2px 0; color:#dc3545; font-weight:bold;">-${formatCOP(priorAbonoTotal)}</td>
+                </tr>
+            </table>
+            <div class="center bold" style="font-size:${fSmall};color:#000;margin-bottom:4px;">NETO PAGADO EN CIERRE</div>
+            <div class="total-usd">${formatCOP(netoPagado)}</div>
+        `;
+    } else {
+        totalsBlockHtml = `
+            <div class="center bold" style="font-size:${fSmall};color:#000;margin-bottom:4px;">TOTAL A PAGAR</div>
+            <div class="total-usd">${formatCOP(totalDisplay)}</div>
+        `;
+    }
 
     const html = `<!DOCTYPE html>
 <html>
@@ -246,8 +275,7 @@ function _printThermalHTML(sale, _bcvRate) {
     <!-- Total -->
     <div style="margin:8px 0;">
         ${totalsBreakdownHtml}
-        <div class="center bold" style="font-size:${fSmall};color:#000;margin-bottom:4px;">TOTAL A PAGAR</div>
-        <div class="total-usd">${formatCOP(totalDisplay)}</div>
+        ${totalsBlockHtml}
         ${rateHtml}
     </div>
 

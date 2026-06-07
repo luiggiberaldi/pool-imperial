@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, AlertTriangle, Clock } from 'lucide-react';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
@@ -10,12 +10,18 @@ import { OpenWizardModal } from './OpenWizardModal';
 import { EditSessionModal } from './EditSessionModal';
 import { TotalDetailsModal } from './TotalDetailsModal';
 import { AttributionModal } from './AttributionModal';
+import AbonoSelectorModal from './AbonoSelectorModal';
+import CashierPaymentModal from '../../views/CashierPaymentModal';
 
 export default function TableCardInlineModals({
     table, session, elapsed, timeCost, seatTimeCost, totalConsumption, consumptionBs, grandTotal,
     costBreakdown, config, tasaUSD, currentItems, currentUser,
     hasPinas, isMixedMode, hasHoursActive, hasLimit,
     isProcessingCharge,
+    // Abono modal
+    showAbonoModal, setShowAbonoModal,
+    // Direct Cashier Payment
+    showCashierPaymentModal, setShowCashierPaymentModal,
     // Cancel modal
     showCancelModal, setShowCancelModal, handleCancelTable,
     // Adjust modal
@@ -48,24 +54,74 @@ export default function TableCardInlineModals({
     searchingEditSeatIndex, setSearchingEditSeatIndex, editClientIdSetter,
     handleCreateCustomer,
 }) {
+    const [confirmAbonoChecked, setConfirmAbonoChecked] = useState(false);
+
+    useEffect(() => {
+        if (!showCancelModal) {
+            setConfirmAbonoChecked(false);
+        }
+    }, [showCancelModal]);
+
+    const hasAbonos = session?.notes && session.notes.includes('|||HISTORIAL_ABONOS:');
+    let abonoTotal = 0;
+    if (hasAbonos) {
+        try {
+            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+            const list = JSON.parse(histStr);
+            abonoTotal = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        } catch (_) {}
+    }
+
     return (
         <>
         {/* Modal de Anular Mesa (Exclusivo Admin) */}
         <Modal isOpen={showCancelModal} onClose={() => setShowCancelModal(false)} title="Anular Mesa">
             <div className="flex flex-col gap-4 py-2">
-                <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl flex items-start gap-3">
-                    <AlertTriangle className="shrink-0 mt-0.5" />
+                <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 text-rose-700 dark:text-rose-450 p-4 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="shrink-0 mt-0.5 text-rose-500" />
                     <div>
                         <h4 className="font-bold text-sm">¿Estás completamente seguro?</h4>
-                        <p className="text-sm opacity-90 mt-1 leading-relaxed">
+                        <p className="text-xs opacity-90 mt-1 leading-relaxed">
                             Esta acción eliminará el tiempo de la mesa y <strong className="font-black">descartará {currentItems.length} producto(s)</strong> de la orden.
                             No se registrará ninguna venta en el sistema (ideal para mesas abiertas por error).
                         </p>
                     </div>
                 </div>
+
+                {hasAbonos && abonoTotal > 0 && (
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-300 p-4 rounded-xl flex flex-col gap-3">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="shrink-0 mt-0.5 text-amber-500" />
+                            <div>
+                                <h4 className="font-bold text-sm">Abonos Previos Detectados ({new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(abonoTotal)})</h4>
+                                <p className="text-xs opacity-90 mt-1 leading-relaxed">
+                                    Esta mesa tiene abonos previos ya cobrados por un total de <strong>{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(abonoTotal)}</strong>.
+                                    Al anular la mesa, la sesión activa se cerrará, pero <strong>los abonos ya registrados NO se anularán automáticamente de los reportes ni de las ventas del día</strong>.
+                                </p>
+                            </div>
+                        </div>
+                        <label className="flex items-start gap-2.5 p-2 bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/50 rounded-lg cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={confirmAbonoChecked}
+                                onChange={(e) => setConfirmAbonoChecked(e.target.checked)}
+                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 mt-0.5"
+                            />
+                            <span className="text-[11px] font-black text-slate-700 dark:text-slate-200">
+                                Entiendo que los abonos previos seguirán apareciendo en los reportes de venta a menos que los anule manualmente.
+                            </span>
+                        </label>
+                    </div>
+                )}
+
                 <button
                     onClick={handleCancelTable}
-                    className="w-full bg-rose-500 hover:bg-rose-600 text-white font-bold py-3.5 rounded-xl transition-colors shadow-md flex items-center justify-center gap-2"
+                    disabled={hasAbonos && abonoTotal > 0 && !confirmAbonoChecked}
+                    className={`w-full font-bold py-3.5 rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 ${
+                        hasAbonos && abonoTotal > 0 && !confirmAbonoChecked
+                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
+                            : 'bg-rose-500 hover:bg-rose-600 text-white active:scale-95 transition-all'
+                    }`}
                 >
                     <X size={18} /> Confirmar Anulación
                 </button>
@@ -115,6 +171,7 @@ export default function TableCardInlineModals({
             onOpenCustomerSheet={() => setShowEditCustomerSheet(true)}
             isPoolTable={table.type !== 'NORMAL'}
             sessionId={session?.id}
+            rawNotes={session?.notes}
             updateSessionMetadata={updateSessionMetadata}
             updateSessionSeats={updateSessionSeats}
         />
@@ -292,6 +349,32 @@ export default function TableCardInlineModals({
                 }}
                 onClose={() => { setShowEditCustomerSheet(false); setSearchingEditSeatIndex(null); }}
                 onCreateCustomer={handleCreateCustomer}
+            />
+        )}
+
+        <AbonoSelectorModal
+            isOpen={showAbonoModal}
+            onClose={() => setShowAbonoModal(false)}
+            table={table}
+            session={session}
+            currentItems={currentItems}
+            currentUser={currentUser}
+            grandTotal={grandTotal}
+        />
+
+        {/* Modal de cobro de caja directo desde panel / card */}
+        {showCashierPaymentModal && (
+            <CashierPaymentModal
+                session={session}
+                table={table}
+                config={config}
+                rates={tasaUSD}
+                currentUser={currentUser}
+                onClose={() => setShowCashierPaymentModal(false)}
+                onSuccess={() => { 
+                    setShowCashierPaymentModal(false); 
+                    useTablesStore.getState().syncTablesAndSessions(); 
+                }}
             />
         )}
         </>

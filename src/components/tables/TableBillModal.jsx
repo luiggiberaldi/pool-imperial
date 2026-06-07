@@ -30,7 +30,7 @@ function TargetIcon({size}) {
  * Soporta modo mixto (piña + hora simultáneamente).
  */
 export default function TableBillModal({ data, onClose, onProceedToPayment }) {
-    const { table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal } = data;
+    const { table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, isPartial } = data;
     const config = useTablesStore(state => state.config);
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
@@ -60,7 +60,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const [serviceChargePercent, setServiceChargePercent] = useState(10);
 
     // Seats mode
-    const seats = session?.seats || [];
+    const seats = isPartial ? [] : (session?.seats || []);
     const hasSeats = seats.length > 0;
     // G: Congelar el número de divisor al abrir el modal para que no cambie al pagar un asiento
     const [frozenActiveCount] = useState(() => {
@@ -83,9 +83,9 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const customDivisionMismatch = seatBreakdown && sharedDivisionType === 'custom' &&
         Math.abs(Object.values(customSharedAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0) - seatBreakdown.sharedTotal) >= 0.01;
     const zeroBreakdown = { pinaCost: 0, hourCost: 0, libreCost: 0, hasPinas: false, hasHours: false, isLibre: false, total: 0 };
-    const breakdown = isTimeFree ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, null, table.type);
+    const breakdown = (isTimeFree || isPartial) ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, null, table.type);
     // Full breakdown (sin offsets) para mostrar totales completos
-    const fullBreakdown = isTimeFree ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, 0, 0, null, table.type);
+    const fullBreakdown = (isTimeFree || isPartial) ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, 0, 0, null, table.type);
     const isMixed = fullBreakdown.hasPinas && fullBreakdown.hasHours;
 
 
@@ -114,7 +114,8 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
             hoursOffset,
             roundsOffset,
             paidHoursOffsets: {},
-            paidRoundsOffsets: {}
+            paidRoundsOffsets: {},
+            isPartial: isPartial
         };
         const result = buildTableSyntheticCart(tableCheckoutData, config, allProducts);
         if (result && result.syntheticCart) {
@@ -146,14 +147,18 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
 
     // Header subtitle
     const headerParts = [];
-    if (fullBreakdown.hasPinas) {
-        headerParts.push(`${pinaCount} jugada(s)`);
-    }
-    if (fullBreakdown.hasHours) {
-        headerParts.push(`${formatElapsedTime(elapsed)} de sesión`);
-    }
-    if (headerParts.length === 0) {
-        headerParts.push(session.game_mode === 'PINA' ? `${pinaCount} jugada(s)` : `${formatElapsedTime(elapsed)} de sesión`);
+    if (isPartial) {
+        headerParts.push("Abono Parcial");
+    } else {
+        if (fullBreakdown.hasPinas) {
+            headerParts.push(`${pinaCount} jugada(s)`);
+        }
+        if (fullBreakdown.hasHours) {
+            headerParts.push(`${formatElapsedTime(elapsed)} de sesión`);
+        }
+        if (headerParts.length === 0) {
+            headerParts.push(session.game_mode === 'PINA' ? `${pinaCount} jugada(s)` : `${formatElapsedTime(elapsed)} de sesión`);
+        }
     }
 
     return (
@@ -187,13 +192,16 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                     </button>
                 </div>
 
-                {/* ── Nota de mesa ──────────────────────────── */}
-                {session?.notes && (
-                    <div className="shrink-0 mx-4 mt-2 flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-700/40 rounded-xl">
-                        <MessageSquare size={13} className="text-amber-500 shrink-0 mt-0.5" />
-                        <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">{session.notes}</p>
-                    </div>
-                )}
+                {(() => {
+                    const cleanNote = (session?.notes || '').split('|||')[0].trim();
+                    if (!cleanNote) return null;
+                    return (
+                        <div className="shrink-0 mx-4 mt-2 flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-700/40 rounded-xl">
+                            <MessageSquare size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">{cleanNote}</p>
+                        </div>
+                    );
+                })()}
 
                 {/* ── Scrollable body ─────────────────────────── */}
                 <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">

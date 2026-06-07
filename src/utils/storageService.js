@@ -21,6 +21,48 @@ export const storageService = {
     async getItem(key, defaultValue = null) {
         const sk = scopedKey(key);
         try {
+            // --- MIGRACIÓN DE CONTAMINACIÓN POR POOL_IMPERIAL_* ---
+            if (key === 'bodega_sales_v1') {
+                const poolSales = await localforage.getItem(scopedKey('pool_imperial_sales_v1'));
+                if (poolSales && poolSales.length > 0) {
+                    const bodegaSales = await localforage.getItem(sk) || [];
+                    const merged = [...poolSales, ...bodegaSales];
+                    const uniqueMap = new Map();
+                    merged.forEach(s => { if (s && s.id) uniqueMap.set(s.id, s); });
+                    const uniqueMerged = Array.from(uniqueMap.values());
+                    uniqueMerged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    await localforage.setItem(sk, uniqueMerged);
+                    await localforage.removeItem(scopedKey('pool_imperial_sales_v1'));
+                    console.log('[Migración Bug] Se migraron ventas de pool_imperial_sales_v1 a bodega_sales_v1');
+                }
+            }
+            if (key === 'bodega_customers_v1') {
+                const poolCust = await localforage.getItem(scopedKey('pool_imperial_customers_v1'));
+                if (poolCust && poolCust.length > 0) {
+                    const bodegaCust = await localforage.getItem(sk) || [];
+                    const merged = [...poolCust, ...bodegaCust];
+                    const uniqueMap = new Map();
+                    merged.reverse().forEach(c => { if (c && c.id) uniqueMap.set(c.id, c); });
+                    const uniqueMerged = Array.from(uniqueMap.values()).reverse();
+                    await localforage.setItem(sk, uniqueMerged);
+                    await localforage.removeItem(scopedKey('pool_imperial_customers_v1'));
+                    console.log('[Migración Bug] Se migraron clientes de pool_imperial_customers_v1 a bodega_customers_v1');
+                }
+            }
+            if (key === 'bodega_products_v1') {
+                const poolProd = await localforage.getItem(scopedKey('pool_imperial_products_v1'));
+                if (poolProd && poolProd.length > 0) {
+                    const bodegaProd = await localforage.getItem(sk) || [];
+                    const merged = [...poolProd, ...bodegaProd];
+                    const uniqueMap = new Map();
+                    merged.reverse().forEach(p => { if (p && p.id) uniqueMap.set(p.id, p); });
+                    const uniqueMerged = Array.from(uniqueMap.values()).reverse();
+                    await localforage.setItem(sk, uniqueMerged);
+                    await localforage.removeItem(scopedKey('pool_imperial_products_v1'));
+                    console.log('[Migración Bug] Se migraron productos de pool_imperial_products_v1 a bodega_products_v1');
+                }
+            }
+
             // 1. Intentar leer de IndexedDB
             const value = await localforage.getItem(sk);
 

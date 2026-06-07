@@ -16,13 +16,23 @@ export function EditSessionModal({
     onOpenCustomerSheet,
     isPoolTable,
     sessionId,
+    rawNotes,
     updateSessionMetadata,
     updateSessionSeats,
 }) {
     const handleSave = async () => {
         const name = editClientId ? (allCustomers.find(c => c.id === editClientId)?.name || editClientName) : editClientName.trim();
         const guestCount = editSeats.length > 0 ? editSeats.length : (parseInt(editGuestCount) || 0);
-        await updateSessionMetadata(sessionId, name, guestCount, editClientId, editNotes.trim());
+
+        // Reconstruct notes string by preserving existing metadata tags
+        let tags = '';
+        if (rawNotes && rawNotes.includes('|||')) {
+            const index = rawNotes.indexOf('|||');
+            tags = ' ' + rawNotes.substring(index).trim();
+        }
+        const finalNotes = editNotes.trim() + tags;
+
+        await updateSessionMetadata(sessionId, name, guestCount, editClientId, finalNotes.trim() || null);
         await updateSessionSeats(sessionId, editSeats);
         onClose();
         showToast('Información actualizada', 'success');

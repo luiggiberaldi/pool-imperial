@@ -12,6 +12,7 @@ import { showToast } from '../components/Toast';
 import { FinancialEngine } from '../core/FinancialEngine';
 import { round2, divR, subR } from '../utils/dinero';
 import { openCashDrawerWebSerial, getWebSerialConfig } from '../services/webSerialPrinter';
+import { supabaseCloud } from '../config/supabaseCloud';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -83,21 +84,35 @@ export default function CashierPaymentModal({ session, table, config, currentUse
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    // Calculate totals
+    // Calculate total    const isAbono = session?.notes && session.notes.includes('|||ABONO:');
+    const isAbonoMonto = session?.notes && session.notes.includes('|||ABONO_MONTO:');
+    const isAnyAbono = isAbono || isAbonoMonto;
+    let abonoItems = [];
+    let abonoMonto = null;
+    if (isAbono) {
+        try {
+            abonoItems = JSON.parse(session.notes.split('|||ABONO:')[1].split('|||')[0].trim());
+        } catch (_) {}
+    } else if (isAbonoMonto) {
+        try {
+            abonoMonto = JSON.parse(session.notes.split('|||ABONO_MONTO:')[1].split('|||')[0].trim());
+        } catch (_) {}
+    }
+
     const order = allOrders.find(o => o.table_session_id === session.id);
-    const currentItems = order ? allItems.filter(i => i.order_id === order.id) : [];
-    const totalConsumption = round2(currentItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0));
+    const currentItems = isAbono ? abonoItems : (isAbonoMonto ? [] : (order ? allItems.filter(i => i.order_id === order.id) : []));
+    const totalConsumption = isAbonoMonto ? (abonoMonto?.amount || 0) : round2(currentItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0));
 
     // Elapsed time calculation
     const isPlaying = session && (session.status === 'ACTIVE' || session.status === 'CHECKOUT');
     const pausedSessions = useTablesStore(state => state.pausedSessions);
     const paused = pausedSessions?.[session?.id];
-    const elapsed = paused?.isPaused ? (paused.elapsedAtPause || 0) : (session?.started_at ? calculateElapsedTime(session.started_at) : 0);
+    const elapsed = isAnyAbono ? 0 : (paused?.isPaused ? (paused.elapsedAtPause || 0) : (session?.started_at ? calculateElapsedTime(session.started_at) : 0));
 
-    const isTimeFree = table.type === 'NORMAL';
+    const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
     const hoursOffset = (paidHoursOffsets || {})[session?.id] || 0;
     const roundsOffset = (paidRoundsOffsets || {})[session?.id] || 0;
-    const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
+    const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
     
     const taxRate = config?.tableTaxType === 'iva_19'
         ? (config?.taxRateIva ?? 19) / 100
@@ -108,10 +123,10 @@ export default function CashierPaymentModal({ session, table, config, currentUse
     const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
     const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
 
-    const seatTimeCost = !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
+    const seatTimeCost = !isAnyAbono && !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
         const tc = (s.timeCharges || []);
         const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
-        const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+        const p = tc.filter(t => tc.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
         return sum + (h * finalHora) + (p * finalPina);
     }, 0) : 0;
 
@@ -128,7 +143,8 @@ export default function CashierPaymentModal({ session, table, config, currentUse
             hoursOffset,
             roundsOffset,
             paidHoursOffsets: {},
-            paidRoundsOffsets: {}
+            paidRoundsOffsets: {},
+            isPartial: isAnyAbono
         };
         const result = buildTableSyntheticCart(tableCheckoutData, config, products);
         if (result && result.syntheticCart) {
@@ -139,20 +155,34 @@ export default function CashierPaymentModal({ session, table, config, currentUse
         console.error("Error calculating CashierPaymentModal grand total:", e);
     }
 
+    // ── Abonos previos del historial (solo para cierre definitivo) ──
+    const priorAbonoHistory = (() => {
+        if (isAnyAbono) return []; // En modo abono, no hay previos que descontár
+        const notes = session?.notes || '';
+        if (!notes.includes('|||HISTORIAL_ABONOS:')) return [];
+        try {
+            const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
+            return Array.isArray(hist) ? hist : [];
+        } catch (_) { return []; }
+    })();
+    const priorAbonoTotal = priorAbonoHistory.reduce((s, h) => s + (Number(h.amount) || 0), 0);
+    const netToPay = Math.max(0, grandTotal - priorAbonoTotal);
+
     // Auto-fill received COP for electronic payment methods
     useEffect(() => {
         if (method !== 'EFECTIVO' && method !== 'FIADO') {
-            setReceivedCOP(grandTotal.toString());
+            setReceivedCOP((isAnyAbono ? grandTotal : netToPay).toString());
         } else if (method === 'FIADO') {
             setReceivedCOP('');
         }
-    }, [method, grandTotal]);
+    }, [method, grandTotal, netToPay, isAnyAbono]);
 
-    // Change calculations
+    // Change calculations against net-to-pay
+    const effectiveTotal = isAnyAbono ? grandTotal : netToPay;
     const rCop = parseFloat(receivedCOP || '0');
-    const changeCOP = rCop > grandTotal ? round2(subR(rCop, grandTotal)) : 0;
-    const remainingCOP = rCop < grandTotal ? round2(subR(grandTotal, rCop)) : 0;
-    const isReady = isFiado ? !!selectedCustomer : rCop >= grandTotal - 1;
+    const changeCOP = rCop > effectiveTotal ? round2(subR(rCop, effectiveTotal)) : 0;
+    const remainingCOP = rCop < effectiveTotal ? round2(subR(effectiveTotal, rCop)) : 0;
+    const isReady = isFiado ? !!selectedCustomer : rCop >= effectiveTotal - 1;
 
     const handleSelectCustomer = (customer) => {
         setSelectedCustomer(customer);
@@ -207,6 +237,22 @@ export default function CashierPaymentModal({ session, table, config, currentUse
 
             // 3. Preparar array de pagos
             const paymentPayload = [];
+
+            // Inyectar abonos previos (solo en cierre definitivo)
+            priorAbonoHistory.forEach(h => {
+                paymentPayload.push({
+                    id: crypto.randomUUID(),
+                    methodId: (h.method || 'efectivo').toLowerCase(),
+                    methodLabel: `${(h.method || 'Efectivo')} (Abono)`,
+                    currency: 'COP',
+                    amountUsd: Number(h.amount),
+                    amountOriginal: Number(h.amount),
+                    amountOriginalCurrency: 'COP',
+                    amountBs: 0,
+                    isAbonoPrevio: true,
+                });
+            });
+
             if (isFiado) {
                 paymentPayload.push({ methodId: 'fiado', amountUsd: grandTotal, currency: 'COP' });
             } else {
@@ -221,7 +267,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
             let meseroUser = null;
             if (session.opened_by) {
                 let openerUser = cachedUsers?.find(u => u.id === session.opened_by) || null;
-                if (!openerUser) {
+                if (!openerUser && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(session.opened_by)) {
                     try {
                         const { supabaseCloud } = await import('../config/supabaseCloud');
                         const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', session.opened_by).single();
@@ -237,7 +283,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                 cartTotalCOP: grandTotal,
                 cartSubtotalCOP: grandTotal,
                 payments: paymentPayload,
-                changeBreakdown: { changeUsdGiven: changeCOP }, // guardamos en changeUsdGiven para el motor
+                changeBreakdown: { changeUsdGiven: changeCOP },
                 selectedCustomerId: selectedCustomer?.id || null,
                 customers: allCustomers,
                 products: products || [],
@@ -245,7 +291,8 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                 meseroId: meseroUser?.id || null,
                 meseroNombre: meseroUser?.name || meseroUser?.nombre || null,
                 tableName: table?.name || null,
-                skipStockDeduction: true, // Stock already deducted when items were added to order
+                tableSessionId: session?.id || null,
+                skipStockDeduction: true,
                 tasaCop: tasaCop
             });
 
@@ -262,6 +309,88 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                     openCashDrawerWebSerial().catch(err => {
                         console.log('Cajón no se pudo abrir por WebSerial:', err.message);
                     });
+                }
+            }
+
+            if (isAnyAbono) {
+                try {
+                    const ordersStore = useOrdersStore.getState();
+                    if (isAbono && abonoItems && abonoItems.length > 0) {
+                        for (const item of abonoItems) {
+                            const originalItem = ordersStore.orderItems.find(oi => oi.id === item.id);
+                            if (originalItem) {
+                                const remainingQty = Number(originalItem.qty) - Number(item.qty);
+                                if (remainingQty <= 0) {
+                                    await ordersStore.deleteItem(item.id);
+                                } else {
+                                    await ordersStore.updateItemQty(item.id, remainingQty);
+                                }
+                            }
+                        }
+                    }
+
+                    // Parse, append to historial, and serialize new notes
+                    const parseSessionNotes = (notesStr) => {
+                        if (!notesStr) return { cleanNotes: '', abono: null, abonoMonto: null, historial: [] };
+                        let clean = notesStr;
+                        let ab = null;
+                        let abM = null;
+                        let hist = [];
+                        if (notesStr.includes('|||ABONO:')) {
+                            try { ab = JSON.parse(notesStr.split('|||ABONO:')[1].split('|||')[0].trim()); } catch (_) {}
+                        }
+                        if (notesStr.includes('|||ABONO_MONTO:')) {
+                            try { abM = JSON.parse(notesStr.split('|||ABONO_MONTO:')[1].split('|||')[0].trim()); } catch (_) {}
+                        }
+                        if (notesStr.includes('|||HISTORIAL_ABONOS:')) {
+                            try { hist = JSON.parse(notesStr.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim()); } catch (_) {}
+                        }
+                        clean = notesStr.split('|||')[0].trim();
+                        return { cleanNotes: clean, abono: ab, abonoMonto: abM, historial: hist };
+                    };
+
+                    const serializeSessionNotes = (clean, ab, abM, hist) => {
+                        let res = clean ? clean.trim() : '';
+                        if (ab && ab.length > 0) {
+                            res += ` |||ABONO:${JSON.stringify(ab)}`;
+                        }
+                        if (abM) {
+                            res += ` |||ABONO_MONTO:${JSON.stringify(abM)}`;
+                        }
+                        if (hist && hist.length > 0) {
+                            res += ` |||HISTORIAL_ABONOS:${JSON.stringify(hist)}`;
+                        }
+                        return res.trim() || null;
+                    };
+
+                    const { cleanNotes, historial } = parseSessionNotes(session.notes);
+                    const newHistorial = [...historial, {
+                        amount: Number(grandTotal),
+                        method: isFiado ? 'FIADO' : method,
+                        date: new Date().toISOString()
+                    }];
+                    const newNotes = serializeSessionNotes(cleanNotes, null, null, newHistorial);
+
+                    await useTablesStore.getState().updateSessionMetadata(session.id, session.client_name, session.guest_count, session.client_id, newNotes);
+
+                    // Revert status to ACTIVE
+                    await supabaseCloud.from('table_sessions').update({ status: 'ACTIVE' }).eq('id', session.id);
+
+                    // Sync
+                    await useTablesStore.getState().syncTablesAndSessions();
+
+                    showToast(
+                        'Abono Exitoso',
+                        `Abono de ${formatCOP(grandTotal)} registrado y comanda actualizada.`,
+                        'success'
+                    );
+                    onSuccess();
+                    return;
+                } catch (error) {
+                    console.error('[CashierPaymentModal] Error finalizing abono:', error);
+                    showToast('Abono registrado, pero falló al actualizar la comanda', 'warning');
+                    onSuccess();
+                    return;
                 }
             }
 
@@ -294,13 +423,16 @@ export default function CashierPaymentModal({ session, table, config, currentUse
         <Modal isOpen={!postPaymentAction} onClose={onClose} title={`Cobro: ${table.name}`}>
             <div className="flex flex-col gap-4 py-2">
 
-                {/* Session notes */}
-                {session?.notes && (
-                    <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-700/40 rounded-xl">
-                        <MessageSquare size={13} className="text-amber-500 shrink-0 mt-0.5" />
-                        <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">{session.notes}</p>
-                    </div>
-                )}
+                {(() => {
+                    const cleanNote = (session?.notes || '').split('|||')[0].trim();
+                    if (!cleanNote) return null;
+                    return (
+                        <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-700/40 rounded-xl">
+                            <MessageSquare size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">{cleanNote}</p>
+                        </div>
+                    );
+                })()}
 
                 {/* Customer Selector */}
                 <div className="flex flex-col gap-2">
@@ -388,11 +520,18 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                 {/* Amount to pay */}
                 <div className="flex justify-between items-center p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-500/20">
                     <div className="flex flex-col">
-                        <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Total a pagar</span>
+                        <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
+                            {(!isAnyAbono && priorAbonoTotal > 0) ? 'Neto a Cobrar' : 'Total a pagar'}
+                        </span>
+                        {!isAnyAbono && priorAbonoTotal > 0 && (
+                            <span className="text-[10px] text-slate-500 mt-0.5">
+                                Consumo: {formatCOP(grandTotal)} · Abonos: -{formatCOP(priorAbonoTotal)}
+                            </span>
+                        )}
                     </div>
                     <div className="flex flex-col items-end">
                         <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                            {formatCOP(grandTotal)}
+                            {formatCOP(effectiveTotal)}
                         </span>
                     </div>
                 </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, ShoppingBag, CreditCard, Clock, Lock, Check, X } from 'lucide-react';
+import { Play, ShoppingBag, CreditCard, Clock, Lock, Check, X, DollarSign } from 'lucide-react';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useCashStore } from '../../hooks/store/cashStore';
 import { TargetIcon } from './TargetIcon';
@@ -11,7 +11,7 @@ export default function TableCardActions({
     hasPinas, isMixedMode, hasHoursActive, costBreakdown, isProcessingCharge, isPaid,
     showReleaseConfirm, setShowReleaseConfirm,
     staffName, currentUser,
-    onRequestOpen, onShowOrderPanel, onRequestCheckout, onNotifyMesaCobrar,
+    onRequestOpen, onShowOrderPanel, onShowAbonoModal, onRequestCheckout, onNotifyMesaCobrar,
     onAddHoursModal, onCancelCheckout, onCloseSession,
     requestAttribution, addPinaToSession,
 }) {
@@ -135,7 +135,7 @@ export default function TableCardActions({
                         </div>
                     ) : (
                         <div className="flex flex-col gap-1.5">
-                            <div className={`grid gap-1.5 ${grandTotal > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                            <div className={`grid gap-1.5 ${grandTotal > 0 ? 'grid-cols-3' : 'grid-cols-1'}`}>
                                 <button
                                     onClick={onShowOrderPanel}
                                     className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[11px] sm:text-xs py-2.5 sm:py-2 px-2 rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1.5"
@@ -144,13 +144,22 @@ export default function TableCardActions({
                                     <span>Consumo</span>
                                 </button>
                                 {grandTotal > 0 && (
-                                <button
-                                    onClick={handleRequestCheckout}
-                                    className="bg-orange-500 hover:bg-orange-400 text-white font-bold text-[11px] sm:text-xs py-2.5 sm:py-2 px-2 rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1.5"
-                                >
-                                    <CreditCard size={13} />
-                                    <span>Cobrar</span>
-                                </button>
+                                    <>
+                                        <button
+                                            onClick={onShowAbonoModal}
+                                            className="bg-amber-500 hover:bg-amber-400 text-white font-bold text-[11px] sm:text-xs py-2.5 sm:py-2 px-2 rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1.5"
+                                        >
+                                            <DollarSign size={13} />
+                                            <span>Abono</span>
+                                        </button>
+                                        <button
+                                            onClick={handleRequestCheckout}
+                                            className="bg-orange-500 hover:bg-orange-400 text-white font-bold text-[11px] sm:text-xs py-2.5 sm:py-2 px-2 rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1.5"
+                                        >
+                                            <CreditCard size={13} />
+                                            <span>Cobrar</span>
+                                        </button>
+                                    </>
                                 )}
                             </div>
 

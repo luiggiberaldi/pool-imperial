@@ -78,16 +78,30 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                         {checkoutSessions.map(session => {
                             const table = tables.find(t => t.id === session.table_id);
                             if (!table) return null;
+                            const isAbono = session.notes && session.notes.includes('|||ABONO:');
+                            const isAbonoMonto = session.notes && session.notes.includes('|||ABONO_MONTO:');
+                            const isAnyAbono = isAbono || isAbonoMonto;
+                            let abonoItems = [];
+                            let abonoMonto = null;
+                            if (isAbono) {
+                                try {
+                                    abonoItems = JSON.parse(session.notes.split('|||ABONO:')[1].split('|||')[0].trim());
+                                } catch (_) {}
+                            } else if (isAbonoMonto) {
+                                try {
+                                    abonoMonto = JSON.parse(session.notes.split('|||ABONO_MONTO:')[1].split('|||')[0].trim());
+                                } catch (_) {}
+                            }
 
                             const order = allOrders.find(o => o.table_session_id === session.id);
-                            const currentItems = order ? allItems.filter(i => i.order_id === order.id) : [];
-                            const totalConsumption = round2(currentItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0));
+                            const currentItems = isAbono ? abonoItems : (isAbonoMonto ? [] : (order ? allItems.filter(i => i.order_id === order.id) : []));
+                            const totalConsumption = isAbonoMonto ? (abonoMonto?.amount || 0) : round2(currentItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0));
 
-                            const elapsed = calculateElapsedTime(session.started_at);
-                            const isTimeFree = table.type === 'NORMAL';
+                            const elapsed = isAnyAbono ? 0 : calculateElapsedTime(session.started_at);
+                            const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
                             const hoursOffset = (paidHoursOffsets || {})[session.id] || 0;
                             const roundsOffset = (paidRoundsOffsets || {})[session.id] || 0;
-                            const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
+                            const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
                             
                             const taxRate = config?.tableTaxType === 'iva_19'
                                 ? (config?.taxRateIva ?? 19) / 100
@@ -98,7 +112,7 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                             const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
                             const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
 
-                            const seatTimeCost = !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
+                            const seatTimeCost = !isAnyAbono && !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
                                 const tc = (s.timeCharges || []);
                                 const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
                                 const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
@@ -119,7 +133,8 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                     hoursOffset,
                                     roundsOffset,
                                     paidHoursOffsets: {},
-                                    paidRoundsOffsets: {}
+                                    paidRoundsOffsets: {},
+                                    isPartial: isAnyAbono
                                 };
                                 const result = buildTableSyntheticCart(tableCheckoutData, config, products);
                                 if (result && result.syntheticCart) {
@@ -133,16 +148,23 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                             return (
                                 <div key={session.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border-2 border-orange-500/30 flex flex-col gap-3">
                                     <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-700 pb-2">
-                                        <h3 className="font-black tracking-tight text-slate-800 dark:text-white">{table.name}</h3>
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 uppercase tracking-widest flex items-center gap-1">
-                                            <AlertCircle size={10} />
-                                            En Cobro
-                                        </span>
+                                        <h3 className="font-black tracking-tight text-slate-850 dark:text-white text-sm">{table.name}</h3>
+                                        {isAnyAbono ? (
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700 uppercase tracking-widest flex items-center gap-1">
+                                                <DollarSign size={10} />
+                                                Abono {isAbonoMonto ? 'Monto' : 'Solicitado'}
+                                            </span>
+                                        ) : (
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 uppercase tracking-widest flex items-center gap-1">
+                                                <AlertCircle size={10} />
+                                                En Cobro
+                                            </span>
+                                        )}
                                     </div>
 
                                     <div className="flex justify-between items-center text-sm font-medium">
                                         <span className="text-slate-500">Total a cobrar:</span>
-                                        <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">${grandTotal.toFixed(2)}</span>
+                                        <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(grandTotal))}</span>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2 mt-1">

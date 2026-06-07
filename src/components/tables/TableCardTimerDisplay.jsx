@@ -155,19 +155,39 @@ export default function TableCardTimerDisplay({
                         </>
                     )}
                     {/* Total + Eye — visible for ALL occupied sessions */}
-                    <div className="flex items-center justify-center gap-1.5 mt-3">
-                        <div className="bg-white/10 px-3 py-1.5 rounded-xl flex flex-col items-center justify-center backdrop-blur-sm shadow-inner overflow-hidden max-w-full">
-                            <div className="flex items-center gap-1.5">
-                                <span className="text-lg sm:text-xl font-black text-emerald-300 truncate">{formatCOP(grandTotal)}</span>
+                    <div className="flex flex-col items-center gap-1.5 mt-3">
+                        <div className="flex items-center justify-center gap-1.5">
+                            <div className="bg-white/10 px-3 py-1.5 rounded-xl flex flex-col items-center justify-center backdrop-blur-sm shadow-inner overflow-hidden max-w-full">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-lg sm:text-xl font-black text-emerald-300 truncate">{formatCOP(grandTotal)}</span>
+                                </div>
                             </div>
+                            <button
+                                onClick={onShowTotalDetails}
+                                className="bg-sky-500/80 hover:bg-sky-500 p-2 rounded-xl text-white transition-all active:scale-95 shrink-0 shadow-sm"
+                                title="Ver detalles"
+                            >
+                                <Eye size={16} />
+                            </button>
                         </div>
-                        <button
-                            onClick={onShowTotalDetails}
-                            className="bg-sky-500/80 hover:bg-sky-500 p-2 rounded-xl text-white transition-all active:scale-95 shrink-0 shadow-sm"
-                            title="Ver detalles"
-                        >
-                            <Eye size={16} />
-                        </button>
+
+                        {(() => {
+                            if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return null;
+                            try {
+                                const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+                                const list = JSON.parse(histStr);
+                                const total = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                                if (total <= 0) return null;
+                                return (
+                                    <div className="text-[10px] sm:text-xs font-black bg-emerald-500/20 border border-emerald-450/30 text-emerald-300 px-2.5 py-1 rounded-lg flex items-center gap-1 animate-in fade-in duration-200">
+                                        <span>Abonado:</span>
+                                        <span>{formatCOP(total)}</span>
+                                    </div>
+                                );
+                            } catch (_) {
+                                return null;
+                            }
+                        })()}
                     </div>
                     {hasPinas && !isMixedMode && (() => {
                         const sharedRounds = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;

@@ -7,6 +7,13 @@ import { printThermalTicket } from '../../utils/ticketGenerator';
 export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
     if (!receipt) return null;
 
+    const priorAbonoPayments = (receipt.payments || []).filter(p => p.isAbonoPrevio === true);
+    const hasPriorAbonos = priorAbonoPayments.length > 0;
+    const priorAbonoTotal = hasPriorAbonos
+        ? priorAbonoPayments.reduce((s, p) => s + (p.amountUsd || p.amountCOP || 0), 0)
+        : 0;
+    const netPaid = Math.max(0, receipt.totalUsd - priorAbonoTotal);
+
     return (
         <div className="fixed inset-0 z-[60] bg-slate-900/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div className="bg-white w-full sm:max-w-sm md:max-w-md sm:rounded-[2rem] rounded-t-[2rem] shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden relative flex flex-col max-h-[95vh] sm:max-h-[90vh]">
@@ -40,12 +47,24 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                                 NIT/C.C.: {receipt.customerDocument}
                             </p>
                         )}
-                        <p className="text-4xl font-black text-slate-900 mb-1 tracking-tighter">{formatCop(receipt.totalUsd)}</p>
+                        {hasPriorAbonos ? (
+                            <>
+                                <p className="text-4xl font-black text-emerald-600 mb-1 tracking-tighter">{formatCop(netPaid)}</p>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-wide">Neto Pagado en Cierre</p>
+                                <div className="text-xs font-bold text-slate-500 mt-2">
+                                    Consumo: {formatCop(receipt.totalUsd)} &nbsp;·&nbsp; Abonos: -{formatCop(priorAbonoTotal)}
+                                </div>
+                            </>
+                        ) : (
+                            <p className="text-4xl font-black text-slate-900 mb-1 tracking-tighter">{formatCop(receipt.totalUsd)}</p>
+                        )}
 
-                        <div className="inline-flex items-center flex-wrap justify-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-600 mt-2">
+                        <div className="inline-flex items-center flex-wrap justify-center gap-1.5 px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-600 mt-3.5">
                             {receipt.payments && receipt.payments.map((p, i) => (
                                 <span key={p.id} className="flex items-center gap-1">
-                                    <Wallet size={12} /> {p.methodLabel} {i < receipt.payments.length - 1 ? ' • ' : ''}
+                                    <Wallet size={12} className={p.isAbonoPrevio ? 'text-red-500' : 'text-slate-400'} />
+                                    <span className={p.isAbonoPrevio ? 'text-red-600 font-bold' : ''}>{p.methodLabel}</span>
+                                    {i < receipt.payments.length - 1 ? ' • ' : ''}
                                 </span>
                             ))}
                         </div>
@@ -97,7 +116,7 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                             <div className="mt-4 pt-4 border-t border-slate-200 text-sm">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Pagos Recibidos</p>
                                 {receipt.payments.map(p => (
-                                    <div key={p.id} className="flex justify-between text-slate-600 mb-1">
+                                    <div key={p.id} className={`flex justify-between mb-1 ${p.isAbonoPrevio ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
                                         <span>{p.methodLabel}:</span>
                                         <span className="font-bold">{formatPaymentAmount(p)}</span>
                                     </div>

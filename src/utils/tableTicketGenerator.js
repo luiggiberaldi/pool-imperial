@@ -24,13 +24,49 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     const seats = session?.seats || [];
     const isMultiClient = seats.length > 1;
 
+    // Parse abono payload
+    const isAbono = session?.notes && session.notes.includes('|||ABONO:');
+    const isAbonoMonto = session?.notes && session.notes.includes('|||ABONO_MONTO:');
+    const isAnyAbono = isAbono || isAbonoMonto;
+
+    let abonoItems = [];
+    let abonoMonto = null;
+
+    if (isAbono) {
+        try {
+            abonoItems = JSON.parse(session.notes.split('|||ABONO:')[1].split('|||')[0].trim());
+        } catch (_) {}
+    } else if (isAbonoMonto) {
+        try {
+            abonoMonto = JSON.parse(session.notes.split('|||ABONO_MONTO:')[1].split('|||')[0].trim());
+        } catch (_) {}
+    }
+
+    const itemsToPrint = isAbono ? abonoItems : currentItems;
+    const finalGrandTotal = isAbono 
+        ? round2(abonoItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0))
+        : (isAbonoMonto ? (abonoMonto?.amount || 0) : grandTotal);
+
+    // Parse abono history
+    let historialAbonos = [];
+    if (session?.notes && session.notes.includes('|||HISTORIAL_ABONOS:')) {
+        try {
+            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+            historialAbonos = JSON.parse(histStr);
+        } catch (_) {}
+    }
+
+    const displayNotes = session?.notes 
+        ? session.notes.split('|||')[0].trim()
+        : '';
+
     // Calcular datos de pagos previos
     const isPina = session.game_mode === 'PINA';
     const pinaCount = isPina ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
     const hasPinas = isPina || pinaCount > 0;
     const totalHours = Number(session.hours_paid) || 0;
     const hasHours = totalHours > 0;
-    const hasPaidBefore = roundsOffset > 0 || hoursOffset > 0;
+    const hasPaidBefore = roundsOffset > 0 || hoursOffset > 0 || historialAbonos.length > 0;
 
     // Seat-level charges
     const seatHasPinas = seats.some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
@@ -40,16 +76,25 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     const lines = [];
     const push = (html) => lines.push(html);
 
-    push(`<div class="title">PRE-CUENTA MESA</div>`);
+    push(`<div class="title">${isAnyAbono ? 'PRE-CUENTA DE ABONO' : 'PRE-CUENTA MESA'}</div>`);
     push(`<div class="subtitle">${table.name.toUpperCase()}</div>`);
     push(`<hr>`);
     const d = new Date();
     push(`<div class="small">Fecha: ${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO')}</div>`);
     if (session?.client_name) push(`<div class="bold">Cliente: ${session.client_name}</div>`);
-    if (session?.notes) push(`<div class="note">Nota: ${session.notes.substring(0, 60)}</div>`);
+    if (displayNotes) push(`<div class="note">Nota: ${displayNotes.substring(0, 60)}</div>`);
     push(`<hr>`);
 
-    if (isMultiClient) {
+    if (isAbono) {
+        push(`<div class="section-title">Abono Solicitado</div>`);
+        itemsToPrint.forEach(i => {
+            const t = i.qty * i.unit_price_usd;
+            push(itemRow(`${i.qty}x ${i.product_name.substring(0, 18)}`, formatCOP(t)));
+        });
+    } else if (isAbonoMonto) {
+        push(`<div class="section-title">Abono Solicitado</div>`);
+        push(itemRow(`Abono por Monto Libre`, formatCOP(abonoMonto?.amount || 0)));
+    } else if (isMultiClient) {
         const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset, table.type);
         if (breakdown) {
             if (breakdown.sharedTotal > 0) {
@@ -166,8 +211,30 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         push(`<hr>`);
     }
 
-    const totalLabel = hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:';
-    push(`<table class="total-table"><tr><td>${totalLabel}</td><td>${formatCOP(grandTotal)}</td></tr></table>`);
+    const totalLabel = isAbono ? 'TOTAL ABONO:' : (hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:');
+    push(`<table class="total-table"><tr><td>${totalLabel}</td><td>${formatCOP(isAbono ? finalGrandTotal : grandTotal)}</td></tr></table>`);
+
+    if (historialAbonos.length > 0) {
+        push(`<hr>`);
+        push(`<div class="section-title center accent">=== HISTORIAL DE ABONOS ===</div>`);
+        historialAbonos.forEach((item, index) => {
+            let formattedDate = '';
+            try {
+                const dateObj = new Date(item.date);
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const year = dateObj.getFullYear();
+                const hours = String(dateObj.getHours()).padStart(2, '0');
+                const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+                formattedDate = `${day}/${month}/${year} ${hours}:${minutes}`;
+            } catch (_) {
+                formattedDate = item.date || '';
+            }
+            push(itemRow(`${index + 1}. ${item.method} (${formattedDate})`, formatCOP(item.amount), 'small'));
+        });
+        const totalAbonosSum = historialAbonos.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        push(itemRow('Total Abonado:', formatCOP(totalAbonosSum), 'bold'));
+    }
 
     push(`<div class="center disclaimer">*** NO ES RECIBO DE PAGO ***</div>`);
 

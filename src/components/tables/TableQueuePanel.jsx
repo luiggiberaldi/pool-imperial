@@ -65,13 +65,28 @@ export function TableQueuePanel({ onCheckoutTable }) {
                     const table = tables.find(t => t.id === session.table_id);
                     if (!table) return null;
 
+                    const isAbono = session.notes && session.notes.includes('|||ABONO:');
+                    const isAbonoMonto = session.notes && session.notes.includes('|||ABONO_MONTO:');
+                    const isAnyAbono = isAbono || isAbonoMonto;
+                    let abonoItems = [];
+                    let abonoMonto = null;
+                    if (isAbono) {
+                        try {
+                            abonoItems = JSON.parse(session.notes.split('|||ABONO:')[1].split('|||')[0].trim());
+                        } catch (_) {}
+                    } else if (isAbonoMonto) {
+                        try {
+                            abonoMonto = JSON.parse(session.notes.split('|||ABONO_MONTO:')[1].split('|||')[0].trim());
+                        } catch (_) {}
+                    }
+
                     const order = orders.find(o => o.table_session_id === session.id);
-                    const items = order ? orderItems.filter(i => i.order_id === order.id) : [];
-                    const totalConsumption = items.reduce((a, i) => a + Number(i.unit_price_usd) * Number(i.qty), 0);
+                    const items = isAbono ? abonoItems : (isAbonoMonto ? [] : (order ? orderItems.filter(i => i.order_id === order.id) : []));
+                    const totalConsumption = isAbonoMonto ? (abonoMonto?.amount || 0) : items.reduce((a, i) => a + Number(i.unit_price_usd) * Number(i.qty), 0);
                     const paused = pausedSessions?.[session.id];
-                    const elapsed = paused?.isPaused ? (paused.elapsedAtPause || 0) : (session.started_at ? calculateElapsedTime(session.started_at) : 0);
-                    const isTimeFree = table.type === 'NORMAL';
-                    const timeCost = isTimeFree ? 0 : calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, (paidHoursOffsets || {})[session.id] || 0, (paidRoundsOffsets || {})[session.id] || 0, session.seats, table.type);
+                    const elapsed = isAnyAbono ? 0 : (paused?.isPaused ? (paused.elapsedAtPause || 0) : (session.started_at ? calculateElapsedTime(session.started_at) : 0));
+                    const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
+                    const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, (paidHoursOffsets || {})[session.id] || 0, (paidRoundsOffsets || {})[session.id] || 0, session.seats, table.type) : 0;
                     const taxRate = config?.tableTaxType === 'iva_19'
                         ? (config?.taxRateIva ?? 19) / 100
                         : config?.tableTaxType === 'impoconsumo_8'
@@ -81,12 +96,12 @@ export function TableQueuePanel({ onCheckoutTable }) {
                     const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
                     const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
 
-                    const seatTimeCost = isTimeFree ? 0 : (session.seats || []).filter(s => !s.paid).reduce((sum, s) => {
+                    const seatTimeCost = !isAnyAbono && !isTimeFree ? (session.seats || []).filter(s => !s.paid).reduce((sum, s) => {
                         const tc = (s.timeCharges || []);
                         const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
-                        const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+                        const p = tc.filter(t => tc.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
                         return sum + (h * finalHora) + (p * finalPina);
-                    }, 0);
+                    }, 0) : 0;
                     let grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
                     try {
                         const tableCheckoutData = {
@@ -100,7 +115,8 @@ export function TableQueuePanel({ onCheckoutTable }) {
                             hoursOffset: (paidHoursOffsets || {})[session.id] || 0,
                             roundsOffset: (paidRoundsOffsets || {})[session.id] || 0,
                             paidHoursOffsets: {},
-                            paidRoundsOffsets: {}
+                            paidRoundsOffsets: {},
+                            isPartial: isAnyAbono
                         };
                         const result = buildTableSyntheticCart(tableCheckoutData, config, products);
                         if (result && result.syntheticCart) {
@@ -120,7 +136,7 @@ export function TableQueuePanel({ onCheckoutTable }) {
                             key={session.id}
                             onClick={() => {
                                 if (!activeCashSession) { showToast('Abre la caja primero para poder cobrar', 'error'); return; }
-                                onCheckoutTable({ table, session, elapsed, timeCost, totalConsumption, currentItems: items, grandTotal, frozenDivisor: (session?.seats || []).filter(s => !s.paid).length || null });
+                                onCheckoutTable({ table, session, elapsed, timeCost, totalConsumption, currentItems: items, grandTotal, frozenDivisor: (session?.seats || []).filter(s => !s.paid).length || null, isPartial: isAnyAbono });
                             }}
                             className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-orange-100/70 dark:hover:bg-orange-900/20 active:scale-[0.99] transition-all text-left"
                         >
@@ -131,23 +147,42 @@ export function TableQueuePanel({ onCheckoutTable }) {
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
-                                <p className="font-bold text-slate-800 dark:text-white text-sm truncate">{table.name}</p>
+                                <div className="flex items-center gap-1.5">
+                                    <p className="font-bold text-slate-800 dark:text-white text-sm truncate">{table.name}</p>
+                                    {isAnyAbono && (
+                                        <span className="px-1.5 py-0.5 rounded-md text-[8px] font-black bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                                            Abono
+                                        </span>
+                                    )}
+                                </div>
                                 {meseroName && (
                                     <p className="text-[10px] font-bold text-orange-500/80 truncate">{meseroName}</p>
                                 )}
-                                {session.notes && (
-                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 truncate flex items-center gap-1">
-                                        <MessageSquare size={9} className="shrink-0" /> {session.notes}
-                                    </p>
-                                )}
+                                {(() => {
+                                    const cleanNote = (session.notes || '').split('|||')[0].trim();
+                                    if (!cleanNote) return null;
+                                    return (
+                                        <p className="text-[10px] text-amber-600 dark:text-amber-400 truncate flex items-center gap-1">
+                                            <MessageSquare size={9} className="shrink-0" /> {cleanNote}
+                                        </p>
+                                    );
+                                })()}
                                 <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                                        <Timer size={10} /> {formatElapsedTime(elapsed)}
-                                    </span>
-                                    {items.length > 0 && (
-                                        <span className="flex items-center gap-1 text-[10px] text-slate-400">
-                                            <Coffee size={10} /> {items.length} consumo{items.length !== 1 ? 's' : ''}
+                                    {isAnyAbono ? (
+                                        <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold">
+                                            <Coffee size={10} /> {isAbonoMonto ? 'Abono de monto libre' : `${items.length} producto${items.length !== 1 ? 's' : ''} a abonar`}
                                         </span>
+                                    ) : (
+                                        <>
+                                            <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                                                <Timer size={10} /> {formatElapsedTime(elapsed)}
+                                            </span>
+                                            {items.length > 0 && (
+                                                <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                                                    <Coffee size={10} /> {items.length} consumo{items.length !== 1 ? 's' : ''}
+                                                </span>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>

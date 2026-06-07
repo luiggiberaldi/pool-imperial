@@ -201,6 +201,9 @@ export class FinancialEngine {
             } else {
                 // Aggregate incoming payments (V2 sales)
                 sale.payments.forEach(p => {
+                    // Skip prior-abono payments — already counted in their own abono receipt
+                    if (p.isAbonoPrevio === true) return;
+
                     const resolvedLabel = (p.methodLabel && p.methodLabel !== p.methodId)
                         ? p.methodLabel
                         : _resolveMethodLabel(p.methodId);

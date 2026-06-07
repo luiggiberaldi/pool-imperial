@@ -25,9 +25,14 @@ export async function generateTicketPDF(sale, _bcvRate) {
     const paymentCount = sale.payments?.length || 0;
     const hasFiado = sale.fiadoUsd > 0;
     const hasChange = (sale.changeUsd > 0);
+    const priorAbonoPayments = (sale.payments || []).filter(p => p.isAbonoPrevio === true);
+    const hasPriorAbonos = priorAbonoPayments.length > 0;
+    const priorAbonoTotal = hasPriorAbonos
+        ? priorAbonoPayments.reduce((s, p) => s + (p.amountUsd || 0), 0)
+        : 0;
 
     // Altura MUY generosa para que nunca se corte
-    const H = 80 + (itemCount * 12) + (paymentCount * 6) + (hasFiado ? 14 : 0) + (hasChange ? 18 : 0);
+    const H = 80 + (itemCount * 12) + (paymentCount * 6) + (hasFiado ? 14 : 0) + (hasChange ? 18 : 0) + (hasPriorAbonos ? 20 : 0);
 
     const doc = new jsPDF({ unit: 'mm', format: [WIDTH, H] });
 
@@ -221,15 +226,42 @@ export async function generateTicketPDF(sale, _bcvRate) {
         }
     }
 
-    doc.setTextColor(...BODY);
-    doc.text('TOTAL A PAGAR', CX, y, { align: 'center' });
-    y += 8;
+    // Si hay abonos previos, mostrar desglose: Consumo Bruto → Abonos → Neto Pagado
+    if (hasPriorAbonos) {
+        const consumoBruto = sale.totalCop || sale.totalUsd || 0;
+        const netoPagado = Math.max(0, consumoBruto - priorAbonoTotal);
 
-    doc.setFontSize(16);
-    doc.setTextColor(...GREEN);
-    const totalDisplay = sale.totalCop || sale.totalUsd || 0;
-    doc.text(formatCOP(totalDisplay), CX, y, { align: 'center' });
-    y += 8;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...BODY);
+        doc.text('TOTAL CONSUMO:', M, y);
+        doc.text(formatCOP(consumoBruto), RIGHT, y, { align: 'right' });
+        y += 5;
+
+        doc.setTextColor(...RED);
+        doc.text('ABONOS PREVIOS:', M, y);
+        doc.text('-' + formatCOP(priorAbonoTotal), RIGHT, y, { align: 'right' });
+        y += 5;
+
+        doc.setTextColor(...BODY);
+        doc.text('NETO PAGADO EN CIERRE:', M, y);
+        y += 8;
+
+        doc.setFontSize(16);
+        doc.setTextColor(...GREEN);
+        doc.text(formatCOP(netoPagado), CX, y, { align: 'center' });
+        y += 8;
+    } else {
+        doc.setTextColor(...BODY);
+        doc.text('TOTAL A PAGAR', CX, y, { align: 'center' });
+        y += 8;
+
+        doc.setFontSize(16);
+        doc.setTextColor(...GREEN);
+        const totalDisplay = sale.totalCop || sale.totalUsd || 0;
+        doc.text(formatCOP(totalDisplay), CX, y, { align: 'center' });
+        y += 8;
+    }
 
 
 
@@ -255,11 +287,14 @@ export async function generateTicketPDF(sale, _bcvRate) {
                 const val = isUsd 
                     ? `${formatUsdVal(p.amountOriginal)} USD` 
                     : `${formatCOP(p.amountUsd || p.amountCOP || 0)} COP`;
+                const label = p.isAbonoPrevio
+                    ? `${p.methodLabel || 'Abono'}`
+                    : (p.methodLabel || 'Pago');
 
                 doc.setFont('helvetica', 'bold');
                 doc.setFontSize(7.5);
-                doc.setTextColor(...BODY);
-                doc.text(p.methodLabel || 'Pago', M, y);
+                doc.setTextColor(...(p.isAbonoPrevio ? RED : BODY));
+                doc.text(label, M, y);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(...INK);
                 doc.text(val, RIGHT, y, { align: 'right' });

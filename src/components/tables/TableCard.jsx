@@ -72,6 +72,8 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const hasLimit = (totalHoursPaid > 0 || wasOpenedWithHours) && !isLibreSession;
 
     const [showCancelModal, setShowCancelModal] = useState(false);
+    const [showAbonoModal, setShowAbonoModal] = useState(false);
+    const [showCashierPaymentModal, setShowCashierPaymentModal] = useState(false);
     const [showAdjustModal, setShowAdjustModal] = useState(false);
     const [showModeModal, setShowModeModal] = useState(false);
     const [showTotalDetails, setShowTotalDetails] = useState(false);
@@ -617,7 +619,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                             </div>
                         ) : (
                         <button
-                            onClick={() => { setEditClientName(session.client_name || ''); setEditGuestCount(session.guest_count > 0 ? String(session.guest_count) : ''); setEditClientId(session.client_id || null); setEditNotes(session.notes || ''); setEditSeats(session.seats || []); setShowEditMetaModal(true); }}
+                            onClick={() => { setEditClientName(session.client_name || ''); setEditGuestCount(session.guest_count > 0 ? String(session.guest_count) : ''); setEditClientId(session.client_id || null); setEditNotes((session.notes || '').split('|||')[0].trim()); setEditSeats(session.seats || []); setShowEditMetaModal(true); }}
                             className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md self-start transition-colors ${session.client_id ? 'bg-sky-400/30 hover:bg-sky-400/50 opacity-100' : 'opacity-80 bg-white/15 hover:bg-white/30'}`}
                             title="Editar nombre y personas"
                         >
@@ -630,19 +632,23 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                     )}
                     {isPlaying && !session?.client_name && !(session?.guest_count > 0) && !isLockedForMe && (
                         <button
-                            onClick={() => { setEditClientName(''); setEditGuestCount(''); setEditClientId(null); setEditNotes(session?.notes || ''); setEditSeats(session?.seats || []); setShowEditMetaModal(true); }}
+                            onClick={() => { setEditClientName(''); setEditGuestCount(''); setEditClientId(null); setEditNotes((session?.notes || '').split('|||')[0].trim()); setEditSeats(session?.seats || []); setShowEditMetaModal(true); }}
                             className="text-[10px] font-bold opacity-50 hover:opacity-80 bg-white/10 hover:bg-white/20 px-1.5 py-0.5 rounded-md self-start transition-colors flex items-center gap-1"
                             title="Añadir nombre y personas"
                         >
                             <Edit2 size={8} /> Añadir info
                         </button>
                     )}
-                    {isPlaying && session?.notes && (
-                        <div className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md self-start bg-amber-400/20 text-amber-100 max-w-full">
-                            <MessageSquare size={9} className="shrink-0" />
-                            <span className="truncate">{session.notes}</span>
-                        </div>
-                    )}
+                    {(() => {
+                        const cleanNote = (session?.notes || '').split('|||')[0].trim();
+                        if (!cleanNote) return null;
+                        return (
+                            <div className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md self-start bg-amber-400/20 text-amber-100 max-w-full">
+                                <MessageSquare size={9} className="shrink-0" />
+                                <span className="truncate">{cleanNote}</span>
+                            </div>
+                        );
+                    })()}
                 </div>
                 <div className={`px-2 py-1 rounded-md text-[9px] font-black tracking-widest uppercase shrink-0 ${
                     isAvailable ? 'bg-emerald-100 text-emerald-700' : isPaidIdle ? 'bg-emerald-400 text-white' : (hasLimit && isExceeded) ? 'bg-rose-500 text-white border border-rose-400' : hasLimit ? 'bg-amber-400 text-slate-900 border border-amber-300' : 'bg-white/20 text-white backdrop-blur-md'
@@ -708,6 +714,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                 currentUser={currentUser}
                 onRequestOpen={handleRequestOpen}
                 onShowOrderPanel={() => setShowOrderPanel(true)}
+                onShowAbonoModal={() => setShowAbonoModal(true)}
                 onRequestCheckout={requestCheckout}
                 onNotifyMesaCobrar={notifyMesaCobrar}
                 onAddHoursModal={() => setShowAdjustModal(true)}
@@ -738,6 +745,11 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
             hasHoursActive={hasHoursActive}
             hasLimit={hasLimit}
             isProcessingCharge={isProcessingCharge}
+            // Abono modal
+            showAbonoModal={showAbonoModal}
+            setShowAbonoModal={setShowAbonoModal}
+            showCashierPaymentModal={showCashierPaymentModal}
+            setShowCashierPaymentModal={setShowCashierPaymentModal}
             // Cancel modal
             showCancelModal={showCancelModal}
             setShowCancelModal={setShowCancelModal}

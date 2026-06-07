@@ -625,8 +625,11 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             if (res && res.success === false) return; // checkout failed — don't show success dialog
                             setShowTablePayment(false);
                             // Solo mostrar diálogo liberar/mantener cuando es cobro completo o todos los asientos pagados
-                            // Para pagos per-seat parciales, el bill modal se reabre automáticamente via setTableCheckoutData refresh
-                            if (!isSeatPayment) {
+                            if (tableCheckoutData.isPartial) {
+                                setTableCheckoutData(null);
+                                setSelectedCustomerId('');
+                                useTablesStore.getState().syncTablesAndSessions();
+                            } else if (!isSeatPayment) {
                                 setPostPaymentSession({ sessionId, tableName });
                             } else {
                                 // Verificar si todos quedaron pagados (allPaid triggers postPayment from useSalesCheckout)
@@ -634,6 +637,10 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                                 const allPaid = updatedSeats.every(s => s.paid || s.id === tableCheckoutData.seatId);
                                 if (allPaid) {
                                     setPostPaymentSession({ sessionId, tableName });
+                                } else {
+                                    setTableCheckoutData(null);
+                                    setSelectedCustomerId('');
+                                    useTablesStore.getState().syncTablesAndSessions();
                                 }
                             }
                         });
