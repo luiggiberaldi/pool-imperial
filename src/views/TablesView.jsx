@@ -235,7 +235,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                         {/* View Mode Toggle */}
                         <ViewToggle mode={viewMode} onChange={(mode) => { setViewMode(mode); if (mode === 'grid') setIsEditingPlan(false); }} />
 
-                        {/* {viewMode === 'floor' && isAdmin && (
+                        {viewMode === 'floor' && isAdmin && (
                             <button
                                 onClick={() => {
                                     setSelectedTableId(null);
@@ -249,7 +249,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                             >
                                 <span>🔧 {isEditingPlan ? 'Salir Editor' : 'Editar Plano'}</span>
                             </button>
-                        )} */}
+                        )}
 
                         {/* Botón pausa general — solo admin, solo si hay sesiones activas */}
                         {isAdmin && pausableSessions.length > 0 && (
