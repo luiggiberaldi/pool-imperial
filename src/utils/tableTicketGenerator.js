@@ -10,19 +10,19 @@ const formatCOP = (val) => {
     return rawVal < 0 ? `-$ ${absVal}` : `$ ${absVal}`;
 };
 
+/** Helper: genera una fila de 2 columnas como tabla para evitar wrapping a 58mm */
+const itemRow = (label, price, extraClass = '') =>
+    `<table class="item-row${extraClass ? ' ' + extraClass : ''}"><tr><td class="item-label">${label}</td><td class="item-price">${price}</td></tr></table>`;
+
 /**
  * Genera e imprime una pre-cuenta para mesa de pool.
- * - Si hay impresora térmica ESC/POS configurada: imprime directo via WebSerial
- *   SIN abrir el cajón de dinero (el cajón solo debe abrirse en ventas exitosas).
- * - Sin impresora térmica: genera PDF via jsPDF + iframe o impresión de ventana directa.
+ * - Sin impresora térmica: genera PDF via ventana directa anclada a 58mm.
  */
 export async function generatePartialSessionTicketPDF({ table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0, products = [] }) {
     // Impresión exclusiva a través de diálogo del sistema (HTML / PDF)
 
     const seats = session?.seats || [];
     const isMultiClient = seats.length > 1;
-
-    const WIDTH = 58;
 
     // Calcular datos de pagos previos
     const isPina = session.game_mode === 'PINA';
@@ -53,46 +53,46 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset, table.type);
         if (breakdown) {
             if (breakdown.sharedTotal > 0) {
-                push(`<div class="bold accent">COMPARTIDO</div>`);
+                push(`<div class="section-title accent">COMPARTIDO</div>`);
                 if (hasPinas) {
                     const pp = config?.pricePina || 0;
-                    push(`<div class="row"><span>${pinaCount} jugada${pinaCount !== 1 ? 's' : ''} x ${formatCOP(pp)}</span><span>${formatCOP(pinaCount * pp)}</span></div>`);
+                    push(itemRow(`${pinaCount} jugada${pinaCount !== 1 ? 's' : ''} x ${formatCOP(pp)}`, formatCOP(pinaCount * pp)));
                 }
                 if (hasHours) {
                     const ph = config?.pricePerHour || 0;
-                    push(`<div class="row"><span>${formatHoursPaid(totalHours)} x ${formatCOP(ph)}</span><span>${formatCOP(totalHours * ph)}</span></div>`);
+                    push(itemRow(`${formatHoursPaid(totalHours)} x ${formatCOP(ph)}`, formatCOP(totalHours * ph)));
                 }
                 breakdown.sharedItems.forEach(i => {
                     const t = i.qty * i.unit_price_usd;
-                    push(`<div class="row"><span>${i.qty}x ${(i.product_name || '').substring(0, 16)}</span><span>${formatCOP(t)}</span></div>`);
+                    push(itemRow(`${i.qty}x ${(i.product_name || '').substring(0, 18)}`, formatCOP(t)));
                 });
                 push(`<div class="muted small">Total compartido: ${formatCOP(breakdown.sharedTotal)} (÷${seats.filter(s => !s.paid).length})</div>`);
                 push(`<hr>`);
             }
             breakdown.seats.forEach((sb) => {
                 const seatLabel = sb.seat.label || `Cliente ${seats.indexOf(sb.seat) + 1}`;
-                push(`<div class="row"><span class="bold accent">${seatLabel.toUpperCase()}</span>${sb.seat.paid ? '<span class="muted">PAGADO</span>' : ''}</div>`);
+                push(itemRow(`<span class="bold accent">${seatLabel.toUpperCase()}</span>`, sb.seat.paid ? `<span class="muted">PAGADO</span>` : ''));
                 if (sb.timeCost.total > 0) {
                     if (sb.timeCost.hasPinas) {
                         const tc = sb.seat.timeCharges?.filter(tc => tc.type === 'pina') || [];
                         const pp = config?.pricePina || 0;
-                        push(`<div class="row"><span>${tc.length} jugada${tc.length !== 1 ? 's' : ''} x ${formatCOP(pp)}</span><span>${formatCOP(sb.timeCost.pinaCost)}</span></div>`);
+                        push(itemRow(`${tc.length} jugada${tc.length !== 1 ? 's' : ''} x ${formatCOP(pp)}`, formatCOP(sb.timeCost.pinaCost)));
                     }
                     if (sb.timeCost.hasHours) {
                         const tc = sb.seat.timeCharges?.filter(tc => tc.type === 'hora') || [];
                         const totalH = tc.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
                         const ph = config?.pricePerHour || 0;
-                        push(`<div class="row"><span>${formatHoursPaid(totalH)} x ${formatCOP(ph)}</span><span>${formatCOP(sb.timeCost.hourCost)}</span></div>`);
+                        push(itemRow(`${formatHoursPaid(totalH)} x ${formatCOP(ph)}`, formatCOP(sb.timeCost.hourCost)));
                     }
                 }
                 sb.items.forEach(i => {
                     const t = i.qty * i.unit_price_usd;
-                    push(`<div class="row"><span>${i.qty}x ${(i.product_name || '').substring(0, 16)}</span><span>${formatCOP(t)}</span></div>`);
+                    push(itemRow(`${i.qty}x ${(i.product_name || '').substring(0, 18)}`, formatCOP(t)));
                 });
                 if (sb.sharedPortion > 0 && !sb.seat.paid) {
-                    push(`<div class="row muted small"><span>Parte compartida</span><span>${formatCOP(sb.sharedPortion)}</span></div>`);
+                    push(itemRow('Parte compartida', formatCOP(sb.sharedPortion), 'muted small'));
                 }
-                push(`<div class="row bold"><span>Subtotal:</span><span>${formatCOP(sb.subtotal)}</span></div>`);
+                push(itemRow('Subtotal:', formatCOP(sb.subtotal), 'bold'));
                 push(`<hr>`);
             });
         }
@@ -104,10 +104,10 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
             const totalPinas = pinaCount + seatPinas;
             const fullCost = round2(totalPinas * pricePerPina);
             const paidCost = round2(roundsOffset * pricePerPina);
-            push(`<div class="bold">Partidas (La Jugada)</div>`);
-            push(`<div class="row"><span>${totalPinas} jugada${totalPinas !== 1 ? 's' : ''} x ${formatCOP(pricePerPina)}</span><span>${formatCOP(fullCost)}</span></div>`);
+            push(`<div class="section-title">Partidas (La Jugada)</div>`);
+            push(itemRow(`${totalPinas} jugada${totalPinas !== 1 ? 's' : ''} x ${formatCOP(pricePerPina)}`, formatCOP(fullCost)));
             if (roundsOffset > 0) {
-                push(`<div class="row muted"><span>Pagado (${roundsOffset} jugada${roundsOffset !== 1 ? 's' : ''})</span><span>-${formatCOP(paidCost)}</span></div>`);
+                push(itemRow(`Pagado (${roundsOffset} jugada${roundsOffset !== 1 ? 's' : ''})`, `-${formatCOP(paidCost)}`, 'muted'));
             }
         }
 
@@ -118,19 +118,19 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
             const combinedHours = totalHours + seatHoursTotal;
             const fullCost = round2(combinedHours * pricePerHour);
             const paidCost = round2(hoursOffset * pricePerHour);
-            push(`<div class="bold">Tiempo de Mesa</div>`);
-            push(`<div class="row"><span>${formatHoursPaid(combinedHours)} x ${formatCOP(pricePerHour)}</span><span>${formatCOP(fullCost)}</span></div>`);
+            push(`<div class="section-title">Tiempo de Mesa</div>`);
+            push(itemRow(`${formatHoursPaid(combinedHours)} x ${formatCOP(pricePerHour)}`, formatCOP(fullCost)));
             if (hoursOffset > 0) {
-                push(`<div class="row muted"><span>Pagado (${formatHoursPaid(hoursOffset)})</span><span>-${formatCOP(paidCost)}</span></div>`);
+                push(itemRow(`Pagado (${formatHoursPaid(hoursOffset)})`, `-${formatCOP(paidCost)}`, 'muted'));
             }
         }
 
         // CONSUMO
         if (currentItems.length > 0) {
-            push(`<div class="bold">Consumo Bar</div>`);
+            push(`<div class="section-title">Consumo Bar</div>`);
             currentItems.forEach(i => {
                 const t = i.qty * i.unit_price_usd;
-                push(`<div class="row"><span>${i.qty}x ${i.product_name.substring(0, 16)}</span><span>${formatCOP(t)}</span></div>`);
+                push(itemRow(`${i.qty}x ${i.product_name.substring(0, 18)}`, formatCOP(t)));
             });
         }
     }
@@ -155,18 +155,18 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
 
     push(`<hr>`);
     if (totalTax > 0) {
-        push(`<div class="row small"><span>Base Gravable:</span><span>${formatCOP(baseBeforeTaxes)}</span></div>`);
+        push(itemRow('Base Gravable:', formatCOP(baseBeforeTaxes), 'small'));
         Object.entries(taxBreakdown).forEach(([taxKey, taxVal]) => {
             if (taxVal > 0) {
                 const config = useTablesStore.getState().config;
                 const taxLabel = taxKey === 'iva_19' ? `IVA (${config?.taxRateIva ?? 19}%)` : taxKey === 'impoconsumo_8' ? `Impoconsumo (${config?.taxRateImpoconsumo ?? 8}%)` : taxKey;
-                push(`<div class="row small"><span>${taxLabel}:</span><span>${formatCOP(taxVal)}</span></div>`);
+                push(itemRow(`${taxLabel}:`, formatCOP(taxVal), 'small'));
             }
         });
         push(`<hr>`);
     }
 
-    const totalLabel = hasPaidBefore ? "TOTAL PENDIENTE:" : "TOTAL ESTIMADO:";
+    const totalLabel = hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:';
     push(`<table class="total-table"><tr><td>${totalLabel}</td><td>${formatCOP(grandTotal)}</td></tr></table>`);
 
     push(`<div class="center disclaimer">*** NO ES RECIBO DE PAGO ***</div>`);
@@ -174,20 +174,25 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @page { size: 58mm auto; margin: 2mm; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { width: 54mm; max-width: 54mm; min-width: 54mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #212529; padding: 2mm 1mm; font-weight: 900; }
+body { width: 54mm; max-width: 54mm; min-width: 54mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #212529; padding: 2mm 1mm; font-weight: 700; }
 .title { text-align: center; font-weight: bold; font-size: 11pt; }
 .subtitle { text-align: center; font-weight: bold; font-size: 9pt; margin-bottom: 2mm; }
 hr { border: none; border-top: 1px dashed #999; margin: 1.5mm 0; }
-.row { display: flex; justify-content: space-between; align-items: baseline; line-height: 1.5; gap: 2mm; flex-wrap: nowrap; }
-.row span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row span:last-child { white-space: nowrap; text-align: right; }
+.section-title { font-weight: bold; margin-top: 1mm; }
 .bold { font-weight: bold; }
 .small { font-size: 7pt; }
 .note { font-size: 7pt; }
 .muted { color: #555; }
 .accent { color: #1d4e89; }
 .center { text-align: center; }
-.total-table { width: 100%; border-collapse: collapse; margin-top: 1mm; }
+.item-row { width: 100%; border-collapse: collapse; margin: 0; }
+.item-row td { font-size: 8pt; vertical-align: top; padding: 1px 0; }
+.item-row td.item-label { width: 65%; white-space: normal; word-break: break-word; }
+.item-row td.item-price { width: 35%; text-align: right; white-space: nowrap; font-weight: bold; }
+.item-row.bold td { font-weight: bold; }
+.item-row.muted td { color: #555; }
+.item-row.small td { font-size: 7pt; }
+.total-table { width: 100%; border-collapse: collapse; margin-top: 1.5mm; }
 .total-table td { font-size: 9pt; font-weight: bold; vertical-align: middle; white-space: nowrap; }
 .total-table td:first-child { width: 55%; }
 .total-table td:last-child { text-align: right; width: 45%; }
