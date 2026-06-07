@@ -167,30 +167,37 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     }
 
     const totalLabel = hasPaidBefore ? "TOTAL PENDIENTE:" : "TOTAL ESTIMADO:";
-    push(`<div class="row total"><span>${totalLabel}</span><span>${formatCOP(grandTotal)}</span></div>`);
+    push(`<table class="total-table"><tr><td>${totalLabel}</td><td>${formatCOP(grandTotal)}</td></tr></table>`);
 
     push(`<div class="center disclaimer">*** NO ES RECIBO DE PAGO ***</div>`);
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@page { size: 58mm auto; margin: 0; }
+@page { size: 58mm auto; margin: 2mm; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { width: 48mm; max-width: 48mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #212529; padding: 4mm 2mm; font-weight: 900; }
-.title { text-align: center; font-weight: bold; font-size: 12pt; }
+body { width: 54mm; max-width: 54mm; min-width: 54mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #212529; padding: 2mm 1mm; font-weight: 900; }
+.title { text-align: center; font-weight: bold; font-size: 11pt; }
 .subtitle { text-align: center; font-weight: bold; font-size: 9pt; margin-bottom: 2mm; }
-hr { border: none; border-top: 1px dashed #ced4da; margin: 2mm 0; }
-.row { display: flex; justify-content: space-between; line-height: 1.6; }
+hr { border: none; border-top: 1px dashed #999; margin: 1.5mm 0; }
+.row { display: flex; justify-content: space-between; align-items: baseline; line-height: 1.5; gap: 2mm; flex-wrap: nowrap; }
+.row span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row span:last-child { white-space: nowrap; text-align: right; }
 .bold { font-weight: bold; }
 .small { font-size: 7pt; }
 .note { font-size: 7pt; }
-.muted { color: #787878; }
+.muted { color: #555; }
 .accent { color: #1d4e89; }
-.right { text-align: right; }
 .center { text-align: center; }
-.total { font-size: 10pt; font-weight: bold; margin-top: 1mm; }
-.disclaimer { margin-top: 3mm; font-size: 7pt; }
+.total-table { width: 100%; border-collapse: collapse; margin-top: 1mm; }
+.total-table td { font-size: 9pt; font-weight: bold; vertical-align: middle; white-space: nowrap; }
+.total-table td:first-child { width: 55%; }
+.total-table td:last-child { text-align: right; width: 45%; }
+.disclaimer { margin-top: 3mm; font-size: 7pt; text-align: center; }
+@media screen { html, body { width: 54mm; max-width: 54mm; } }
+@media print { @page { size: 58mm auto; margin: 2mm; } html, body { width: 54mm; max-width: 54mm; } }
 </style></head><body>${lines.join('')}</body></html>`;
 
-    const printWindow = window.open('', '_blank', 'width=350,height=600');
+    // 58mm a 96dpi ≈ 219px de contenido + ~20px de chrome del navegador = 240px
+    const printWindow = window.open('', '_blank', 'width=240,height=650,resizable=no,scrollbars=yes');
     if (!printWindow) {
         const iframe = document.createElement('iframe');
         Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
