@@ -31,6 +31,10 @@ export const useTablesStore = create((set, get) => ({
         tableTaxMode: 'inclusive',
         taxRateIva: 19,
         taxRateImpoconsumo: 8,
+        defaultServiceChargeEnabled: true,
+        defaultServiceChargePercent: 10,
+        defaultTipEnabled: true,
+        defaultTipPercent: 8,
     },
 
     // Compose slices

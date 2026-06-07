@@ -355,7 +355,7 @@ export default function CheckoutModal({
                         {/* Pill Servicio Voluntario */}
                         {tableContext?.includeServiceCharge && (() => {
                             const svcPercent = tableContext?.serviceChargePercent ?? 10;
-                            const svcAmount = getServiceChargeAmount();
+                            const svcAmount = tableContext?.serviceChargeAmount ?? getServiceChargeAmount();
                             if (svcAmount > 0) {
                                 return (
                                     <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/30 text-violet-600 dark:text-violet-400 px-3.5 py-1.5 rounded-xl border border-violet-100/40 dark:border-violet-900/30 text-[11px] font-black uppercase tracking-wide">
@@ -365,6 +365,13 @@ export default function CheckoutModal({
                             }
                             return null;
                         })()}
+
+                        {/* Pill Propina del Personal */}
+                        {tableContext?.includeTip && tableContext?.tipAmount > 0 && (
+                            <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 px-3.5 py-1.5 rounded-xl border border-indigo-100/40 dark:border-indigo-900/30 text-[11px] font-black uppercase tracking-wide">
+                                <span>Prop. ({tableContext.tipPercent}%): +{formatCOP(tableContext.tipAmount)}</span>
+                            </div>
+                        )}
 
                         {/* Pill Recargo TDC */}
                         {tdcSurcharge > 0 && (

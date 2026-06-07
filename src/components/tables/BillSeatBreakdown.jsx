@@ -13,12 +13,17 @@ export function BillSeatBreakdown({
     customDivisionMismatch,
     onProceedToPayment, discount, itemDiscounts,
     includeServiceCharge,
+    includeTip = 0,
 }) {
     return (
         <>
             {seatBreakdown.seats.map((sb, idx) => {
                 const seat = sb.seat;
                 const label = seat.label || `Cliente ${idx + 1}`;
+                const svcAmount = includeServiceCharge > 0 && !seat.paid ? Math.round(sb.subtotal * (includeServiceCharge / 100)) : 0;
+                const tipAmount = includeTip > 0 && !seat.paid ? Math.round(sb.subtotal * (includeTip / 100)) : 0;
+                const totalWithExtras = sb.subtotal + svcAmount + tipAmount;
+
                 return (
                     <div key={seat.id} className={`border rounded-2xl overflow-hidden ${seat.paid ? 'opacity-50 bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700' : 'bg-sky-50 dark:bg-sky-950/20 border-sky-100 dark:border-sky-900/40'}`}>
                         <div className="flex items-center justify-between px-4 py-2.5 border-b border-inherit">
@@ -29,7 +34,7 @@ export function BillSeatBreakdown({
                                 <span className="text-sm font-black text-slate-800 dark:text-white">{label}</span>
                                 {seat.paid && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">PAGADO</span>}
                             </div>
-                            <span className="text-base font-black text-slate-800 dark:text-white">{formatCOP(includeServiceCharge > 0 ? sb.subtotal + Math.round(sb.subtotal * (includeServiceCharge / 100)) : sb.subtotal)}</span>
+                            <span className="text-base font-black text-slate-800 dark:text-white">{formatCOP(seat.paid ? sb.subtotal : totalWithExtras)}</span>
                         </div>
                         <div className="px-4 py-2 space-y-1 text-xs">
                             {/* Cargos de tiempo individuales */}
@@ -81,7 +86,13 @@ export function BillSeatBreakdown({
                             {includeServiceCharge > 0 && !seat.paid && sb.subtotal > 0 && (
                                 <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold pt-1 border-t border-slate-100 dark:border-slate-800">
                                     <span>Servicio Voluntario ({includeServiceCharge}%)</span>
-                                    <span>{formatCOP(Math.round(sb.subtotal * (includeServiceCharge / 100)))}</span>
+                                    <span>{formatCOP(svcAmount)}</span>
+                                </div>
+                            )}
+                            {includeTip > 0 && !seat.paid && sb.subtotal > 0 && (
+                                <div className={`flex justify-between text-indigo-600 dark:text-indigo-400 font-bold pt-1 ${includeServiceCharge <= 0 ? 'border-t border-slate-100 dark:border-slate-800' : ''}`}>
+                                    <span>Propina ({includeTip}%)</span>
+                                    <span>{formatCOP(tipAmount)}</span>
                                 </div>
                             )}
                         </div>
@@ -89,11 +100,11 @@ export function BillSeatBreakdown({
                             <div className="px-4 pb-3">
                                 <button
                                     disabled={customDivisionMismatch}
-                                    onClick={() => onProceedToPayment(discount, itemDiscounts, seat.id, sb.subtotal, includeServiceCharge)}
+                                    onClick={() => onProceedToPayment(discount, itemDiscounts, seat.id, sb.subtotal, includeServiceCharge, includeTip)}
                                     className={`w-full py-2 rounded-xl text-xs font-black text-white flex items-center justify-center gap-1.5 active:scale-95 transition-all ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     style={{ background: customDivisionMismatch ? '#94a3b8' : 'linear-gradient(135deg, #F97316, #EA580C)' }}
                                 >
-                                    Cobrar {label} — {formatCOP(includeServiceCharge > 0 ? sb.subtotal + Math.round(sb.subtotal * (includeServiceCharge / 100)) : sb.subtotal)}
+                                    Cobrar {label} — {formatCOP(totalWithExtras)}
                                 </button>
                             </div>
                         )}

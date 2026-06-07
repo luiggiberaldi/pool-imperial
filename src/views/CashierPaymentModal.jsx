@@ -32,6 +32,12 @@ export default function CashierPaymentModal({ session, table, config, currentUse
     const [splitPeople, setSplitPeople] = useState(null);
     const [postPaymentAction, setPostPaymentAction] = useState(null);
 
+    // Service charge & tip toggles
+    const [includeServiceCharge, setIncludeServiceCharge] = useState(() => config?.defaultServiceChargeEnabled ?? true);
+    const [serviceChargePercent, setServiceChargePercent] = useState(() => config?.defaultServiceChargePercent ?? 10);
+    const [includeTip, setIncludeTip] = useState(() => config?.defaultTipEnabled ?? true);
+    const [tipPercent, setTipPercent] = useState(() => config?.defaultTipPercent ?? 8);
+
     // Customer selection state
     const { customers: allCustomers, fetchCustomers } = useCustomersStore();
     useEffect(() => { fetchCustomers(); }, []);
@@ -130,7 +136,8 @@ export default function CashierPaymentModal({ session, table, config, currentUse
         return sum + (h * finalHora) + (p * finalPina);
     }, 0) : 0;
 
-    let grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+    const baseGrandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+    let baseGrandTotalBuilt = baseGrandTotal;
     try {
         const tableCheckoutData = {
             table,
@@ -149,11 +156,15 @@ export default function CashierPaymentModal({ session, table, config, currentUse
         const result = buildTableSyntheticCart(tableCheckoutData, config, products);
         if (result && result.syntheticCart) {
             const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
-            grandTotal = totals.totalUsd || 0;
+            baseGrandTotalBuilt = totals.totalUsd || 0;
         }
     } catch (e) {
         console.error("Error calculating CashierPaymentModal grand total:", e);
     }
+
+    const serviceChargeAmt = includeServiceCharge ? Math.round(baseGrandTotalBuilt * (serviceChargePercent / 100)) : 0;
+    const tipAmt = includeTip ? Math.round(baseGrandTotalBuilt * (tipPercent / 100)) : 0;
+    const grandTotal = round2(baseGrandTotalBuilt + serviceChargeAmt + tipAmt);
 
     // ── Abonos previos del historial (solo para cierre definitivo) ──
     const priorAbonoHistory = (() => {
@@ -233,6 +244,30 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                         isWeight: false
                     });
                 }
+            }
+
+            // 2b. Inyectar Servicio y Propina como líneas de carrito separadas
+            if (serviceChargeAmt > 0) {
+                cart.push({
+                    id: `SERVICIO-${session.id}`,
+                    _originalId: `SERVICIO-${session.id}`,
+                    name: `Servicio Voluntario (${serviceChargePercent}%)`,
+                    qty: 1,
+                    priceUsd: serviceChargeAmt,
+                    isWeight: false,
+                    isServiceCharge: true,
+                });
+            }
+            if (tipAmt > 0) {
+                cart.push({
+                    id: `PROPINA-${session.id}`,
+                    _originalId: `PROPINA-${session.id}`,
+                    name: `Propina del Personal (${tipPercent}%)`,
+                    qty: 1,
+                    priceUsd: tipAmt,
+                    isWeight: false,
+                    isTip: true,
+                });
             }
 
             // 3. Preparar array de pagos
@@ -499,6 +534,72 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                 </div>
 
                 {/* Method Selector */}
+                {/* Servicio y Propina toggles */}
+                {!isAnyAbono && (
+                    <div className="space-y-2">
+                        {/* Servicio Voluntario */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 flex items-center justify-between select-none">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-950/40 rounded-lg flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                                    <span className="font-extrabold text-xs">%</span>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Servicio Voluntario</span>
+                                    <p className="text-[10px] text-slate-400">Recargo por servicio del local</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {includeServiceCharge && (
+                                    <div className="flex items-center bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border-2 border-slate-200 dark:border-slate-700 w-14 focus-within:border-emerald-500 transition-all">
+                                        <input
+                                            type="number" min="0" max="100"
+                                            value={serviceChargePercent}
+                                            onChange={(e) => { const v = parseInt(e.target.value); setServiceChargePercent(isNaN(v) ? 0 : Math.max(0, Math.min(100, v))); }}
+                                            className="w-full text-center text-xs font-black bg-transparent text-slate-800 dark:text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <span className="text-[10px] font-black text-slate-400">%</span>
+                                    </div>
+                                )}
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input type="checkbox" checked={includeServiceCharge} onChange={(e) => setIncludeServiceCharge(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-10 h-5 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Propina del Personal */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 flex items-center justify-between select-none">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-950/40 rounded-lg flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                                    <span className="font-extrabold text-xs">%</span>
+                                </div>
+                                <div>
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Propina del Personal</span>
+                                    <p className="text-[10px] text-slate-400">Propina sugerida para los meseros</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {includeTip && (
+                                    <div className="flex items-center bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border-2 border-slate-200 dark:border-slate-700 w-14 focus-within:border-indigo-500 transition-all">
+                                        <input
+                                            type="number" min="0" max="100"
+                                            value={tipPercent}
+                                            onChange={(e) => { const v = parseInt(e.target.value); setTipPercent(isNaN(v) ? 0 : Math.max(0, Math.min(100, v))); }}
+                                            className="w-full text-center text-xs font-black bg-transparent text-slate-800 dark:text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <span className="text-[10px] font-black text-slate-400">%</span>
+                                    </div>
+                                )}
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                    <input type="checkbox" checked={includeTip} onChange={(e) => setIncludeTip(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-10 h-5 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Method Selector */}
                 <div className={`grid gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl grid-cols-3 sm:grid-cols-6`}>
                     {['EFECTIVO', 'NEQUI', 'DAVIPLATA', 'TRANSFERENCIA', 'DATAFONO', ...(selectedCustomer ? ['FIADO'] : [])].map(m => (
                         <button
@@ -523,6 +624,13 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                         <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
                             {(!isAnyAbono && priorAbonoTotal > 0) ? 'Neto a Cobrar' : 'Total a pagar'}
                         </span>
+                        {!isAnyAbono && (serviceChargeAmt > 0 || tipAmt > 0) && (
+                            <span className="text-[10px] text-slate-500 mt-0.5">
+                                Base: {formatCOP(baseGrandTotalBuilt)}
+                                {serviceChargeAmt > 0 ? ` + Serv. ${serviceChargePercent}%: ${formatCOP(serviceChargeAmt)}` : ''}
+                                {tipAmt > 0 ? ` + Prop. ${tipPercent}%: ${formatCOP(tipAmt)}` : ''}
+                            </span>
+                        )}
                         {!isAnyAbono && priorAbonoTotal > 0 && (
                             <span className="text-[10px] text-slate-500 mt-0.5">
                                 Consumo: {formatCOP(grandTotal)} · Abonos: -{formatCOP(priorAbonoTotal)}

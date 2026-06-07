@@ -145,6 +145,10 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                 table_tax_mode: merged.tableTaxMode || 'inclusive',
                 tax_rate_iva: merged.taxRateIva ?? 19,
                 tax_rate_impoconsumo: merged.taxRateImpoconsumo ?? 8,
+                default_service_charge_enabled: merged.defaultServiceChargeEnabled,
+                default_service_charge_percent: merged.defaultServiceChargePercent,
+                default_tip_enabled: merged.defaultTipEnabled,
+                default_tip_percent: merged.defaultTipPercent,
                 updated_at: new Date().toISOString()
             }).eq('id', 1);
             if (error && error.message?.includes('column')) {
@@ -194,6 +198,18 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                     tableTaxMode: configData.table_tax_mode || 'inclusive',
                     taxRateIva: configData.tax_rate_iva != null ? Number(configData.tax_rate_iva) : (get().config.taxRateIva ?? 19),
                     taxRateImpoconsumo: configData.tax_rate_impoconsumo != null ? Number(configData.tax_rate_impoconsumo) : (get().config.taxRateImpoconsumo ?? 8),
+                    defaultServiceChargeEnabled: configData.default_service_charge_enabled !== undefined && configData.default_service_charge_enabled !== null 
+                        ? configData.default_service_charge_enabled 
+                        : (get().config.defaultServiceChargeEnabled ?? true),
+                    defaultServiceChargePercent: configData.default_service_charge_percent != null 
+                        ? Number(configData.default_service_charge_percent) 
+                        : (get().config.defaultServiceChargePercent ?? 10),
+                    defaultTipEnabled: configData.default_tip_enabled !== undefined && configData.default_tip_enabled !== null 
+                        ? configData.default_tip_enabled 
+                        : (get().config.defaultTipEnabled ?? true),
+                    defaultTipPercent: configData.default_tip_percent != null 
+                        ? Number(configData.default_tip_percent) 
+                        : (get().config.defaultTipPercent ?? 8),
                 };
                 set({ config: cloudConfig });
                 await tablesCache.setItem(scopedKey('pool_config'), cloudConfig);

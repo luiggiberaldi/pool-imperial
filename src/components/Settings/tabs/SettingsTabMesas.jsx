@@ -17,21 +17,33 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
     const [pricePina, setPricePina] = useState(config?.pricePina || 0);
     const [tableTaxType, setTableTaxType] = useState(config?.tableTaxType || 'exento');
     const [tableTaxMode, setTableTaxMode] = useState(config?.tableTaxMode || 'inclusive');
+    const [defaultServiceChargeEnabled, setDefaultServiceChargeEnabled] = useState(config?.defaultServiceChargeEnabled ?? true);
+    const [defaultServiceChargePercent, setDefaultServiceChargePercent] = useState(config?.defaultServiceChargePercent ?? 10);
+    const [defaultTipEnabled, setDefaultTipEnabled] = useState(config?.defaultTipEnabled ?? true);
+    const [defaultTipPercent, setDefaultTipPercent] = useState(config?.defaultTipPercent ?? 8);
 
     // Sync local state when external config changes (e.g., from another tab/device)
     const configPricePerHour = config?.pricePerHour;
     const configPricePina = config?.pricePina;
     const configTableTaxType = config?.tableTaxType;
     const configTableTaxMode = config?.tableTaxMode;
+    const configDefaultServiceChargeEnabled = config?.defaultServiceChargeEnabled;
+    const configDefaultServiceChargePercent = config?.defaultServiceChargePercent;
+    const configDefaultTipEnabled = config?.defaultTipEnabled;
+    const configDefaultTipPercent = config?.defaultTipPercent;
     useEffect(() => {
         const raf = requestAnimationFrame(() => {
             if (configPricePerHour != null) setPricePerHour(configPricePerHour);
             if (configPricePina != null) setPricePina(configPricePina);
             if (configTableTaxType != null) setTableTaxType(configTableTaxType);
             if (configTableTaxMode != null) setTableTaxMode(configTableTaxMode);
+            if (configDefaultServiceChargeEnabled != null) setDefaultServiceChargeEnabled(configDefaultServiceChargeEnabled);
+            if (configDefaultServiceChargePercent != null) setDefaultServiceChargePercent(configDefaultServiceChargePercent);
+            if (configDefaultTipEnabled != null) setDefaultTipEnabled(configDefaultTipEnabled);
+            if (configDefaultTipPercent != null) setDefaultTipPercent(configDefaultTipPercent);
         });
         return () => cancelAnimationFrame(raf);
-    }, [configPricePerHour, configPricePina, configTableTaxType, configTableTaxMode]);
+    }, [configPricePerHour, configPricePina, configTableTaxType, configTableTaxMode, configDefaultServiceChargeEnabled, configDefaultServiceChargePercent, configDefaultTipEnabled, configDefaultTipPercent]);
 
     // Form State for adding new tables
     const [tableName, setTableName] = useState(() => {
@@ -129,6 +141,10 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
             pricePinaBs: 0,
             tableTaxType,
             tableTaxMode,
+            defaultServiceChargeEnabled,
+            defaultServiceChargePercent: parseFloat(defaultServiceChargePercent) || 0,
+            defaultTipEnabled,
+            defaultTipPercent: parseFloat(defaultTipPercent) || 0,
         });
         showToast('Tarifas guardadas', 'success');
         triggerHaptic?.('light');
@@ -416,6 +432,82 @@ export default function SettingsTabMesas({ showToast, triggerHaptic }) {
                                 </CustomSelect>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Servicio Voluntario Config */}
+                    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                                    <Layers size={14} className="text-indigo-600 dark:text-indigo-400" />
+                                </div>
+                                <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Servicio Voluntario por Defecto</span>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer select-none">
+                                <input 
+                                    type="checkbox" 
+                                    checked={defaultServiceChargeEnabled} 
+                                    onChange={(e) => setDefaultServiceChargeEnabled(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-500"></div>
+                            </label>
+                        </div>
+                        {defaultServiceChargeEnabled && (
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Porcentaje de Servicio (%)</label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={defaultServiceChargePercent}
+                                        onChange={e => setDefaultServiceChargePercent(e.target.value)}
+                                        onWheel={e => e.target.blur()}
+                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all dark:text-white"
+                                    />
+                                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center font-bold text-slate-400 pointer-events-none">%</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Propina por Defecto Config */}
+                    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                                    <Trophy size={14} className="text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <span className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">Propina por Defecto</span>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer select-none">
+                                <input 
+                                    type="checkbox" 
+                                    checked={defaultTipEnabled} 
+                                    onChange={(e) => setDefaultTipEnabled(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-500"></div>
+                            </label>
+                        </div>
+                        {defaultTipEnabled && (
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Porcentaje de Propina (%)</label>
+                                <div className="relative">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        value={defaultTipPercent}
+                                        onChange={e => setDefaultTipPercent(e.target.value)}
+                                        onWheel={e => e.target.blur()}
+                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-500/30 transition-all dark:text-white"
+                                    />
+                                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center font-bold text-slate-400 pointer-events-none">%</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

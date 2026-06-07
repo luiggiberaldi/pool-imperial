@@ -497,7 +497,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
 
             {tableCheckoutData && !showTablePayment && (
                 <TableBillModal data={tableCheckoutData} onClose={() => { setTableCheckoutData(null); }}
-                    onProceedToPayment={(disc, itemDiscs, seatId, seatTotal, includeServiceCharge) => {
+                    onProceedToPayment={(disc, itemDiscs, seatId, seatTotal, includeServiceCharge, tipPct) => {
                         // Calculate discount amounts and attach to checkout data
                         const _itemDiscs = itemDiscs || {};
                         const _itemDiscAmt = (tableCheckoutData.currentItems || []).reduce((acc, item) => {
@@ -550,7 +550,9 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                         const subtotalAfterDiscounts = baseTotal - totalDiscAmt;
                         const svcPercent = typeof includeServiceCharge === 'number' ? includeServiceCharge : (includeServiceCharge ? 10 : 0);
                         const serviceChargeAmt = svcPercent > 0 ? Math.round(subtotalAfterDiscounts * (svcPercent / 100)) : 0;
-                        const finalGrandTotal = subtotalAfterDiscounts + serviceChargeAmt;
+                        const tipPercent = typeof tipPct === 'number' ? tipPct : 0;
+                        const tipAmt = tipPercent > 0 ? Math.round(subtotalAfterDiscounts * (tipPercent / 100)) : 0;
+                        const finalGrandTotal = subtotalAfterDiscounts + serviceChargeAmt + tipAmt;
 
                         setTableCheckoutData(prev => ({
                             ...prev,
@@ -558,6 +560,10 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             grandTotal: finalGrandTotal,
                             includeServiceCharge: svcPercent > 0,
                             serviceChargePercent: svcPercent,
+                            serviceChargeAmount: serviceChargeAmt,
+                            includeTip: tipPercent > 0,
+                            tipPercent: tipPercent,
+                            tipAmount: tipAmt,
                             ...(seatId ? { seatId } : {}),
                             ...(seatDisplayInfo ? { seatDisplayInfo } : { seatDisplayInfo: null }),
                         }));
