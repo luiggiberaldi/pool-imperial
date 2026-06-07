@@ -123,6 +123,27 @@ export function useSalesCheckout({
             }
         }
 
+        // 2.5 Inyectar Propina del Personal si está activa
+        const includeTip = !!tableCheckoutData.includeTip;
+        const tipPercent = tableCheckoutData.tipPercent ?? (includeTip ? 8 : 0);
+        if (includeTip && tipPercent > 0) {
+            const tipPrice = Math.round(subtotalDespuesDescuentos * (tipPercent / 100));
+            if (tipPrice > 0) {
+                syntheticCart.push({
+                    id: crypto.randomUUID(),
+                    name: `Propina del Personal (${tipPercent}%)`,
+                    priceUsdt: tipPrice,
+                    priceUsd: tipPrice,
+                    qty: 1,
+                    costUsd: 0,
+                    costBs: 0,
+                    category: 'servicios',
+                    unit: 'servicio',
+                    stock: 9999
+                });
+            }
+        }
+
         // 3. Inyectar Recargo TDC si está presente en surchargeData
         if (surchargeData && surchargeData.tdcSurcharge > 0) {
             syntheticCart.push({

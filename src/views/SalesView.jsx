@@ -587,11 +587,11 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                 };
                 const { syntheticCart } = buildTableSyntheticCart(tableCheckoutParams, tableConfig, products);
                 
+                // Calcular totales base con impuestos pero sin cargo de servicio ni propina, para calcular ambos sobre la misma base (Opción B)
+                const baseTotals = FinancialEngine.buildCartTotals(syntheticCart, discData, 1, 1);
+
                 if (tableCheckoutData.includeServiceCharge && tableCheckoutData.serviceChargePercent > 0) {
-                    // 1. Calcular totales base con impuestos pero sin cargo de servicio
-                    const baseTotals = FinancialEngine.buildCartTotals(syntheticCart, discData, 1, 1);
                     const svcPercent = tableCheckoutData.serviceChargePercent;
-                    // 2. Calcular cargo de servicio sobre el total con impuestos (tax-inclusive)
                     const serviceChargePriceVal = Math.round(baseTotals.totalUsd * (svcPercent / 100));
                     if (serviceChargePriceVal > 0) {
                         syntheticCart.push({
@@ -599,6 +599,25 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             name: `Servicio Voluntario (${svcPercent}%)`,
                             priceUsdt: serviceChargePriceVal,
                             priceUsd: serviceChargePriceVal,
+                            qty: 1,
+                            costUsd: 0,
+                            costBs: 0,
+                            category: 'servicios',
+                            unit: 'servicio',
+                            stock: 9999
+                        });
+                    }
+                }
+
+                if (tableCheckoutData.includeTip && tableCheckoutData.tipPercent > 0) {
+                    const tipPercent = tableCheckoutData.tipPercent;
+                    const tipPriceVal = Math.round(baseTotals.totalUsd * (tipPercent / 100));
+                    if (tipPriceVal > 0) {
+                        syntheticCart.push({
+                            id: crypto.randomUUID(),
+                            name: `Propina del Personal (${tipPercent}%)`,
+                            priceUsdt: tipPriceVal,
+                            priceUsd: tipPriceVal,
                             qty: 1,
                             costUsd: 0,
                             costBs: 0,

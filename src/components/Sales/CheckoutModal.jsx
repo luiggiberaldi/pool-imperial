@@ -465,7 +465,22 @@ export default function CheckoutModal({
                                                 </div>
                                             );
                                         })()}
-                                    </>
+                                        {tableContext.includeTip && tableContext.tipAmount > 0 && (
+
+                                            <div className="flex items-center justify-between px-3 py-1.5 bg-indigo-50/50 dark:bg-indigo-950/10 border-t border-indigo-100/30 dark:border-indigo-900/20 border-b border-indigo-100/30 dark:border-indigo-900/20">
+
+                                                <span className="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400">
+
+                                                    <span className="font-extrabold">%</span> Propina del Personal ({tableContext.tipPercent}%)
+
+                                                </span>
+
+                                                <span className="text-xs font-black text-indigo-700 dark:text-indigo-350">{formatCOP(tableContext.tipAmount)}</span>
+
+                                            </div>
+
+                                        )}
+</>
                                 );
                             })() : (
                                 <>
@@ -540,7 +555,38 @@ export default function CheckoutModal({
                                             </div>
                                         );
                                     })()}
-                                </>
+                                        {tableContext.includeTip && tableContext.tipAmount > 0 && (
+
+                                            <div className="flex items-center justify-between px-3 py-1.5 bg-indigo-50/50 dark:bg-indigo-950/10 border-t border-indigo-100/30 dark:border-indigo-900/20 border-b border-indigo-100/30 dark:border-indigo-900/20">
+
+                                                <span className="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400">
+
+                                                    <span className="font-extrabold">%</span> Propina del Personal ({tableContext.tipPercent}%)
+
+                                                </span>
+
+                                                <div className="flex items-center gap-1.5 shrink-0">
+
+                                                    {splitPeople > 1 && (
+
+                                                        <span className="text-[10px] text-slate-400 line-through">{formatCOP(tableContext.tipAmount)}</span>
+
+                                                    )}
+
+                                                    <span className="text-xs font-black text-indigo-700 dark:text-indigo-350">
+
+                                                        {splitPeople > 1 ? formatCOP(divR(tableContext.tipAmount, splitPeople)) : formatCOP(tableContext.tipAmount)}
+
+                                                        {splitPeople > 1 && <span className="text-[9px] font-bold text-indigo-500 ml-0.5">÷{splitPeople}</span>}
+
+                                                    </span>
+
+                                                </div>
+
+                                            </div>
+
+                                        )}
+</>
                             )}
                         </div>
                     </div>
