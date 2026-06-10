@@ -183,6 +183,17 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     let baseBeforeTaxes = grandTotal;
     let totalTax = 0;
     let taxBreakdown = {};
+    let untippedTotal = grandTotal;
+    let tipAmt = 0;
+
+    const isTipEnabled = (() => {
+        if (!session) return false;
+        const match = (session.notes || '').match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
+        if (match) return match[1] === '1';
+        return config?.defaultTipEnabled ?? false;
+    })();
+
+    const tipPercent = config?.defaultTipPercent ?? 8;
 
     try {
         const { syntheticCart } = buildTableSyntheticCart(
@@ -192,8 +203,13 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         );
         const totals = FinancialEngine.buildCartTotals(syntheticCart, { active: false }, 1, 1);
         totalTax = totals.totalTax;
-        baseBeforeTaxes = grandTotal - totalTax;
+        untippedTotal = totals.totalUsd || 0;
+        baseBeforeTaxes = untippedTotal - totalTax;
         taxBreakdown = totals.taxBreakdown;
+
+        if (isTipEnabled) {
+            tipAmt = Math.round(untippedTotal * (tipPercent / 100));
+        }
     } catch (e) {
         console.error('[generatePartialSessionTicketPDF] Error building synthetic cart taxes:', e);
     }
@@ -208,11 +224,15 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
                 push(itemRow(`${taxLabel}:`, formatCOP(taxVal), 'small'));
             }
         });
-        push(`<hr>`);
     }
 
+    if (tipAmt > 0) {
+        push(itemRow(`Propina del Personal (${tipPercent}%):`, formatCOP(tipAmt), 'bold'));
+    }
+    push(`<hr>`);
+
     const totalLabel = isAbono ? 'TOTAL ABONO:' : (hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:');
-    push(`<table class="total-table"><tr><td>${totalLabel}</td><td>${formatCOP(isAbono ? finalGrandTotal : grandTotal)}</td></tr></table>`);
+    push(`<table class="total-table"><tr><td>${totalLabel}</td><td>${formatCOP(isAbono ? finalGrandTotal : (untippedTotal + tipAmt))}</td></tr></table>`);
 
     if (historialAbonos.length > 0) {
         push(`<hr>`);

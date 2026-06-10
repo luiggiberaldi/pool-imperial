@@ -53,6 +53,18 @@ export function TotalDetailsModal({
 
     let taxBreakdown = {};
     let totalTax = 0;
+    let untippedTotal = grandTotal;
+    let tipAmt = 0;
+
+    const isTipEnabled = (() => {
+        if (!session) return false;
+        const match = (session.notes || '').match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
+        if (match) return match[1] === '1';
+        return config?.defaultTipEnabled ?? false;
+    })();
+
+    const tipPercent = config?.defaultTipPercent ?? 8;
+
     try {
         const tableCheckoutData = {
             table,
@@ -72,6 +84,10 @@ export function TotalDetailsModal({
             const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
             taxBreakdown = totals.taxBreakdown || {};
             totalTax = totals.totalTax || 0;
+            untippedTotal = totals.totalUsd || 0;
+            if (isTipEnabled) {
+                tipAmt = Math.round(untippedTotal * (tipPercent / 100));
+            }
         }
     } catch (e) {
         console.error("Error calculating tax breakdown in TotalDetailsModal:", e);
@@ -398,11 +414,21 @@ export function TotalDetailsModal({
                 </div>
                 )}
 
+                {/* Propina del Personal */}
+                {tipAmt > 0 && (
+                <div className="flex flex-col p-3 bg-indigo-55/40 dark:bg-indigo-950/15 border border-indigo-150 dark:border-indigo-900/30 rounded-xl text-sm gap-1.5">
+                    <div className="flex justify-between items-center">
+                        <span className="font-bold text-indigo-700 dark:text-indigo-400">Propina del Personal ({tipPercent}%)</span>
+                        <span className="font-black text-indigo-800 dark:text-indigo-300">{formatCOP(tipAmt)}</span>
+                    </div>
+                </div>
+                )}
+
                 {/* Total */}
                 <div className="flex justify-between items-center mt-2 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-200 dark:border-emerald-500/20">
                     <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Total Cuenta</span>
                     <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                        {formatCOP(grandTotal)}
+                        {formatCOP(untippedTotal + tipAmt)}
                     </span>
                 </div>
                 <button

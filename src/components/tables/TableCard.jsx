@@ -516,6 +516,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const grandTotal = useMemo(() => {
         const baseTotal = round2(timeCost + seatTimeCost + totalConsumption);
         if (baseTotal <= 0 || !session) return 0;
+        let totalBuilt = baseTotal;
         try {
             const tableCheckoutData = {
                 table,
@@ -533,12 +534,25 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
             const result = buildTableSyntheticCart(tableCheckoutData, config, products);
             if (result && result.syntheticCart) {
                 const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
-                return totals.totalUsd || 0;
+                totalBuilt = totals.totalUsd || 0;
             }
         } catch (e) {
             console.error("Error calculating tax-inclusive table card grand total:", e);
         }
-        return baseTotal;
+
+        const isTipEnabled = (() => {
+            const match = (session?.notes || '').match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
+            if (match) return match[1] === '1';
+            return config?.defaultTipEnabled ?? false;
+        })();
+
+        if (isTipEnabled) {
+            const tipPercent = config?.defaultTipPercent ?? 8;
+            const tipAmt = Math.round(totalBuilt * (tipPercent / 100));
+            totalBuilt = round2(totalBuilt + tipAmt);
+        }
+
+        return totalBuilt;
     }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, products]);
     // Mesa pagada sin cerrar y sin cargos nuevos agregados (ni tiempo ni consumo)
     const isPaidIdle = isPlaying && !!session?.paid_at && grandTotal === 0;

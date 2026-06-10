@@ -9,7 +9,8 @@ import {
     calculateElapsedTime, 
     calculateSessionCost, 
     calculateSessionCostBreakdown, 
-    calculateConsumptionBs 
+    calculateConsumptionBs,
+    buildTableSyntheticCart
 } from '../../utils/tableBillingEngine';
 import { round2 } from '../../utils/dinero';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
@@ -23,6 +24,7 @@ import { useCashStore } from '../../hooks/store/cashStore';
 import { generatePartialSessionTicketPDF } from '../../utils/ticketGenerator';
 import { showToast } from '../Toast';
 import { logEvent } from '../../services/auditService';
+import { FinancialEngine } from '../../core/FinancialEngine';
 
 import TableCardInlineModals from './TableCardInlineModals';
 import { TargetIcon } from './TargetIcon';
@@ -476,7 +478,48 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
         return sum + (h * finalHora) + (p * finalPina);
     }, 0) : 0;
 
-    const grandTotal = round2(timeCost + seatTimeCost + totalConsumption);
+    const grandTotal = useMemo(() => {
+        const baseTotal = round2(timeCost + seatTimeCost + totalConsumption);
+        if (baseTotal <= 0 || !session) return 0;
+        let totalBuilt = baseTotal;
+        try {
+            const tableCheckoutData = {
+                table,
+                session,
+                elapsed,
+                timeCost,
+                totalConsumption,
+                currentItems,
+                config,
+                hoursOffset,
+                roundsOffset,
+                paidHoursOffsets: {},
+                paidRoundsOffsets: {}
+            };
+            const result = buildTableSyntheticCart(tableCheckoutData, config, products);
+            if (result && result.syntheticCart) {
+                const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
+                totalBuilt = totals.totalUsd || 0;
+            }
+        } catch (e) {
+            console.error("Error calculating tax-inclusive table card grand total in TableContextPanel:", e);
+        }
+
+        const isTipEnabled = (() => {
+            const match = (session?.notes || '').match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
+            if (match) return match[1] === '1';
+            return config?.defaultTipEnabled ?? false;
+        })();
+
+        if (isTipEnabled) {
+            const tipPercent = config?.defaultTipPercent ?? 8;
+            const tipAmt = Math.round(totalBuilt * (tipPercent / 100));
+            totalBuilt = round2(totalBuilt + tipAmt);
+        }
+
+        return totalBuilt;
+    }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, products]);
+
     const isPaidIdle = isPlaying && !!session?.paid_at && grandTotal === 0;
 
     const seatHoursTotal = (session?.seats || []).reduce((sum, s) =>
