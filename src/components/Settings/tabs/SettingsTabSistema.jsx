@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Database, Palette, Upload, Download, Share2,
-    Check, Sun, Moon, ChevronRight, Trash2, AlertTriangle, FileText, RotateCcw
+    Check, Sun, Moon, ChevronRight, Trash2, AlertTriangle, FileText, RotateCcw,
+    Volume2
 } from 'lucide-react';
 import { SectionCard, Toggle } from '../../SettingsShared';
 import AuditLogViewer from '../AuditLogViewer';
@@ -29,6 +30,8 @@ export default function SettingsTabSistema({
     const { log } = useAudit();
     const confirm = useConfirm();
     const { setProducts } = useProductContext();
+
+    const [posSoundsEnabled, setPosSoundsEnabled] = useState(() => localStorage.getItem('pos_sounds_enabled') !== 'false');
 
     const handleRestoreSeedWithAudit = async () => {
         if (!isAdmin) return;
@@ -130,6 +133,27 @@ export default function SettingsTabSistema({
 
             {/* Impresora */}
             <WebSerialPanel />
+
+            {/* Efectos de Sonido */}
+            <SectionCard icon={Volume2} title="Efectos de Sonido" subtitle="Sonidos de interfaz y alertas" iconColor="text-pink-500">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Sonidos del Sistema</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Emitir pitidos al agregar productos, cobrar y en alertas</p>
+                    </div>
+                    <Toggle
+                        enabled={posSoundsEnabled}
+                        onChange={() => {
+                            const newVal = !posSoundsEnabled;
+                            setPosSoundsEnabled(newVal);
+                            localStorage.setItem('pos_sounds_enabled', newVal.toString());
+                            showToast(newVal ? 'Efectos de sonido activados' : 'Efectos de sonido desactivados', 'success');
+                            triggerHaptic?.();
+                            log('CONFIG', 'CONFIG_SISTEMA_CAMBIADA', `Sonidos ${newVal ? 'activados' : 'desactivados'}`, { setting: 'pos_sounds_enabled', value: newVal });
+                        }}
+                    />
+                </div>
+            </SectionCard>
 
             {/* Zona de Peligro */}
             {(

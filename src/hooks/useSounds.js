@@ -8,6 +8,9 @@ export function useSounds() {
     const ctxRef = useRef(null);
 
     const getCtx = useCallback(() => {
+        if (localStorage.getItem('pos_sounds_enabled') === 'false') {
+            return null;
+        }
         if (!ctxRef.current) {
             ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
         }
@@ -22,6 +25,7 @@ export function useSounds() {
     const beep = useCallback((freq, duration = 0.08, type = 'sine', vol = 0.15) => {
         try {
             const ctx = getCtx();
+            if (!ctx) return;
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.type = type;

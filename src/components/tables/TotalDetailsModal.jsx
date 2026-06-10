@@ -1,9 +1,8 @@
 import React from 'react';
-import { formatElapsedTime } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, formatHoursPaid, buildTableSyntheticCart, calculateFullTableBreakdown } from '../../utils/tableBillingEngine';
 import { Modal } from '../Modal';
 import { useProductContext } from '../../context/ProductContext';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
-import { buildTableSyntheticCart } from '../../utils/tableBillingEngine';
 import { FinancialEngine } from '../../core/FinancialEngine';
 
 // Formatea un número como peso colombiano: $ 12.500
@@ -23,6 +22,17 @@ export function TotalDetailsModal({
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
     const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
     const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
+
+    const seats = session?.seats || [];
+    const isMultiClient = seats.length > 1;
+
+    const [activeTab, setActiveTab] = React.useState('clients');
+
+    React.useEffect(() => {
+        if (isOpen) {
+            setActiveTab(isMultiClient ? 'clients' : 'general');
+        }
+    }, [isOpen, isMultiClient]);
 
     // Calcular desglose de horas/piñas de seats
     const seatHours = (session?.seats || []).reduce((sum, s) =>
@@ -65,82 +75,283 @@ export function TotalDetailsModal({
         console.error("Error calculating tax breakdown in TotalDetailsModal:", e);
     }
 
-    console.log("[TotalDetailsModal] products:", products?.length, "currentItems:", currentItems, "totalTax:", totalTax, "taxBreakdown:", taxBreakdown, "config:", config);
+    let breakdown = null;
+    if (isMultiClient) {
+        try {
+            breakdown = calculateFullTableBreakdown(
+                session,
+                seats,
+                elapsed,
+                config,
+                currentItems,
+                null,
+                null,
+                table?.type === 'NORMAL',
+                hoursOffset,
+                roundsOffset,
+                table?.type
+            );
+        } catch (e) {
+            console.error("Error calculating table breakdown in TotalDetailsModal:", e);
+        }
+    }
+
+    console.log("[TotalDetailsModal] products:", products?.length, "currentItems:", currentItems, "totalTax:", totalTax, "taxBreakdown:", taxBreakdown, "config:", config, "breakdown:", breakdown);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Detalle de Cuenta">
-             <div className="flex flex-col gap-3 py-4 text-slate-800 dark:text-white max-h-[70vh] overflow-y-auto">
-                {/* Jugadas */}
-                {table?.type !== 'NORMAL' && (costBreakdown?.hasPinas || seatPinas > 0) && (
-                <div className="flex flex-col p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/40">
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-bold text-amber-700 dark:text-amber-400">Jugadas</span>
-                        <span className="text-lg font-black">{formatCOP(costBreakdown.pinaCost || 0)}</span>
+             <div className="flex flex-col gap-3 py-4 text-slate-800 dark:text-white max-h-[70vh] overflow-y-auto pr-1">
+                {/* Selector de pestañas si hay múltiples clientes */}
+                {isMultiClient && (
+                    <div className="flex p-1 bg-slate-100 dark:bg-slate-800/40 rounded-xl mb-1 border border-slate-200/50 dark:border-white/5">
+                        <button
+                            onClick={() => setActiveTab('clients')}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                                activeTab === 'clients'
+                                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm border border-slate-200/50 dark:border-white/5'
+                                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                            }`}
+                        >
+                            <span>👥</span> Por Cliente
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('general')}
+                            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 ${
+                                activeTab === 'general'
+                                    ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm border border-slate-200/50 dark:border-white/5'
+                                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-350'
+                            }`}
+                        >
+                            <span>📋</span> Resumen General
+                        </button>
                     </div>
-                    <span className="text-xs text-amber-600 dark:text-amber-400/70">
-                        {session?.game_mode === 'PINA' ? 1 + (Number(session?.extended_times) || 0) : Number(session?.extended_times) || 0} jugada(s) · {formatCOP(finalPina)} c/u
-                    </span>
-                </div>
                 )}
 
-                {/* Tiempo de sesión (session-level hours) */}
-                {table?.type !== 'NORMAL' && costBreakdown?.hasHours && (
-                <div className="flex flex-col p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10">
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Tiempo de Juego</span>
-                        <span className="text-lg font-black">{formatCOP(costBreakdown.hourCost || 0)}</span>
-                    </div>
-                    <span className="text-xs text-slate-500">
-                        {formatElapsedTime(elapsed)} · {Number(session?.hours_paid) || 0}h pagadas
-                    </span>
-                </div>
-                )}
-
-                {/* Tiempo de seats (horas prepagadas asignadas a clientes) */}
-                {table?.type !== 'NORMAL' && seatHours > 0 && (
-                <div className="flex flex-col p-3 bg-sky-50 dark:bg-sky-950/20 rounded-xl border border-sky-200 dark:border-sky-800/40">
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-bold text-sky-700 dark:text-sky-400">Horas Prepagadas</span>
-                        <span className="text-lg font-black">{formatCOP(seatHours * finalHora)}</span>
-                    </div>
-                    <span className="text-xs text-sky-600 dark:text-sky-400/70">
-                        {seatHours === 0.5 ? '30 min' : `${seatHours}h`} · {formatCOP(finalHora)}/hora
-                    </span>
-                </div>
-                )}
-
-                {/* Fallback */}
-                {table?.type !== 'NORMAL' && !costBreakdown?.hasPinas && !costBreakdown?.hasHours && timeCost > 0 && (
-                <div className="flex flex-col p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10">
-                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Tiempo de Juego</span>
-                        <span className="text-lg font-black">{formatCOP(timeCost)}</span>
-                    </div>
-                </div>
-                )}
-
-                {/* Consumos Detallados */}
-                <div className="flex flex-col p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10">
-                    <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-200/50 dark:border-white/5">
-                        <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Consumo en Mesa</span>
-                        <span className="text-lg font-black">{formatCOP(totalConsumption)}</span>
-                    </div>
-                    {currentItems.length > 0 ? (
-                        <div className="flex flex-col gap-1.5 mt-1">
-                            {currentItems.map((item, idx) => (
-                                <div key={idx} className="flex justify-between items-start text-sm">
-                                    <span className="text-slate-700 dark:text-slate-300 font-medium">
-                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold mr-1">{item.qty}x</span>
-                                        {item.product_name}
+                {isMultiClient && activeTab === 'clients' && breakdown ? (
+                    <>
+                        {/* Consumo Compartido */}
+                        {breakdown.sharedTotal > 0 && (
+                            <div className="flex flex-col p-3 bg-indigo-50/40 dark:bg-indigo-950/15 rounded-xl border border-indigo-150 dark:border-indigo-900/30">
+                                <div className="flex justify-between items-center mb-2 pb-2 border-b border-indigo-200/30 dark:border-indigo-900/30">
+                                    <span className="text-xs font-black text-indigo-700 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                                        Consumo Compartido
                                     </span>
-                                    <span className="font-bold text-slate-800 dark:text-white">{formatCOP(item.qty * item.unit_price_usd)}</span>
+                                    <span className="text-base font-black text-indigo-800 dark:text-indigo-300">
+                                        {formatCOP(breakdown.sharedTotal)}
+                                    </span>
                                 </div>
-                            ))}
+                                <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-350">
+                                    {breakdown.sessionTimeCost?.pinaCost > 0 && (
+                                        <div className="flex justify-between">
+                                            <span>
+                                                {session?.game_mode === 'PINA' ? 1 + (Number(session?.extended_times) || 0) : Number(session?.extended_times) || 0} jugada(s) compartida(s)
+                                            </span>
+                                            <span className="font-semibold">{formatCOP(breakdown.sessionTimeCost.pinaCost)}</span>
+                                        </div>
+                                    )}
+                                    {breakdown.sessionTimeCost?.hourCost > 0 && (
+                                        <div className="flex justify-between">
+                                            <span>
+                                                Tiempo compartido ({formatHoursPaid(Number(session?.hours_paid) || 0)})
+                                            </span>
+                                            <span className="font-semibold">{formatCOP(breakdown.sessionTimeCost.hourCost)}</span>
+                                        </div>
+                                    )}
+                                    {breakdown.sessionTimeCost?.libreCost > 0 && (
+                                        <div className="flex justify-between">
+                                            <span>Tiempo de juego libre compartido ({formatElapsedTime(elapsed)})</span>
+                                            <span className="font-semibold">{formatCOP(breakdown.sessionTimeCost.libreCost)}</span>
+                                        </div>
+                                    )}
+                                    {breakdown.sharedItems.map((item, idx) => (
+                                        <div key={idx} className="flex justify-between">
+                                            <span>
+                                                <span className="text-indigo-600 dark:text-indigo-400 font-bold mr-1">{item.qty}x</span>
+                                                {item.product_name}
+                                            </span>
+                                            <span>{formatCOP(item.qty * item.unit_price_usd)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-2 pt-2 border-t border-indigo-200/30 dark:border-indigo-900/30 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
+                                    Cuota por cliente (÷{seats.filter(s => !s.paid).length}): <span className="font-bold">{formatCOP(breakdown.sharedPerSeat)}</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Cuentas de Clientes */}
+                        <div className="flex flex-col gap-2.5">
+                            {breakdown.seats.map((sb, idx) => {
+                                const seatLabel = sb.seat.label || `Cliente ${seats.indexOf(sb.seat) + 1}`;
+                                const isPaid = sb.seat.paid;
+
+                                return (
+                                    <div
+                                        key={idx}
+                                        className={`flex flex-col p-3 rounded-xl border transition-all ${
+                                            isPaid
+                                                ? 'bg-slate-100/50 dark:bg-slate-800/10 border-slate-200 dark:border-slate-800/50 opacity-60'
+                                                : 'bg-white dark:bg-slate-900/30 border-slate-200/80 dark:border-white/5 shadow-sm'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-center mb-2 pb-1.5 border-b border-slate-100 dark:border-white/5">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`flex items-center justify-center w-5 h-5 rounded-full font-bold text-[10px] ${
+                                                    isPaid 
+                                                        ? 'bg-slate-200 dark:bg-slate-800 text-slate-500' 
+                                                        : 'bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-900/20'
+                                                }`}>
+                                                    {idx + 1}
+                                                </span>
+                                                <span className={`font-bold text-sm ${isPaid ? 'text-slate-500' : 'text-slate-800 dark:text-slate-200'}`}>
+                                                    {seatLabel}
+                                                </span>
+                                            </div>
+                                            {isPaid ? (
+                                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-250/20">
+                                                    PAGADO
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs font-black text-slate-800 dark:text-white">
+                                                    Subtotal: {formatCOP(sb.subtotal)}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex flex-col gap-1.5 text-xs">
+                                            {sb.timeCost.total > 0 && (
+                                                <div className="flex flex-col gap-1 bg-slate-50/50 dark:bg-slate-950/10 p-2 rounded-lg mb-1">
+                                                    {sb.timeCost.hasPinas && (
+                                                        (() => {
+                                                            const tc = sb.seat.timeCharges?.filter(tc => tc.type === 'pina') || [];
+                                                            return (
+                                                                <div className="flex justify-between text-amber-700 dark:text-amber-400">
+                                                                    <span>{tc.length} jugada(s) individual(es)</span>
+                                                                    <span className="font-bold">{formatCOP(sb.timeCost.pinaCost)}</span>
+                                                                </div>
+                                                            );
+                                                        })()
+                                                    )}
+                                                    {sb.timeCost.hasHours && (
+                                                        (() => {
+                                                            const tc = sb.seat.timeCharges?.filter(tc => tc.type === 'hora') || [];
+                                                            const totalH = tc.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+                                                            return (
+                                                                <div className="flex justify-between text-sky-700 dark:text-sky-400">
+                                                                    <span>Tiempo individual ({formatHoursPaid(totalH)})</span>
+                                                                    <span className="font-bold">{formatCOP(sb.timeCost.hourCost)}</span>
+                                                                </div>
+                                                            );
+                                                        })()
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {sb.items.length > 0 && (
+                                                <div className="flex flex-col gap-1">
+                                                    {sb.items.map((item, itemIdx) => (
+                                                        <div key={itemIdx} className="flex justify-between text-slate-700 dark:text-slate-355">
+                                                            <span>
+                                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold mr-1">{item.qty}x</span>
+                                                                {item.product_name}
+                                                            </span>
+                                                            <span className="font-semibold text-slate-800 dark:text-white">{formatCOP(item.qty * item.unit_price_usd)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {!isPaid && sb.sharedPortion > 0 && (
+                                                <div className="flex justify-between text-slate-500 dark:text-slate-400 italic">
+                                                    <span>Parte compartida</span>
+                                                    <span>{formatCOP(sb.sharedPortion)}</span>
+                                                </div>
+                                            )}
+
+                                            {sb.items.length === 0 && sb.timeCost.total === 0 && (!isPaid && sb.sharedPortion === 0) && (
+                                                <span className="text-xs text-slate-400 italic">Sin consumos</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
-                    ) : (
-                        <span className="text-xs text-slate-400 italic">No hay consumos registrados</span>
-                    )}
-                </div>
+                    </>
+                ) : (
+                    <>
+                        {/* Jugadas */}
+                        {table?.type !== 'NORMAL' && (costBreakdown?.hasPinas || seatPinas > 0) && (
+                        <div className="flex flex-col p-3 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-800/40">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-bold text-amber-700 dark:text-amber-400">Jugadas</span>
+                                <span className="text-lg font-black">{formatCOP(costBreakdown.pinaCost || 0)}</span>
+                            </div>
+                            <span className="text-xs text-amber-600 dark:text-amber-400/70">
+                                {session?.game_mode === 'PINA' ? 1 + (Number(session?.extended_times) || 0) : Number(session?.extended_times) || 0} jugada(s) · {formatCOP(finalPina)} c/u
+                            </span>
+                        </div>
+                        )}
+
+                        {/* Tiempo de sesión (session-level hours) */}
+                        {table?.type !== 'NORMAL' && costBreakdown?.hasHours && (
+                        <div className="flex flex-col p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Tiempo de Juego</span>
+                                <span className="text-lg font-black">{formatCOP(costBreakdown.hourCost || 0)}</span>
+                            </div>
+                            <span className="text-xs text-slate-500">
+                                {formatElapsedTime(elapsed)} · {Number(session?.hours_paid) || 0}h pagadas
+                            </span>
+                        </div>
+                        )}
+
+                        {/* Tiempo de seats (horas prepagadas asignadas a clientes) */}
+                        {table?.type !== 'NORMAL' && seatHours > 0 && (
+                        <div className="flex flex-col p-3 bg-sky-50 dark:bg-sky-950/20 rounded-xl border border-sky-200 dark:border-sky-800/40">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-bold text-sky-700 dark:text-sky-400">Horas Prepagadas</span>
+                                <span className="text-lg font-black">{formatCOP(seatHours * finalHora)}</span>
+                            </div>
+                            <span className="text-xs text-sky-600 dark:text-sky-400/70">
+                                {seatHours === 0.5 ? '30 min' : `${seatHours}h`} · {formatCOP(finalHora)}/hora
+                            </span>
+                        </div>
+                        )}
+
+                        {/* Fallback */}
+                        {table?.type !== 'NORMAL' && !costBreakdown?.hasPinas && !costBreakdown?.hasHours && timeCost > 0 && (
+                        <div className="flex flex-col p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Tiempo de Juego</span>
+                                <span className="text-lg font-black">{formatCOP(timeCost)}</span>
+                            </div>
+                        </div>
+                        )}
+
+                        {/* Consumos Detallados */}
+                        <div className="flex flex-col p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-white/10">
+                            <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-200/50 dark:border-white/5">
+                                <span className="text-sm font-bold text-slate-600 dark:text-slate-300">Consumo en Mesa</span>
+                                <span className="text-lg font-black">{formatCOP(totalConsumption)}</span>
+                            </div>
+                            {currentItems.length > 0 ? (
+                                <div className="flex flex-col gap-1.5 mt-1">
+                                    {currentItems.map((item, idx) => (
+                                        <div key={idx} className="flex justify-between items-start text-sm">
+                                            <span className="text-slate-700 dark:text-slate-300 font-medium">
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold mr-1">{item.qty}x</span>
+                                                {item.product_name}
+                                            </span>
+                                            <span className="font-bold text-slate-800 dark:text-white">{formatCOP(item.qty * item.unit_price_usd)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <span className="text-xs text-slate-400 italic">No hay consumos registrados</span>
+                            )}
+                        </div>
+                    </>
+                )}
 
                 {/* Impuestos / IVA */}
                 {totalTax > 0 && (

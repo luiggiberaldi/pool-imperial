@@ -22,6 +22,7 @@ const formatCOP = (val) => {
 };
 
 let activePort = null;
+let _cachedPort = null;
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ export function clearPrinterConfig() {
     const cfg = getWebSerialConfig();
     saveWebSerialConfig({ ...cfg, printerType: null, printerBrand: null, printerModel: null });
     activePort = null;
+    _cachedPort = null;
 }
 
 // ── Port management ───────────────────────────────────────────────────────────
@@ -58,6 +60,7 @@ export async function requestPrinterPort() {
     try {
         const port = await navigator.serial.requestPort();
         activePort = port;
+        _cachedPort = port;
         return port;
     } catch (err) {
         if (err.name === 'NotFoundError') throw new Error('Cancelaste la selección del puerto.');
@@ -96,6 +99,7 @@ export async function detectAndAutoConfig() {
 
     if (!port) throw new Error('No se seleccionó ningún puerto.');
     activePort = port;
+    _cachedPort = port;
 
     // 3. Leer VID/PID
     const info = port.getInfo();
@@ -160,16 +164,22 @@ export async function sendEscPosCommand(commandArray) {
 
     console.log('[ESC/POS] ▶ sendEscPosCommand', commandArray.length, 'bytes | baud:', baud);
 
-    // Recuperar o reutilizar puerto activo
+    // Recuperar o reutilizar puerto activo o cacheado
     if (!activePort) {
-        console.log('[ESC/POS] activePort=null → buscando puertos autorizados...');
-        const ports = await navigator.serial.getPorts();
-        console.log('[ESC/POS] getPorts():', ports.length, 'puerto(s)');
-        if (ports.length === 0) {
-            throw new Error('Sin puerto autorizado. Pulsa "Detectar impresora" para reconectar.');
+        if (_cachedPort) {
+            console.log('[ESC/POS] Reutilizando _cachedPort de la memoria');
+            activePort = _cachedPort;
+        } else {
+            console.log('[ESC/POS] activePort=null y _cachedPort=null → buscando puertos autorizados...');
+            const ports = await navigator.serial.getPorts();
+            console.log('[ESC/POS] getPorts():', ports.length, 'puerto(s)');
+            if (ports.length === 0) {
+                throw new Error('Sin puerto autorizado. Pulsa "Detectar impresora" para reconectar.');
+            }
+            activePort = ports[0];
+            _cachedPort = ports[0];
+            console.log('[ESC/POS] Puerto asignado y guardado en cache:', JSON.stringify(activePort.getInfo()));
         }
-        activePort = ports[0];
-        console.log('[ESC/POS] Puerto asignado:', JSON.stringify(activePort.getInfo()));
     } else {
         console.log('[ESC/POS] Reutilizando activePort:', JSON.stringify(activePort.getInfo()));
     }

@@ -38,12 +38,14 @@ export function useSalesCheckout({
         setSalesData(prev => [result.sale, ...prev]);
         setShowReceipt(result.sale);
         playCheckout();
-        setShowConfetti(true);
-        notifyLowStock(result.updatedProducts);
-        setCart([]);
-        setShowCheckout(false);
-        setSelectedCustomerId('');
-        setCartSelectedIndex(-1);
+        setTimeout(() => {
+            setShowConfetti(true);
+            notifyLowStock(result.updatedProducts);
+            setCart([]);
+            setShowCheckout(false);
+            setSelectedCustomerId('');
+            setCartSelectedIndex(-1);
+        }, 50);
     }, [cart, cartTotalUsd, cartSubtotalUsd, discountData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, playCheckout, setShowConfetti, notifyLowStock, setCart, setShowCheckout, setSelectedCustomerId, setCartSelectedIndex, playError, triggerHaptic, effectiveRate, tasaCop, copEnabled]);
 
     const handleCheckoutWithCustomer = useCallback(async (payments, changeBreakdown, selectedCustomerId, splitMeta = null) => {
@@ -64,12 +66,14 @@ export function useSalesCheckout({
         setSalesData(prev => [result.sale, ...prev]);
         setShowReceipt(result.sale);
         playCheckout();
-        setShowConfetti(true);
-        notifyLowStock(result.updatedProducts);
-        setCart([]);
-        setShowCheckout(false);
-        setSelectedCustomerId('');
-        setCartSelectedIndex(-1);
+        setTimeout(() => {
+            setShowConfetti(true);
+            notifyLowStock(result.updatedProducts);
+            setCart([]);
+            setShowCheckout(false);
+            setSelectedCustomerId('');
+            setCartSelectedIndex(-1);
+        }, 50);
     }, [cart, cartTotalUsd, cartSubtotalUsd, discountData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, playCheckout, setShowConfetti, notifyLowStock, setCart, setShowCheckout, setSelectedCustomerId, setCartSelectedIndex, playError, triggerHaptic, effectiveRate, tasaCop, copEnabled]);
 
     const handleTableCheckout = useCallback(async (payments, changeBreakdown, selectedCustomerId, shouldRelease = null, splitMeta = null, surchargeData = null) => {
@@ -299,10 +303,12 @@ export function useSalesCheckout({
 
             setShowReceipt(result.sale);
             playCheckout();
-            setShowConfetti(true);
-            notifyLowStock(result.updatedProducts);
-            setSelectedCustomerId('');
-            setTableCheckoutData(null);
+            setTimeout(() => {
+                setShowConfetti(true);
+                notifyLowStock(result.updatedProducts);
+                setSelectedCustomerId('');
+                setTableCheckoutData(null);
+            }, 50);
             return { success: true };
         }
 
@@ -324,9 +330,11 @@ export function useSalesCheckout({
             }
             setShowReceipt(result.sale);
             playCheckout();
-            setShowConfetti(true);
-            notifyLowStock(result.updatedProducts);
-            setSelectedCustomerId('');
+            setTimeout(() => {
+                setShowConfetti(true);
+                notifyLowStock(result.updatedProducts);
+                setSelectedCustomerId('');
+            }, 50);
             return;
         }
 
@@ -346,9 +354,11 @@ export function useSalesCheckout({
 
         setShowReceipt(result.sale);
         playCheckout();
-        setShowConfetti(true);
-        notifyLowStock(result.updatedProducts);
-        setSelectedCustomerId('');
+        setTimeout(() => {
+            setShowConfetti(true);
+            notifyLowStock(result.updatedProducts);
+            setSelectedCustomerId('');
+        }, 50);
     }, [tableCheckoutData, customers, products, setProductsAfterCheckout, setCustomers, setSalesData, setShowReceipt, setTableCheckoutData, setSelectedCustomerId, setShowConfetti, playCheckout, playError, notifyLowStock, triggerHaptic, effectiveRate, tasaCop, copEnabled]);
 
     const handleCreateCustomer = useCallback(async (name, documentId, phone) => {
