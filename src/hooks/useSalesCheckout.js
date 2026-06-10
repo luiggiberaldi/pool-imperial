@@ -122,7 +122,8 @@ export function useSalesCheckout({
                     costBs: 0,
                     category: 'servicios',
                     unit: 'servicio',
-                    stock: 9999
+                    stock: 9999,
+                    isServiceCharge: true
                 });
             }
         }
@@ -143,7 +144,8 @@ export function useSalesCheckout({
                     costBs: 0,
                     category: 'servicios',
                     unit: 'servicio',
-                    stock: 9999
+                    stock: 9999,
+                    isTip: true
                 });
             }
         }

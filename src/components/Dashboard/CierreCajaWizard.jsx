@@ -21,6 +21,32 @@ export default function CierreCajaWizard({
     const [actualCop, setActualCop] = useState('');
     const [actualUsd, setActualUsd] = useState('');
 
+    const tipsBreakdown = React.useMemo(() => {
+        const tipsByUser = {};
+        let totalTips = 0;
+        
+        todaySales.forEach(s => {
+            if (s.status === 'ANULADA') return;
+            (s.items || []).forEach(item => {
+                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) {
+                    const user = s.meseroNombre || s.vendedorNombre || 'Sistema';
+                    const amt = (item.priceUsd || 0) * (item.qty || 1);
+                    if (amt > 0) {
+                        tipsByUser[user] = (tipsByUser[user] || 0) + amt;
+                        totalTips += amt;
+                    }
+                }
+            });
+        });
+        
+        return {
+            users: Object.entries(tipsByUser)
+                .map(([name, total]) => ({ name, total }))
+                .sort((a, b) => b.total - a.total),
+            total: totalTips
+        };
+    }, [todaySales]);
+
     if (!isOpen) return null;
 
     // Expected COP cash = COP starting float + COP cash payments + COP change given (negative)
@@ -208,6 +234,25 @@ export default function CierreCajaWizard({
                                                 <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md">{p.qty} uds</span>
                                             </div>
                                         ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Propinas del Personal */}
+                            {tipsBreakdown.total > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 pl-1">Propinas por Personal</h4>
+                                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 p-3.5 rounded-xl border border-indigo-100/30 dark:border-indigo-900/20 space-y-2">
+                                        {tipsBreakdown.users.map((u) => (
+                                            <div key={u.name} className="flex items-center justify-between text-xs font-bold">
+                                                <span className="text-slate-600 dark:text-slate-350">{u.name}</span>
+                                                <span className="text-slate-800 dark:text-white font-mono">{fmtCop(u.total)}</span>
+                                            </div>
+                                        ))}
+                                        <div className="border-t border-indigo-100/50 dark:border-indigo-900/30 pt-2 flex items-center justify-between font-black text-xs text-indigo-600 dark:text-indigo-400">
+                                            <span>Total Propinas</span>
+                                            <span className="font-mono">{fmtCop(tipsBreakdown.total)}</span>
+                                        </div>
                                     </div>
                                 </div>
                             )}

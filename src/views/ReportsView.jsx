@@ -49,6 +49,32 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         totalTax, taxBreakdown, netRevenue,
     } = useReportsData({ isActive, products, bcvRate, selectedRange, customFrom, customTo, activeTab, tasaCop });
 
+    const tipsBreakdown = useMemo(() => {
+        const tipsByUser = {};
+        let totalTips = 0;
+        
+        salesForStats.forEach(s => {
+            if (s.status === 'ANULADA') return;
+            (s.items || []).forEach(item => {
+                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) {
+                    const user = s.meseroNombre || s.vendedorNombre || 'Sistema';
+                    const amt = (item.priceUsd || 0) * (item.qty || 1);
+                    if (amt > 0) {
+                        tipsByUser[user] = (tipsByUser[user] || 0) + amt;
+                        totalTips += amt;
+                    }
+                }
+            });
+        });
+        
+        return {
+            users: Object.entries(tipsByUser)
+                .map(([name, total]) => ({ name, total }))
+                .sort((a, b) => b.total - a.total),
+            total: totalTips
+        };
+    }, [salesForStats]);
+
     // ── Aggregated product sales for "Por Artículo" tab ──
     const allProductsSold = useMemo(() => {
         const map = {};
@@ -308,6 +334,35 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                         tasaCop={tasaCop}
                         copEnabled={copEnabled}
                     />
+
+                    {/* Propinas del Personal */}
+                    {tipsBreakdown.total > 0 && (
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1.5">
+                                <TrendingUp size={14} className="text-indigo-500" /> Propinas por Personal
+                            </h3>
+                            <div className="space-y-4">
+                                {tipsBreakdown.users.map((d) => {
+                                    const pct = tipsBreakdown.total > 0 ? (d.total / tipsBreakdown.total) * 100 : 0;
+                                    return (
+                                        <div key={d.name}>
+                                            <div className="flex justify-between text-sm mb-1">
+                                                <span className="text-slate-600 dark:text-slate-350 font-medium">{d.name}</span>
+                                                <span className="font-bold text-slate-700 dark:text-white font-mono">{formatCop(d.total)}</span>
+                                            </div>
+                                            <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex items-center justify-between font-black text-sm text-indigo-650 dark:text-indigo-450">
+                                    <span>Total Propinas</span>
+                                    <span className="font-mono">{formatCop(tipsBreakdown.total)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Top Products */}
                     {topProducts.length > 0 && (

@@ -36,6 +36,7 @@ function _printThermalHTML(sale, _bcvRate) {
     const priorAbonoTotal = hasPriorAbonos
         ? priorAbonoPayments.reduce((s, p) => s + (p.amountUsd || 0), 0)
         : 0;
+    const totalDisplay = sale.totalCop || sale.totalUsd || 0;
 
     // ── OBTENER CONFIGURACIÓN DEL NEGOCIO ──
     const settings = {
@@ -276,7 +277,6 @@ function _printThermalHTML(sale, _bcvRate) {
     <div style="margin:8px 0;">
         ${totalsBreakdownHtml}
         ${totalsBlockHtml}
-        ${rateHtml}
     </div>
 
     <hr class="dash">

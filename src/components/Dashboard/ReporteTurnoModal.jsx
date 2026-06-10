@@ -32,6 +32,32 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
         return todaySales.reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
     }, [todaySales]);
 
+    const tipsBreakdown = useMemo(() => {
+        const tipsByUser = {};
+        let totalTips = 0;
+        
+        todaySales.forEach(s => {
+            if (s.status === 'ANULADA') return;
+            (s.items || []).forEach(item => {
+                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) {
+                    const user = s.meseroNombre || s.vendedorNombre || 'Sistema';
+                    const amt = (item.priceUsd || 0) * (item.qty || 1);
+                    if (amt > 0) {
+                        tipsByUser[user] = (tipsByUser[user] || 0) + amt;
+                        totalTips += amt;
+                    }
+                }
+            });
+        });
+        
+        return {
+            users: Object.entries(tipsByUser)
+                .map(([name, total]) => ({ name, total }))
+                .sort((a, b) => b.total - a.total),
+            total: totalTips
+        };
+    }, [todaySales]);
+
     const fecha = formatFecha(activeCashSession?.opened_at || new Date().toISOString());
     const horaApertura = formatHora(activeCashSession?.opened_at);
 
@@ -91,6 +117,16 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
             rows.push([d.label, d.total.toFixed(2), d.currency, d.count]);
         });
         rows.push([]);
+
+        if (tipsBreakdown.total > 0) {
+            rows.push(['=== PROPINAS POR PERSONAL ===']);
+            rows.push(['Usuario', 'Total Propina (COP)']);
+            tipsBreakdown.users.forEach(u => {
+                rows.push([u.name, u.total]);
+            });
+            rows.push(['Total Propinas', tipsBreakdown.total]);
+            rows.push([]);
+        }
 
         // Detalle de ventas
         rows.push(['=== DETALLE DE VENTAS ===']);
@@ -269,6 +305,32 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Propinas del Personal */}
+                    {tipsBreakdown.total > 0 && (
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <TrendingUp size={13} className="text-slate-400" />
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Propinas por Personal</p>
+                            </div>
+                            <div className="space-y-2 bg-indigo-50/50 dark:bg-indigo-900/10 p-3.5 rounded-2xl border border-indigo-100/30 dark:border-indigo-900/20">
+                                {tipsBreakdown.users.map((d) => (
+                                    <div key={d.name} className="flex items-center justify-between">
+                                        <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{d.name}</p>
+                                        <p className="text-sm font-black text-slate-800 dark:text-white font-mono">
+                                            {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(d.total)}
+                                        </p>
+                                    </div>
+                                ))}
+                                <div className="border-t border-indigo-100/50 dark:border-indigo-900/30 pt-2.5 mt-1 flex items-center justify-between font-black text-sm text-indigo-600 dark:text-indigo-400">
+                                    <p>Total Propinas</p>
+                                    <p className="font-mono">
+                                        {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(tipsBreakdown.total)}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     )}

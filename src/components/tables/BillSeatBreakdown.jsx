@@ -45,7 +45,9 @@ export function BillSeatBreakdown({
                             {seat.paid && onReleaseSeat ? (
                                 <button
                                     onClick={() => {
-                                        if (window.confirm(`¿Retirar a ${label} de la mesa? Su slot quedará libre.`)) {
+                                        const displayName = /^\d+$/.test(label) ? `Cliente ${label}` : label;
+                                        const preposition = /^\d+$/.test(label) || label.toLowerCase().startsWith('cliente') ? 'al' : 'a';
+                                        if (window.confirm(`¿Desea retirar ${preposition} ${displayName} de la mesa?\n\nSu espacio quedará disponible.`)) {
                                             onReleaseSeat(seat.id);
                                         }
                                     }}

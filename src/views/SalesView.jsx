@@ -318,7 +318,19 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                 showRateConfig={showRateConfig} setShowRateConfig={setShowRateConfig}
                 setShowKeyboardHelp={setShowKeyboardHelp} triggerHaptic={triggerHaptic} />
 
-            <TableQueuePanel onCheckoutTable={setTableCheckoutData} effectiveRate={effectiveRate} />
+            <TableQueuePanel 
+                onCheckoutTable={(data) => {
+                    setTableCheckoutData(data);
+                    if (data.seatId) {
+                        setShowTablePayment(true);
+                        const seatCustomer = data.session?.seats?.find(s => s.id === data.seatId)?.customerId;
+                        if (seatCustomer) setSelectedCustomerId(seatCustomer);
+                    } else {
+                        setShowTablePayment(false);
+                    }
+                }} 
+                effectiveRate={effectiveRate} 
+            />
 
             {!activeCashSession ? (
                 <CajaCerradaOverlay cartCount={cart.length} onOpenApertura={() => onNavigate && onNavigate('inicio')} />
@@ -604,7 +616,8 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             costBs: 0,
                             category: 'servicios',
                             unit: 'servicio',
-                            stock: 9999
+                            stock: 9999,
+                            isServiceCharge: true
                         });
                     }
                 }
@@ -623,7 +636,8 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             costBs: 0,
                             category: 'servicios',
                             unit: 'servicio',
-                            stock: 9999
+                            stock: 9999,
+                            isTip: true
                         });
                     }
                 }

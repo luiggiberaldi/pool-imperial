@@ -38,6 +38,24 @@ export async function generateDailyClosePDF({
     const CX = WIDTH / 2;
     const RIGHT = WIDTH - M;
 
+    // Calcular propinas agrupadas por usuario (meseroNombre || vendedorNombre || 'Sistema')
+    const tipsByUser = {};
+    let totalTips = 0;
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) {
+                const user = s.meseroNombre || s.vendedorNombre || 'Sistema';
+                const amt = (item.priceUsd || 0) * (item.qty || 1);
+                if (amt > 0) {
+                    tipsByUser[user] = (tipsByUser[user] || 0) + amt;
+                    totalTips += amt;
+                }
+            }
+        });
+    });
+    const tipsUserRows = Object.keys(tipsByUser).length;
+
     // Calcular altura dinámica
     const paymentRows = Object.keys(paymentBreakdown).length;
     const topProdRows = topProducts.length;
@@ -48,7 +66,8 @@ export async function generateDailyClosePDF({
         + (paymentRows * 7)
         + (topProdRows * 10)
         + (saleRows * 45)
-        + (totalTax > 0 ? 12 + (taxRows * 5) : 0);
+        + (totalTax > 0 ? 12 + (taxRows * 5) : 0)
+        + (tipsUserRows > 0 ? 12 + (tipsUserRows * 5) : 0);
 
     const doc = new jsPDF({ unit: 'mm', format: [WIDTH, H] });
 
@@ -205,6 +224,36 @@ export async function generateDailyClosePDF({
             doc.text(formatCOP(val), RIGHT, y, { align: 'right' });
             y += 5;
         });
+
+        y += 2;
+        dash(y); y += 6;
+    }
+
+    // ════════════════════════════════════
+    //  PROPINAS POR PERSONAL
+    // ════════════════════════════════════
+    if (tipsUserRows > 0) {
+        y = sectionTitle('PROPINAS POR PERSONAL', y);
+
+        Object.entries(tipsByUser).forEach(([user, total]) => {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...BODY);
+            doc.text(user, M, y);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...INK);
+            doc.text(formatCOP(total), RIGHT, y, { align: 'right' });
+            y += 5;
+        });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(...BODY);
+        doc.text('Total Propinas', M, y);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...BLUE);
+        doc.text(formatCOP(totalTips), RIGHT, y, { align: 'right' });
+        y += 5;
 
         y += 2;
         dash(y); y += 6;
