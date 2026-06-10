@@ -229,20 +229,6 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             return saleLocalDay === today;
         };
 
-        if (todayCashFlow.length > 0 || todaySales.length > 0) {
-            const allTodayForReport = sales.filter(s =>
-                !s.cajaCerrada && s.tipo !== 'APERTURA_CAJA' && isInSession(s)
-            );
-            await generateDailyClosePDF({
-                sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
-                allSales: allTodayForReport,
-                bcvRate, paymentBreakdown, topProducts: todayTopProducts,
-                todayTotalUsd, todayTotalBs, todayProfit, todayItemsSold,
-                reconData, apertura: todayApertura,
-                totalTax: dashTab === 'hoy' ? dayTotalTax : todayTotalTax,
-                taxBreakdown: dashTab === 'hoy' ? dayTaxBreakdown : todayTaxBreakdown,
-            });
-        }
         const currentCierreId = Date.now();
         const validTipos = ['VENTA','VENTA_FIADA','COBRO_DEUDA','PAGO_PROVEEDOR','APERTURA_CAJA'];
         const updatedSales = sales.map(s =>
@@ -253,7 +239,6 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         await storageService.setItem(SALES_KEY, updatedSales);
         setSales(updatedSales);
         await closeCashSession(reconData, usuarioActivo?.email || 'admin');
-        setIsCashReconOpen(false);
         showToast('Cierre de caja completado (Historial conservado)', 'success');
         auditLog('VENTA', 'CIERRE_CAJA', 'Cierre de caja completado');
 
@@ -262,6 +247,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         supabaseCloud.auth.getSession().then(({ data: { session } }) => {
             if (session?.user?.id) syncCierreMarks(affectedSales, session.user.id);
         }).catch(() => {});
+
+        return currentCierreId;
     };
 
     // ── Pull-to-refresh ──
@@ -789,9 +776,10 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 confirmText="Sí, anular" variant="danger" />
 
             <CierreCajaWizard isOpen={isCashReconOpen} onClose={() => setIsCashReconOpen(false)} onConfirm={handleConfirmCashRecon}
-                todaySales={todaySales} todayTotalUsd={todayTotalUsd} todayTotalBs={todayTotalBs} todayProfit={todayProfit}
+                todaySales={todaySales} todayCashFlow={todayCashFlow} todayTotalUsd={todayTotalUsd} todayTotalBs={todayTotalBs} todayProfit={todayProfit}
                 todayItemsSold={todayItemsSold} todayExpensesUsd={todayExpensesUsd} paymentBreakdown={paymentBreakdown}
-                todayTopProducts={todayTopProducts} bcvRate={bcvRate} copEnabled={copEnabled} tasaCop={tasaCop} isAdmin={isAdmin} />
+                todayTopProducts={todayTopProducts} bcvRate={bcvRate} copEnabled={copEnabled} tasaCop={tasaCop} isAdmin={isAdmin}
+                apertura={todayApertura} totalTax={dashTab === 'hoy' ? dayTotalTax : todayTotalTax} taxBreakdown={dashTab === 'hoy' ? dayTaxBreakdown : todayTaxBreakdown} />
 
             <AperturaCajaModal isOpen={isAperturaOpen} onClose={() => setIsAperturaOpen(false)} onConfirm={handleSaveApertura} />
 

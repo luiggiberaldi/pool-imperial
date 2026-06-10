@@ -8,7 +8,7 @@ const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
 }).format(Math.round(val || 0));
 
 // Re-exports for backward compatibility
-export { printThermalTicket } from './thermalTicketGenerator';
+export { printThermalTicket, printThermalDailyClose } from './thermalTicketGenerator';
 export { generatePartialSessionTicketPDF } from './tableTicketGenerator';
 
 /**

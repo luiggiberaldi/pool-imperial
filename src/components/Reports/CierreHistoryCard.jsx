@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, LockIcon, Printer, DollarSign, CheckCircle2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, LockIcon, Printer, DollarSign, CheckCircle2, Trash2, Download } from 'lucide-react';
 import { formatCop } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentIcon, toTitleCase, PAYMENT_ICONS } from '../../config/paymentMethods';
 import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
+import { printThermalDailyClose } from '../../utils/ticketGenerator';
 
 export default function CierreHistoryCard({ cierre, products: _products, isAdmin, onDeleteCierre }) {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -48,6 +49,48 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
             isReprint: true,
             totalTax: cierre.totalTax || 0,
             taxBreakdown: cierre.taxBreakdown || {},
+        });
+    };
+
+    const handlePrintReceipt = (e) => {
+        e.stopPropagation();
+        
+        const todayProductMap = {};
+        const prodList = _products || [];
+        const productIds = new Set(prodList.map(p => p.id));
+        const productNames = new Set(prodList.map(p => p.name.toLowerCase()));
+
+        cierre.salesForStats.forEach(s => {
+            if (s.items) {
+                s.items.forEach(item => {
+                    const nameLower = item.name?.toLowerCase();
+                    if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
+                    if (!todayProductMap[item.name]) todayProductMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
+                    todayProductMap[item.name].qty += item.qty;
+                    todayProductMap[item.name].revenue += item.priceUsd * item.qty;
+                });
+            }
+        });
+        const todayTopProducts = Object.values(todayProductMap).sort((a, b) => b.qty - a.qty).slice(0, 10);
+
+        printThermalDailyClose({
+            sales: cierre.salesForCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
+            allSales: cierre.salesForStats,
+            paymentBreakdown: cierre.paymentBreakdown,
+            topProducts: todayTopProducts,
+            todayTotalCOP: cierre.totalUsd,
+            todayProfit: 0,
+            todayItemsSold: cierre.totalItems,
+            reconData: {
+                declaredCop: cierre.declaredCop || cierre.declaredCOP || 0,
+                declaredUsd: cierre.declaredUsd || cierre.declaredUSD || 0,
+                diffCop: cierre.diffCop || cierre.diffCOP || 0,
+                diffUsd: cierre.diffUsd || cierre.diffUSD || 0
+            },
+            apertura: cierre.apertura,
+            totalTax: cierre.totalTax || 0,
+            taxBreakdown: cierre.taxBreakdown || {},
+            cierreId: cierre.cierreId
         });
     };
 
@@ -108,10 +151,16 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
 
                     <div className="pt-3 mt-1 flex gap-2">
                         <button 
-                            onClick={handlePrintPDF}
+                            onClick={handlePrintReceipt}
                             className="flex-1 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95"
                         >
-                            <Printer size={16} /> Re-imprimir PDF
+                            <Printer size={16} /> Re-imprimir Ticket
+                        </button>
+                        <button 
+                            onClick={handlePrintPDF}
+                            className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95"
+                        >
+                            <Download size={16} /> Descargar PDF
                         </button>
                         {isAdmin && onDeleteCierre && (
                             <button 

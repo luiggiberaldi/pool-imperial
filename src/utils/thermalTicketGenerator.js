@@ -2,6 +2,7 @@ import { capitalizeName } from './calculatorUtils';
 import { printReceiptEscPos, getWebSerialConfig } from '../services/webSerialPrinter';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { showToast } from '../components/Toast';
+import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 
 const formatCOP = (val) => {
     const rawVal = Math.round(val || 0);
@@ -299,6 +300,330 @@ function _printThermalHTML(sale, _bcvRate) {
     const printWindow = window.open('', '_blank', 'width=350,height=600');
     if (!printWindow) {
         // Fallback: iframe oculto
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:58mm;height:auto;';
+        document.body.appendChild(iframe);
+        iframe.contentDocument.open();
+        iframe.contentDocument.write(html);
+        iframe.contentDocument.close();
+        iframe.onload = () => {
+            setTimeout(() => {
+                iframe.contentWindow.print();
+                setTimeout(() => document.body.removeChild(iframe), 2000);
+            }, 300);
+        };
+        return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    let printed = false;
+    printWindow.onload = () => {
+        setTimeout(() => {
+            if (!printed) {
+                printed = true;
+                printWindow.onafterprint = () => printWindow.close();
+                printWindow.print();
+            }
+        }, 400);
+    };
+
+    setTimeout(() => {
+        if (!printed) {
+            printed = true;
+            try {
+                printWindow.onafterprint = () => printWindow.close();
+                printWindow.print();
+            } catch(_) {}
+        }
+    }, 1500);
+}
+
+export async function printThermalDailyClose({
+    sales = [],
+    allSales = [],
+    paymentBreakdown = {},
+    topProducts = [],
+    todayTotalCOP = 0,
+    todayProfit = 0,
+    todayItemsSold = 0,
+    reconData = null,
+    apertura = null,
+    totalTax = 0,
+    taxBreakdown = {},
+    cierreId = null
+}) {
+    const settings = {
+        name: localStorage.getItem('business_name') || 'Pool Imperial',
+        rif: localStorage.getItem('business_rif') || '',
+        address: localStorage.getItem('business_address') || '',
+        phone: localStorage.getItem('business_phone') || '',
+    };
+
+    const now = new Date(cierreId || Date.now());
+    const fecha = now.toLocaleDateString('es-CO');
+    const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+    const totalCOP = todayTotalCOP || 0;
+    const netCOP = totalCOP - totalTax;
+
+    const totalUSD = allSales
+        .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
+        .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
+
+    // Propinas por personal
+    const tipsByUser = {};
+    let totalTips = 0;
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) {
+                const user = s.meseroNombre || s.vendedorNombre || 'Sistema';
+                const amt = (item.priceUsd || 0) * (item.qty || 1);
+                if (amt > 0) {
+                    tipsByUser[user] = (tipsByUser[user] || 0) + amt;
+                    totalTips += amt;
+                }
+            }
+        });
+    });
+    const tipsUserRows = Object.keys(tipsByUser).length;
+
+    // Resumen General HTML
+    const resumenGeneralHtml = `
+        <div class="section-title">Resumen General</div>
+        <table>
+            <tr><td>Ventas realizadas</td><td style="text-align:right;font-weight:bold;">${sales.length}</td></tr>
+            <tr><td>Artículos vendidos</td><td style="text-align:right;font-weight:bold;">${todayItemsSold}</td></tr>
+            <tr><td>Ingresos Brutos COP</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalCOP)}</td></tr>
+            <tr><td>Ingresos Netos COP</td><td style="text-align:right;font-weight:bold;">${formatCOP(netCOP)}</td></tr>
+            <tr><td>Ingresos USD equiv.</td><td style="text-align:right;font-weight:bold;">$ ${totalUSD.toFixed(2)}</td></tr>
+            <tr><td>Ganancia estimada</td><td style="text-align:right;font-weight:bold;">${formatCOP(todayProfit)}</td></tr>
+        </table>
+    `;
+
+    // Pagos por Método HTML
+    let pagosMetodoHtml = '';
+    const paymentEntries = Object.entries(paymentBreakdown || {}).filter(([, d]) => d.total > 0);
+    if (paymentEntries.length > 0) {
+        pagosMetodoHtml = `
+            <div class="section-title">Pagos por Método</div>
+            <table>
+                ${paymentEntries.map(([methodId, d]) => {
+                    const label = toTitleCase(getPaymentLabel(methodId, d.label));
+                    const isUsd = d.currency === 'USD';
+                    const val = isUsd ? `$ ${d.total.toFixed(2)}` : formatCOP(d.total);
+                    return `<tr><td>${label}</td><td style="text-align:right;font-weight:bold;">${val}</td></tr>`;
+                }).join('')}
+            </table>
+        `;
+    }
+
+    // Impuestos HTML
+    let impuestosHtml = '';
+    if (totalTax > 0) {
+        impuestosHtml = `
+            <div class="section-title">Impuestos Recaudados</div>
+            <table>
+                <tr><td>Total Impuestos</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalTax)}</td></tr>
+                ${Object.entries(taxBreakdown || {}).map(([key, val]) => {
+                    if (val <= 0) return '';
+                    const config = useTablesStore.getState().config;
+                    const label = key === 'iva_19' ? `IVA ${config?.taxRateIva ?? 19}%` : key === 'impoconsumo_8' ? `Impoconsumo ${config?.taxRateImpoconsumo ?? 8}%` : key;
+                    return `<tr><td style="padding-left: 6px; color: #555;">${label}</td><td style="text-align:right;font-weight:bold;">${formatCOP(val)}</td></tr>`;
+                }).join('')}
+            </table>
+        `;
+    }
+
+    // Propinas HTML
+    let propinasHtml = '';
+    if (tipsUserRows > 0) {
+        propinasHtml = `
+            <div class="section-title">Propinas por Personal</div>
+            <table>
+                ${Object.entries(tipsByUser).map(([user, total]) => `
+                    <tr><td>${user}</td><td style="text-align:right;font-weight:bold;">${formatCOP(total)}</td></tr>
+                `).join('')}
+                <tr style="border-top:1px dashed #555;font-weight:bold;"><td>Total Propinas</td><td style="text-align:right;color:#2563eb;">${formatCOP(totalTips)}</td></tr>
+            </table>
+        `;
+    }
+
+    // Cuadre HTML
+    let cuadreHtml = '';
+    if (reconData) {
+        const openingCOP = apertura?.openingCOP || apertura?.openingUsd || 0;
+        const openingUSD = apertura?.openingBs || 0;
+
+        const expectedCOP = (paymentBreakdown['efectivo']?.total || 0) + (paymentBreakdown['efectivo_cop']?.total || 0) + (paymentBreakdown['_vuelto_cop']?.total || 0);
+        const declaredCOP = reconData.declaredCop || reconData.declaredCOP || 0;
+        const diffCOP = declaredCOP - expectedCOP;
+
+        const expectedUSD = paymentBreakdown['efectivo_usd']?.total || 0;
+        const declaredUSD = reconData.declaredUsd || reconData.declaredUSD || 0;
+        const diffUSD = declaredUSD - expectedUSD;
+
+        const getDiffStyle = (val) => val >= 0 ? 'color:#107c41;' : 'color:#dc3545;';
+
+        cuadreHtml = `
+            <div class="section-title">Cuadre de Caja</div>
+            <table>
+                <tr><td>Fondo inicial COP</td><td style="text-align:right;">${formatCOP(openingCOP)}</td></tr>
+                <tr><td>COP Esperado</td><td style="text-align:right;">${formatCOP(expectedCOP)}</td></tr>
+                <tr><td>COP Declarado</td><td style="text-align:right;font-weight:bold;">${formatCOP(declaredCOP)}</td></tr>
+                <tr style="font-weight:bold;${getDiffStyle(diffCOP)}"><td>COP Diferencia</td><td style="text-align:right;">${diffCOP >= 0 ? '+' : ''}${formatCOP(diffCOP)}</td></tr>
+                
+                <tr><td style="padding-top:4px;">Fondo inicial USD</td><td style="text-align:right;padding-top:4px;">$ ${openingUSD.toFixed(2)}</td></tr>
+                <tr><td>USD Esperado</td><td style="text-align:right;">$ ${expectedUSD.toFixed(2)}</td></tr>
+                <tr><td>USD Declarado</td><td style="text-align:right;font-weight:bold;">$ ${declaredUSD.toFixed(2)}</td></tr>
+                <tr style="font-weight:bold;${getDiffStyle(diffUSD)}"><td>USD Diferencia</td><td style="text-align:right;">${diffUSD >= 0 ? '+' : ''}$ ${diffUSD.toFixed(2)}</td></tr>
+            </table>
+        `;
+    }
+
+    // Top Products HTML
+    let topProductsHtml = '';
+    if (topProducts && topProducts.length > 0) {
+        topProductsHtml = `
+            <div class="section-title">Productos Más Vendidos</div>
+            <table style="font-size: 10px;">
+                <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
+                    <td>Cant</td><td>Producto</td><td style="text-align:right;">Ingreso</td>
+                </tr>
+                ${topProducts.map(p => `
+                    <tr>
+                        <td>${p.qty}u</td>
+                        <td>${p.name.length > 18 ? p.name.substring(0, 18) + '…' : p.name}</td>
+                        <td style="text-align:right;font-weight:bold;">${formatCOP(p.revenue)}</td>
+                    </tr>
+                `).join('')}
+            </table>
+        `;
+    }
+
+    // Sales History HTML
+    let salesHistoryHtml = '';
+    if (allSales && allSales.length > 0) {
+        salesHistoryHtml = `
+            <div class="section-title">Historial de Ventas</div>
+            <table style="font-size: 9px; line-height: 1.1;">
+                <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
+                    <td>Ref</td><td>Atend.</td><td style="text-align:right;">Total</td>
+                </tr>
+                ${allSales.map(s => {
+                    const ref = String(s.saleNumber || 0).padStart(4, '0');
+                    const staff = (s.meseroNombre || s.vendedorNombre || 'Sistema').substring(0, 8);
+                    const isCanceled = s.status === 'ANULADA';
+                    const amountStr = isCanceled ? 'ANUL.' : formatCOP(s.totalCop || s.totalUsd);
+                    const cancelStyle = isCanceled ? 'color:#dc3545;text-decoration:line-through;' : '';
+                    return `
+                        <tr style="${cancelStyle}">
+                            <td>#${ref}</td>
+                            <td>${staff}</td>
+                            <td style="text-align:right;font-weight:bold;">${amountStr}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </table>
+        `;
+    }
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Cierre de Caja</title>
+<style>
+    @page {
+        size: 58mm auto;
+        margin: 0;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: Arial, Helvetica, sans-serif;
+        width: 48mm;
+        max-width: 48mm;
+        margin: 0 auto;
+        padding: 4mm 2mm;
+        color: #000;
+        background: #fff;
+        font-weight: 600;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        line-height: 1.3;
+    }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .dash {
+        border: none;
+        border-top: 1px dashed #555;
+        margin: 4px 0;
+    }
+    .section-title {
+        font-size: 9.5px;
+        font-weight: bold;
+        color: #2563eb;
+        margin: 8px 0 3px;
+        text-transform: uppercase;
+        border-bottom: 1px solid #2563eb;
+        padding-bottom: 1px;
+    }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+    td { font-size: 10px; padding: 1.5px 0; vertical-align: top; }
+</style>
+</head>
+<body>
+    <!-- Logo -->
+    <div class="center" style="margin-bottom:6px;">
+        <img src="/logo-ticket.png" alt="Logo" style="max-width:44mm;max-height:16mm;" onerror="this.style.display='none'">
+    </div>
+
+    <!-- Info del Negocio -->
+    <div class="center" style="margin-bottom:6px;line-height:1.2;">
+        ${settings.name ? `<div class="bold" style="font-size:13px;text-transform:uppercase;">${settings.name}</div>` : ''}
+        ${settings.rif ? `<div style="font-size:9px;">NIT: ${settings.rif}</div>` : ''}
+        ${settings.address ? `<div style="font-size:9px;">${settings.address}</div>` : ''}
+        ${settings.phone ? `<div style="font-size:9px;">Tel: ${settings.phone}</div>` : ''}
+    </div>
+
+    <div class="center bold" style="font-size:12px;margin:8px 0 4px;">CIERRE DE CAJA</div>
+    <div class="center" style="font-size:9.5px;color:#555;">${fecha} ${hora}</div>
+
+    <hr class="dash">
+
+    ${resumenGeneralHtml}
+    <hr class="dash">
+    
+    ${pagosMetodoHtml}
+    ${pagosMetodoHtml ? '<hr class="dash">' : ''}
+
+    ${impuestosHtml}
+    ${impuestosHtml ? '<hr class="dash">' : ''}
+
+    ${propinasHtml}
+    ${propinasHtml ? '<hr class="dash">' : ''}
+
+    ${cuadreHtml}
+    ${cuadreHtml ? '<hr class="dash">' : ''}
+
+    ${topProductsHtml}
+    ${topProductsHtml ? '<hr class="dash">' : ''}
+
+    ${salesHistoryHtml}
+    <hr class="dash">
+
+    <!-- Pie -->
+    <div class="center bold" style="font-size:11px;margin:8px 0 4px;">Pool Imperial</div>
+    <div class="center" style="font-size:8px;color:#555;font-weight:normal;">Reporte generado automáticamente · Sin valor fiscal</div>
+    <div style="height: 35px;"></div>
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank', 'width=350,height=600');
+    if (!printWindow) {
         const iframe = document.createElement('iframe');
         iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:58mm;height:auto;';
         document.body.appendChild(iframe);

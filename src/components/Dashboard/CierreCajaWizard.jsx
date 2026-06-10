@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, AlertTriangle, TrendingUp, ShoppingBag, Package, ArrowRight, Coins, Wallet } from 'lucide-react';
+import { X, CheckCircle2, AlertTriangle, TrendingUp, ShoppingBag, Package, ArrowRight, Coins, Wallet, Printer, Download } from 'lucide-react';
 import { getPaymentLabel, getPaymentIcon, toTitleCase } from '../../config/paymentMethods';
 import { round2 } from '../../utils/dinero';
+import { printThermalDailyClose } from '../../utils/ticketGenerator';
+import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
 
 export default function CierreCajaWizard({
     isOpen,
@@ -9,17 +11,22 @@ export default function CierreCajaWizard({
     onConfirm,
     // Data from DashboardView
     todaySales = [],
+    todayCashFlow = [],
     todayTotalUsd = 0,
     todayProfit = 0,
     todayItemsSold = 0,
     todayExpensesUsd = 0,
     paymentBreakdown = {},
     todayTopProducts = [],
-    isAdmin = true
+    isAdmin = true,
+    apertura = null,
+    totalTax = 0,
+    taxBreakdown = {}
 }) {
     const [step, setStep] = useState(1);
     const [actualCop, setActualCop] = useState('');
     const [actualUsd, setActualUsd] = useState('');
+    const [cierreId, setCierreId] = useState(null);
 
     const tipsBreakdown = React.useMemo(() => {
         const tipsByUser = {};
@@ -84,24 +91,28 @@ export default function CierreCajaWizard({
         return { color: 'red', label: 'Discrepancia significativa', icon: AlertTriangle, bg: 'bg-red-500' };
     };
 
-    const handleConfirm = () => {
-        onConfirm({ 
-            declaredUsd: declaredUsd, 
-            declaredBs: 0, 
-            declaredCop, 
-            diffUsd: diffUsd, 
-            diffBs: 0, 
-            diffCop 
-        });
-        setStep(1);
-        setActualCop('');
-        setActualUsd('');
+    const handleConfirm = async () => {
+        try {
+            const currentCierreId = await onConfirm({ 
+                declaredUsd: declaredUsd, 
+                declaredBs: 0, 
+                declaredCop, 
+                diffUsd: diffUsd, 
+                diffBs: 0, 
+                diffCop 
+            });
+            setCierreId(currentCierreId || Date.now());
+            setStep(4);
+        } catch (error) {
+            console.error("Error al confirmar el cierre de caja:", error);
+        }
     };
 
     const handleClose = () => {
         setStep(1);
         setActualCop('');
         setActualUsd('');
+        setCierreId(null);
         onClose();
     };
 
@@ -126,7 +137,7 @@ export default function CierreCajaWizard({
                         </button>
                     </div>
                     <div className="flex gap-2">
-                        {[1, 2, 3].map(s => (
+                        {[1, 2, 3, 4].map(s => (
                             <div key={s} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${s <= step ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-slate-700'}`} />
                         ))}
                     </div>
@@ -134,6 +145,7 @@ export default function CierreCajaWizard({
                         <span className={`text-[10px] font-bold uppercase tracking-wider ${step >= 1 ? 'text-indigo-500' : 'text-slate-400'}`}>Resumen</span>
                         <span className={`text-[10px] font-bold uppercase tracking-wider ${step >= 2 ? 'text-indigo-500' : 'text-slate-400'}`}>Conteo</span>
                         <span className={`text-[10px] font-bold uppercase tracking-wider ${step >= 3 ? 'text-indigo-500' : 'text-slate-400'}`}>Resultado</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${step >= 4 ? 'text-indigo-500' : 'text-slate-400'}`}>Fin</span>
                     </div>
                 </div>
 
@@ -423,6 +435,90 @@ export default function CierreCajaWizard({
                             </div>
                         );
                     })()}
+
+                    {/* ═══ STEP 4: Imprimir / Finalizar ═══ */}
+                    {step === 4 && (
+                        <div className="space-y-6 text-center py-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                            <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-955/30 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-emerald-100 dark:border-emerald-900/50 shadow-inner">
+                                <CheckCircle2 size={44} className="text-emerald-500" />
+                            </div>
+                            
+                            <div>
+                                <h3 className="text-xl font-black text-slate-800 dark:text-white">¡Cierre de Caja Registrado!</h3>
+                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed max-w-[280px] mx-auto">
+                                    Los datos se guardaron y el turno se cerró correctamente. Puedes imprimir el ticket físico para control.
+                                </p>
+                            </div>
+
+                            {/* Acciones principales */}
+                            <div className="space-y-3 pt-2">
+                                <button
+                                    onClick={() => {
+                                        printThermalDailyClose({
+                                            sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
+                                            allSales: todaySales,
+                                            paymentBreakdown: paymentBreakdown,
+                                            topProducts: todayTopProducts,
+                                            todayTotalCOP: todayTotalUsd,
+                                            todayProfit: todayProfit,
+                                            todayItemsSold: todayItemsSold,
+                                            reconData: {
+                                                declaredCop,
+                                                declaredUsd,
+                                                diffCop,
+                                                diffUsd
+                                            },
+                                            apertura,
+                                            totalTax,
+                                            taxBreakdown,
+                                            cierreId: cierreId
+                                        });
+                                    }}
+                                    className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <Printer size={18} /> Imprimir Ticket (58mm)
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        generateDailyClosePDF({
+                                            sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
+                                            allSales: todaySales,
+                                            bcvRate: 0,
+                                            paymentBreakdown: paymentBreakdown,
+                                            topProducts: todayTopProducts,
+                                            todayTotalUsd: todayTotalUsd,
+                                            todayTotalBs: 0,
+                                            todayProfit: todayProfit,
+                                            todayItemsSold: todayItemsSold,
+                                            reconData: {
+                                                declaredCop,
+                                                declaredUsd,
+                                                diffCop,
+                                                diffUsd
+                                            },
+                                            apertura,
+                                            isReprint: false,
+                                            totalTax,
+                                            taxBreakdown,
+                                        });
+                                    }}
+                                    className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95"
+                                >
+                                    <Download size={16} /> Descargar Reporte PDF
+                                </button>
+                            </div>
+
+                            <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4">
+                                <button
+                                    onClick={handleClose}
+                                    className="w-full py-3 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                                >
+                                    Entendido y Finalizar
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
