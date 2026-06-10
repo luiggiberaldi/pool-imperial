@@ -36,7 +36,10 @@ export function TableQueuePanel({ onCheckoutTable }) {
         return () => {}; // don't unsubscribe — shared channel
     }, [subscribeToRealtime, subscribeOrders]);
 
-    const pendingSessions = activeSessions.filter(s => s.status === 'CHECKOUT');
+    const pendingSessions = activeSessions.filter(s => 
+        s.status === 'CHECKOUT' || 
+        (s.status === 'ACTIVE' && s.seats && s.seats.some(seat => seat.checkoutRequested && !seat.paid))
+    );
 
     if (pendingSessions.length === 0) return null;
 

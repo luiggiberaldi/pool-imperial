@@ -315,7 +315,7 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         const session = get().activeSessions.find(s => s.id === sessionId);
         if (!session) return;
         const newSeats = (session.seats || []).map(s =>
-            s.id === seatId ? { ...s, paid: true } : s
+            s.id === seatId ? { ...s, paid: true, checkoutRequested: false } : s
         );
         const allPaid = newSeats.every(s => s.paid);
         const newSessions = get().activeSessions.map(s =>
@@ -348,6 +348,42 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
             if (error) throw error;
         } catch (e) {
             await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload });
+        }
+    },
+
+    requestSeatCheckout: async (sessionId, seatId) => {
+        const session = get().activeSessions.find(s => s.id === sessionId);
+        if (!session) return;
+        const newSeats = (session.seats || []).map(s =>
+            s.id === seatId ? { ...s, checkoutRequested: true } : s
+        );
+        const newSessions = get().activeSessions.map(s =>
+            s.id === sessionId ? { ...s, seats: newSeats } : s
+        );
+        set({ activeSessions: newSessions });
+        await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
+        try {
+            await supabaseCloud.from('table_sessions').update({ seats: newSeats }).eq('id', sessionId);
+        } catch (e) {
+            await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload: { seats: newSeats } });
+        }
+    },
+
+    cancelSeatCheckoutRequest: async (sessionId, seatId) => {
+        const session = get().activeSessions.find(s => s.id === sessionId);
+        if (!session) return;
+        const newSeats = (session.seats || []).map(s =>
+            s.id === seatId ? { ...s, checkoutRequested: false } : s
+        );
+        const newSessions = get().activeSessions.map(s =>
+            s.id === sessionId ? { ...s, seats: newSeats } : s
+        );
+        set({ activeSessions: newSessions });
+        await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
+        try {
+            await supabaseCloud.from('table_sessions').update({ seats: newSeats }).eq('id', sessionId);
+        } catch (e) {
+            await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload: { seats: newSeats } });
         }
     },
 

@@ -26,14 +26,21 @@ export function BillSeatBreakdown({
                 const totalWithExtras = sb.subtotal + svcAmount + tipAmount;
 
                 return (
-                    <div key={seat.id} className={`border rounded-2xl overflow-hidden ${seat.paid ? 'opacity-50 bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700' : 'bg-sky-50 dark:bg-sky-950/20 border-sky-100 dark:border-sky-900/40'}`}>
+                    <div key={seat.id} className={`border rounded-2xl overflow-hidden ${
+                        seat.paid 
+                            ? 'opacity-50 bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700' 
+                            : seat.checkoutRequested
+                                ? 'bg-amber-50/50 dark:bg-amber-955/20 border-amber-400 dark:border-amber-900/40 animate-pulse shadow-md'
+                                : 'bg-sky-50 dark:bg-sky-955/20 border-sky-100 dark:border-sky-900/40'
+                    }`}>
                         <div className="flex items-center justify-between px-4 py-2.5 border-b border-inherit">
                             <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${seat.paid ? 'bg-emerald-200 text-emerald-700' : 'bg-sky-500 text-white'}`}>
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${seat.paid ? 'bg-emerald-200 text-emerald-700' : seat.checkoutRequested ? 'bg-amber-500 text-white' : 'bg-sky-500 text-white'}`}>
                                     {label.charAt(0).toUpperCase()}
                                 </div>
                                 <span className="text-sm font-black text-slate-800 dark:text-white">{label}</span>
                                 {seat.paid && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">PAGADO</span>}
+                                {!seat.paid && seat.checkoutRequested && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 animate-pulse">COBRO SOLICITADO</span>}
                             </div>
                             {seat.paid && onReleaseSeat ? (
                                 <button

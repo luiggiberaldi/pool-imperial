@@ -434,12 +434,17 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-1.5 mr-1">Cobrar individual:</span>
                             {seats.filter(s => !s.paid).map(seat => {
                                 const sb = seatBreakdown?.seats.find(s => s.seat.id === seat.id);
+                                const isRequested = seat.checkoutRequested === true;
                                 return (
                                     <button
                                         key={seat.id}
                                         disabled={customDivisionMismatch}
                                         onClick={() => onProceedToPayment(discount, itemDiscounts, seat.id, sb?.subtotal, includeServiceCharge ? serviceChargePercent : 0, includeTip ? tipPercent : 0)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-700/40 hover:bg-sky-100 dark:hover:bg-sky-900/30 active:scale-95 transition-all ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border active:scale-95 transition-all ${
+                                            isRequested
+                                                ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-650 animate-pulse shadow-md shadow-amber-500/20'
+                                                : 'bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-700/40 hover:bg-sky-100 dark:hover:bg-sky-900/30'
+                                        } ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
                                     >
                                         {seat.label || `P${seats.indexOf(seat) + 1}`} · {sb ? formatCOP(sb.subtotal + (includeServiceCharge ? Math.round(sb.subtotal * (serviceChargePercent / 100)) : 0) + (includeTip ? Math.round(sb.subtotal * (tipPercent / 100)) : 0)) : '$ 0'}
                                     </button>

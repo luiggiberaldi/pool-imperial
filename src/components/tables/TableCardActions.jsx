@@ -151,7 +151,7 @@ export default function TableCardActions({
                             {/* Admin y mesero pueden revertir la solicitud */}
                             <button
                                 onClick={() => onCancelCheckout(session.id)}
-                                className="w-full text-[10px] font-bold text-slate-400 hover:text-rose-400 transition-colors py-1"
+                                className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-500 dark:text-rose-455 font-extrabold text-[10px] py-2 rounded-xl transition-all active:scale-95 flex items-center justify-center gap-1 mt-0.5"
                             >
                                 Retirar solicitud
                             </button>

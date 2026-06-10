@@ -19,7 +19,7 @@ const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
     style: 'currency', currency: 'COP', minimumFractionDigits: 0
 }).format(Math.round(val || 0));
 
-export default function CashierPaymentModal({ session, table, config, currentUser, onClose, onSuccess }) {
+export default function CashierPaymentModal({ session, table, seatId = null, config, currentUser, onClose, onSuccess }) {
     const { closeSession, resetSessionAfterPayment, paidHoursOffsets, paidRoundsOffsets } = useTablesStore();
     const { cancelOrderBySessionId } = useOrdersStore();
     const { orders: allOrders, orderItems: allItems } = useOrdersStore();
@@ -118,7 +118,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
     const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
     const hoursOffset = (paidHoursOffsets || {})[session?.id] || 0;
     const roundsOffset = (paidRoundsOffsets || {})[session?.id] || 0;
-    const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
+    const timeCost = !seatId && !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
     
     const taxRate = config?.tableTaxType === 'iva_19'
         ? (config?.taxRateIva ?? 19) / 100
@@ -129,7 +129,7 @@ export default function CashierPaymentModal({ session, table, config, currentUse
     const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
     const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
 
-    const seatTimeCost = !isAnyAbono && !isTimeFree ? (session?.seats || []).filter(s => !s.paid).reduce((sum, s) => {
+    const seatTimeCost = !isAnyAbono && !isTimeFree ? (session?.seats || []).filter(s => !s.paid && (!seatId || s.id === seatId)).reduce((sum, s) => {
         const tc = (s.timeCharges || []);
         const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
         const p = tc.filter(t => tc.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
@@ -151,7 +151,8 @@ export default function CashierPaymentModal({ session, table, config, currentUse
             roundsOffset,
             paidHoursOffsets: {},
             paidRoundsOffsets: {},
-            isPartial: isAnyAbono
+            isPartial: isAnyAbono,
+            seatId
         };
         const result = buildTableSyntheticCart(tableCheckoutData, config, products);
         if (result && result.syntheticCart) {
@@ -205,45 +206,36 @@ export default function CashierPaymentModal({ session, table, config, currentUse
         if (!isReady || isProcessing) return;
         setIsProcessing(true);
         try {
-            // 1. Armar el carrito de compras a partir de currentItems
-            const cart = currentItems.map(item => {
-                return {
-                    id: item.product_id,
-                    _originalId: item.product_id,
-                    name: item.product_name,
-                    qty: item.qty,
-                    priceUsd: Number(item.unit_price_usd), // almacena COP directamente
-                    exactBs: 0,
-                    isWeight: false
-                };
-            });
-
-            // 2. Si la mesa cobró tiempo, ingresarlo como ítems separados (jugadas + horas)
-            if (timeCost > 0) {
-                const breakdown = calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, null, table.type);
-                if (breakdown.pinaCost > 0) {
-                    const pinaCount = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
-                    const billableRounds = Math.max(0, pinaCount - roundsOffset);
+            // 1. Armar el carrito de compras a partir del synthetic cart
+            const tableCheckoutData = {
+                table,
+                session,
+                elapsed,
+                timeCost: !seatId && !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0,
+                totalConsumption,
+                currentItems,
+                config,
+                hoursOffset,
+                roundsOffset,
+                paidHoursOffsets: {},
+                paidRoundsOffsets: {},
+                isPartial: isAnyAbono,
+                seatId
+            };
+            const result = buildTableSyntheticCart(tableCheckoutData, config, products);
+            const cart = [];
+            if (result && result.syntheticCart) {
+                result.syntheticCart.forEach(item => {
                     cart.push({
-                        id: `MESA-PINA-${session.id}`,
-                        _originalId: `MESA-PINA-${session.id}`,
-                        name: `Jugada ${table.name}`,
-                        qty: billableRounds,
-                        priceUsd: round2(config.pricePina || 0),
-                        isWeight: false
+                        id: item.id || item.product_id || crypto.randomUUID(),
+                        _originalId: item._originalId || item.product_id || item.id || null,
+                        name: item.name || item.product_name || 'Producto',
+                        qty: Number(item.qty) || 1,
+                        priceUsd: Number(item.priceUsd) || 0,
+                        exactBs: 0,
+                        isWeight: !!item.isWeight
                     });
-                }
-                if (breakdown.hourCost > 0) {
-                    const billableHours = Math.max(0, (Number(session.hours_paid) || 0) - hoursOffset);
-                    cart.push({
-                        id: `MESA-HORA-${session.id}`,
-                        _originalId: `MESA-HORA-${session.id}`,
-                        name: `Tiempo ${table.name} (${formatHoursPaid(billableHours)})`,
-                        qty: 1,
-                        priceUsd: round2(breakdown.hourCost),
-                        isWeight: false
-                    });
-                }
+                });
             }
 
             // 2b. Inyectar Servicio y Propina como líneas de carrito separadas
@@ -429,22 +421,48 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                 }
             }
 
-            // 6. Mostrar diálogo post-pago
-            setPostPaymentAction({
-                sessionId: session.id,
-                tableName: table.name,
-                grandTotal,
-                method: isFiado ? 'FIADO' : method,
-                customerName: selectedCustomer?.name || selectedCustomer?.nombre || null,
-                isFiado
-            });
-            showToast(
-                'Cobro Exitoso',
-                isFiado
-                    ? `Mesa ${table.name} cargada a cuenta de ${selectedCustomer?.name || selectedCustomer?.nombre}.`
-                    : `La mesa ${table.name} ha sido facturada correctamente.`,
-                'success'
-            );
+            // 6. Mostrar diálogo post-pago o marcar asiento como pagado
+            if (seatId) {
+                const allPaid = await useTablesStore.getState().markSeatAsPaid(session.id, seatId);
+                if (allPaid) {
+                    setPostPaymentAction({
+                        sessionId: session.id,
+                        tableName: table.name,
+                        grandTotal,
+                        method: isFiado ? 'FIADO' : method,
+                        customerName: selectedCustomer?.name || selectedCustomer?.nombre || null,
+                        isFiado
+                    });
+                    showToast(
+                        'Cobro Exitoso',
+                        `El último cliente fue pagado. Se requiere liberar la mesa.`,
+                        'success'
+                    );
+                } else {
+                    showToast(
+                        'Cobro Exitoso',
+                        `Cliente pagado correctamente. La mesa sigue activa con otros clientes.`,
+                        'success'
+                    );
+                    onSuccess();
+                }
+            } else {
+                setPostPaymentAction({
+                    sessionId: session.id,
+                    tableName: table.name,
+                    grandTotal,
+                    method: isFiado ? 'FIADO' : method,
+                    customerName: selectedCustomer?.name || selectedCustomer?.nombre || null,
+                    isFiado
+                });
+                showToast(
+                    'Cobro Exitoso',
+                    isFiado
+                        ? `Mesa ${table.name} cargada a cuenta de ${selectedCustomer?.name || selectedCustomer?.nombre}.`
+                        : `La mesa ${table.name} ha sido facturada correctamente.`,
+                    'success'
+                );
+            }
         } catch (error) {
             console.error(error);
             showToast('Error de Cierre', 'No se pudo procesar el pago finalizado.', 'error');
@@ -453,9 +471,12 @@ export default function CashierPaymentModal({ session, table, config, currentUse
         }
     };
 
+    const seat = seatId && session?.seats ? session.seats.find(s => s.id === seatId) : null;
+    const titleText = seat ? `Cobro: ${table.name} - ${seat.label || 'Cliente'}` : `Cobro: ${table.name}`;
+
     return (
         <>
-        <Modal isOpen={!postPaymentAction} onClose={onClose} title={`Cobro: ${table.name}`}>
+        <Modal isOpen={!postPaymentAction} onClose={onClose} title={titleText}>
             <div className="flex flex-col gap-4 py-2">
 
                 {(() => {
@@ -645,40 +666,42 @@ export default function CashierPaymentModal({ session, table, config, currentUse
                 </div>
 
                 {/* Split Bill */}
-                <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
-                        <Users size={12} /> Dividir Cuenta
-                    </label>
-                    <div className="flex gap-2 flex-wrap">
-                        {[2, 3, 4, 5, 6].map(n => (
-                            <button
-                                key={n}
-                                onClick={() => setSplitPeople(splitPeople === n ? null : n)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all border ${
-                                    splitPeople === n
-                                        ? 'bg-violet-500 text-white border-violet-500 shadow-md shadow-violet-500/30'
-                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'
-                                }`}
-                            >
-                                {n} personas
-                            </button>
-                        ))}
-                    </div>
-                    {splitPeople && grandTotal > 0 && (
-                        <div className="mt-1 p-3 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700/40 rounded-xl flex items-center justify-between">
-                            <div>
-                                <p className="text-xs font-bold text-violet-700 dark:text-violet-400 uppercase tracking-widest">
-                                    Por persona ({splitPeople})
-                                </p>
-                            </div>
-                            <div className="flex flex-col items-end">
-                                <span className="text-xl font-black text-violet-700 dark:text-violet-300 leading-none">
-                                    {formatCOP(divR(grandTotal, splitPeople))}
-                                </span>
-                            </div>
+                {!seatId && (
+                    <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                            <Users size={12} /> Dividir Cuenta
+                        </label>
+                        <div className="flex gap-2 flex-wrap">
+                            {[2, 3, 4, 5, 6].map(n => (
+                                <button
+                                    key={n}
+                                    onClick={() => setSplitPeople(splitPeople === n ? null : n)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all border ${
+                                        splitPeople === n
+                                            ? 'bg-violet-500 text-white border-violet-500 shadow-md shadow-violet-500/30'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-violet-400'
+                                    }`}
+                                >
+                                    {n} personas
+                                </button>
+                            ))}
                         </div>
-                    )}
-                </div>
+                        {splitPeople && grandTotal > 0 && (
+                            <div className="mt-1 p-3 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700/40 rounded-xl flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs font-bold text-violet-700 dark:text-violet-400 uppercase tracking-widest">
+                                        Por persona ({splitPeople})
+                                    </p>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className="text-xl font-black text-violet-700 dark:text-violet-300 leading-none">
+                                        {formatCOP(divR(grandTotal, splitPeople))}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Fiado notice OR denomination inputs */}
                 {isFiado ? (

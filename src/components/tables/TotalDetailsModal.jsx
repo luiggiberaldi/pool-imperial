@@ -20,6 +20,8 @@ export function TotalDetailsModal({
     const { products } = useProductContext();
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
+    const requestSeatCheckout = useTablesStore(state => state.requestSeatCheckout);
+    const cancelSeatCheckoutRequest = useTablesStore(state => state.cancelSeatCheckoutRequest);
     const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
     const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
 
@@ -182,8 +184,9 @@ export function TotalDetailsModal({
                         {/* Cuentas de Clientes */}
                         <div className="flex flex-col gap-2.5">
                             {breakdown.seats.map((sb, idx) => {
-                                const seatLabel = sb.seat.label || `Cliente ${seats.indexOf(sb.seat) + 1}`;
-                                const isPaid = sb.seat.paid;
+                                const seat = sb.seat;
+                                const seatLabel = seat.label || `Cliente ${seats.indexOf(seat) + 1}`;
+                                const isPaid = seat.paid;
 
                                 return (
                                     <div
@@ -212,9 +215,35 @@ export function TotalDetailsModal({
                                                     PAGADO
                                                 </span>
                                             ) : (
-                                                <span className="text-xs font-black text-slate-800 dark:text-white">
-                                                    Subtotal: {formatCOP(sb.subtotal)}
-                                                </span>
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <span className="text-xs font-black text-slate-850 dark:text-white">
+                                                        Subtotal: {formatCOP(sb.subtotal)}
+                                                    </span>
+                                                    {seat.checkoutRequested ? (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[8px] font-black bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse">
+                                                                En Cobro
+                                                            </span>
+                                                            <button
+                                                                onClick={async () => {
+                                                                    await cancelSeatCheckoutRequest(session.id, seat.id);
+                                                                }}
+                                                                className="text-[9px] font-extrabold text-rose-500 hover:text-rose-400 hover:underline transition-all"
+                                                            >
+                                                                Cancelar
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={async () => {
+                                                                await requestSeatCheckout(session.id, seat.id);
+                                                            }}
+                                                            className="text-[9px] font-bold bg-sky-50 dark:bg-sky-900/20 hover:bg-sky-100 text-sky-650 dark:text-sky-400 border border-sky-200 dark:border-sky-700/40 px-1.5 py-0.5 rounded transition-all active:scale-95"
+                                                        >
+                                                            Solicitar Cobro
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
 
