@@ -36,7 +36,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
     const [transactionModal, setTransactionModal] = useState({ isOpen: false, type: null, customer: null });
     const [transactionAmount, setTransactionAmount] = useState('');
     const [currencyMode, setCurrencyMode] = useState('BS');
-    const [paymentMethod, setPaymentMethod] = useState('efectivo_bs');
+    const [paymentMethod, setPaymentMethod] = useState('efectivo');
     const [activePaymentMethods, setActivePaymentMethods] = useState([]);
     const [resetBalanceCustomer, setResetBalanceCustomer] = useState(null);
     const { effectiveRate: bcvRate, tasaCop, copEnabled } = useProductContext();
@@ -69,6 +69,11 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
         setSuppliers(savedSuppliers);
         setInvoices(savedInvoices);
         setActivePaymentMethods(savedMethods);
+        
+        const filtered = savedMethods.filter(m => m.currency === 'COP');
+        if (filtered.length > 0) {
+            setPaymentMethod(filtered[0].id);
+        }
     };
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -144,7 +149,12 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
             `${transactionModal.type} de ${transactionAmount} COP para ${transactionModal.customer?.name}`);
         setTransactionModal({ isOpen: false, type: null, customer: null });
         setTransactionAmount('');
-        setPaymentMethod('efectivo');
+        const filtered = activePaymentMethods.filter(m => m.currency === 'COP');
+        if (filtered.length > 0) {
+            setPaymentMethod(filtered[0].id);
+        } else {
+            setPaymentMethod('efectivo');
+        }
     };
 
     // ── LÓGICA DE PROVEEDORES ──

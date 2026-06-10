@@ -10,59 +10,7 @@ import './index.css'
 // ── ELIMINACIÓN TEMPORAL CORRELATIVO 7 Y HOMOLOGACIÓN EN LA NUBE ──
 (async () => {
   try {
-    // --- DIAGNÓSTICO EN CONSOLA ---
-    try {
-      const sessionData = await supabaseCloud.auth.getSession();
-      if (sessionData.data?.session?.user) {
-        const email = sessionData.data.session.user.email;
-        const uid = sessionData.data.session.user.id;
-        console.log('🔑 [Diagnóstico] Usuario:', email, 'ID:', uid);
 
-        // 1. Consultar sync_documents
-        const { data: syncDocs } = await supabaseCloud
-          .from('sync_documents')
-          .select('doc_id, collection, updated_at')
-          .eq('user_id', uid);
-        console.log('📂 [Diagnóstico] Keys en sync_documents:', syncDocs?.map(d => d.doc_id));
-
-        // 2. Consultar cloud_backups
-        const { data: backup } = await supabaseCloud
-          .from('cloud_backups')
-          .select('email, updated_at, backup_data')
-          .eq('email', email)
-          .maybeSingle();
-        if (backup?.backup_data) {
-          const keys = Object.keys(backup.backup_data.data?.idb || {});
-          console.log('📦 [Diagnóstico] Keys en cloud_backups:', keys);
-          const backupCust = backup.backup_data.data?.idb?.bodega_customers_v1 || 
-                             backup.backup_data.data?.idb?.pool_imperial_customers_v1 ||
-                             backup.backup_data.data?.idb?.my_customers_v1;
-          console.log('👥 [Diagnóstico] Clientes en cloud_backup:', backupCust?.length, backupCust);
-        } else {
-          console.log('📦 [Diagnóstico] No se encontró backup en cloud_backups');
-        }
-
-        // 3. Consultar tabla pool_customers
-        const { data: poolCustRows, error: poolCustErr } = await supabaseCloud
-          .from('pool_customers')
-          .select('*');
-        console.log('👥 [Diagnóstico] Tabla pool_customers rows:', poolCustRows, poolCustErr);
-
-        // 4. Consultar IndexedDB local
-        const localKeys = [
-          'bodega_customers_v1',
-          'pool_imperial_customers_v1',
-          'my_customers_v1',
-          'customers'
-        ];
-        for (const k of localKeys) {
-          const val = await storageService.getItem(k);
-          console.log(`🏠 [Diagnóstico] Local IndexedDB key "${k}":`, val?.length, val);
-        }
-      }
-    } catch (diagErr) {
-      console.error('❌ [Diagnóstico] Error:', diagErr);
-    }
 
     // --- PLAN B: RECONSTRUCCIÓN DE CLIENTES DESDE VENTAS ---
     try {
@@ -278,7 +226,6 @@ import './index.css'
     const { data: { session } } = await supabaseCloud.auth.getSession();
     if (session?.user?.id) {
       const userId = session.user.id;
-      console.log(`☁️ [Homologación] Iniciando homologación de la nube para user_id: ${userId}`);
 
       // Consultar documentos actuales para ver qué hay en la nube
       const { data: docs, error: queryErr } = await supabaseCloud
@@ -290,7 +237,6 @@ import './index.css'
         console.error('❌ [Homologación] Error consultando sync_documents:', queryErr.message);
       } else if (docs) {
         const docIds = docs.map(d => d.doc_id);
-        console.log('📊 [Homologación] Documentos actuales en Supabase:', docIds);
 
         const oldCustDoc = docs.find(d => d.doc_id === 'pool_imperial_customers_v1');
         const newCustDoc = docs.find(d => d.doc_id === 'bodega_customers_v1');
@@ -301,7 +247,6 @@ import './index.css'
 
         // FUSIONAR CLIENTES
         if (oldCustDoc) {
-          console.log('🔄 [Homologación] Fusionando pool_imperial_customers_v1 con bodega_customers_v1...');
           const oldCustomers = oldCustDoc.data?.payload || [];
           const newCustomers = newCustDoc?.data?.payload || [];
           // Intentar mezclar también con los del IndexedDB local actual
@@ -341,7 +286,6 @@ import './index.css'
           if (upsertErr) {
             console.error('❌ [Homologación] Error al subir bodega_customers_v1 consolidado:', upsertErr.message);
           } else {
-            console.log('✅ [Homologación] Clientes consolidados subidos bajo bodega_customers_v1.');
             // Guardar localmente silencioso
             await storageService.setItemSilent('bodega_customers_v1', consolidatedCustomers);
             window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: 'bodega_customers_v1' } }));
@@ -357,7 +301,6 @@ import './index.css'
             if (deleteErr) {
               console.error('❌ [Homologación] Error al borrar pool_imperial_customers_v1:', deleteErr.message);
             } else {
-              console.log('✅ [Homologación] Clave vieja pool_imperial_customers_v1 borrada con éxito.');
               migratedSomething = true;
             }
           }
@@ -365,7 +308,6 @@ import './index.css'
 
         // FUSIONAR PRODUCTOS
         if (oldProdDoc) {
-          console.log('🔄 [Homologación] Fusionando pool_imperial_products_v1 con bodega_products_v1...');
           const oldProducts = oldProdDoc.data?.payload || [];
           const newProducts = newProdDoc?.data?.payload || [];
           const localProducts = await storageService.getItem('bodega_products_v1', []);
@@ -401,7 +343,6 @@ import './index.css'
           if (upsertErr) {
             console.error('❌ [Homologación] Error al subir bodega_products_v1 consolidado:', upsertErr.message);
           } else {
-            console.log('✅ [Homologación] Productos consolidados subidos bajo bodega_products_v1.');
             // Guardar localmente silencioso
             await storageService.setItemSilent('bodega_products_v1', consolidatedProducts);
             window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: 'bodega_products_v1' } }));
@@ -417,7 +358,6 @@ import './index.css'
             if (deleteErr) {
               console.error('❌ [Homologación] Error al borrar pool_imperial_products_v1:', deleteErr.message);
             } else {
-              console.log('✅ [Homologación] Clave vieja pool_imperial_products_v1 borrada con éxito.');
               migratedSomething = true;
             }
           }
@@ -426,8 +366,6 @@ import './index.css'
         if (migratedSomething) {
           alert('¡Sincronización y Homologación completadas! Se fusionaron clientes/productos antiguos de la nube en la nueva versión. Recargando la aplicación...');
           window.location.reload();
-        } else {
-          console.log('☁️ [Homologación] La nube ya está homologada y limpia.');
         }
       }
     }

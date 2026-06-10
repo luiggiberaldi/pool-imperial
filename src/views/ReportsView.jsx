@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent } from 'lucide-react';
+import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent, Trash2 } from 'lucide-react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatCop, formatUsd } from '../utils/calculatorUtils';
 import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
@@ -13,6 +13,10 @@ import CierreHistoryCard from '../components/Reports/CierreHistoryCard';
 import TransactionRow from '../components/Reports/TransactionRow';
 import PaymentBreakdownCard from '../components/Reports/PaymentBreakdownCard';
 import { useReportsData } from '../hooks/useReportsData';
+import { useAuthStore } from '../hooks/store/authStore';
+import { useCashStore } from '../hooks/store/cashStore';
+import { storageService } from '../utils/storageService';
+
 
 const RANGE_OPTIONS = [
     { id: 'today', label: 'Hoy' },
@@ -25,6 +29,9 @@ const RANGE_OPTIONS = [
 export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, isActive }) {
     const { products, setProducts, effectiveRate: bcvRate, copEnabled, tasaCop } = useProductContext();
     const { loadCart } = useCart();
+    const { role } = useAuthStore();
+    const isAdmin = role === 'ADMIN';
+    const [cierreToDelete, setCierreToDelete] = useState(null);
     const [activeTab, setActiveTab] = useState('metrics');
     const [selectedRange, setSelectedRange] = useState('week');
     const [customFrom, setCustomFrom] = useState('');
@@ -116,6 +123,81 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
             setRecycleOffer(sale);
         } catch (error) {
             console.error('Error anulando venta:', error);
+        }
+    };
+
+    const handleDeleteCierre = async (cierreId, shouldReopen = true) => {
+        const salesInCierre = allSales.filter(s => s.cierreId === cierreId);
+        if (salesInCierre.length === 0) {
+            return;
+        }
+
+        // 1. Modificar localmente
+        const updatedSales = allSales.map(s => {
+            if (s.cierreId === cierreId) {
+                if (shouldReopen) {
+                    return { ...s, cajaCerrada: false, cierreId: null };
+                } else {
+                    return { ...s, cierreId: null };
+                }
+            }
+            return s;
+        });
+
+        // 2. Guardar localmente
+        await storageService.setItem('bodega_sales_v1', updatedSales);
+        setAllSales(updatedSales);
+        window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: 'bodega_sales_v1' } }));
+
+        // 3. Sincronizar en la nube
+        try {
+            const { supabaseCloud } = await import('../config/supabaseCloud');
+            const { data: { session } } = await supabaseCloud.auth.getSession();
+            if (session?.user?.id) {
+                const { syncCierreMarks } = await import('../utils/salesSyncService');
+                const salesToSync = updatedSales.filter(s => salesInCierre.some(sic => sic.id === s.id));
+                await syncCierreMarks(salesToSync, session.user.id);
+            }
+        } catch (e) {
+            console.error('Error al sincronizar marcas de cierre a la nube:', e);
+        }
+
+        // 4. Reabrir sesión de caja en Supabase si corresponde y si se solicitó reabrir
+        if (shouldReopen) {
+            try {
+                const { supabaseCloud } = await import('../config/supabaseCloud');
+                const { data: lastClosedSession } = await supabaseCloud
+                    .from('cash_sessions')
+                    .select('*')
+                    .eq('status', 'CLOSED')
+                    .order('closed_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (lastClosedSession) {
+                    const sessionCloseTime = new Date(lastClosedSession.closed_at).getTime();
+                    const diffMs = Math.abs(sessionCloseTime - cierreId);
+                    
+                    // Si el cierre coincide en menos de 5 minutos, reabrimos la sesión
+                    if (diffMs < 5 * 60 * 1000) {
+                        const { error } = await supabaseCloud
+                            .from('cash_sessions')
+                            .update({
+                                status: 'OPEN',
+                                closed_at: null,
+                                final_cash_usd: 0
+                            })
+                            .eq('id', lastClosedSession.id);
+
+                        if (!error) {
+                            console.log('[Caja] Sesión de caja reabierta en Supabase ✓');
+                            await useCashStore.getState().syncCashSession(true);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Error al intentar reabrir la sesión de caja:', err);
+            }
         }
     };
 
@@ -589,7 +671,14 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     {groupedClosings.length > 0 ? (
                         groupedClosings.map(cierre => (
-                            <CierreHistoryCard key={cierre.cierreId} cierre={cierre} bcvRate={bcvRate} products={products} />
+                            <CierreHistoryCard 
+                                key={cierre.cierreId} 
+                                cierre={cierre} 
+                                bcvRate={bcvRate} 
+                                products={products} 
+                                isAdmin={isAdmin}
+                                onDeleteCierre={(cId) => setCierreToDelete(cId)}
+                            />
                         ))
                     ) : (
                         <div className="mt-8">
@@ -643,6 +732,64 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                 message={'Esta accion:\n- Marcara la venta como ANULADA\n- Devolvera el stock a la bodega\n- Revertira deudas o saldos a favor\n\nEsta accion no se puede deshacer.'}
                 confirmText="Si, anular"
             />
+
+            {/* Custom Delete Cierre Modal with options */}
+            {cierreToDelete && (
+                <div className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={() => setCierreToDelete(null)}>
+                    <div className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-6 max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200 relative"
+                        onClick={e => e.stopPropagation()}>
+
+                        {/* Close button */}
+                        <button onClick={() => setCierreToDelete(null)} className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                            <X size={16} />
+                        </button>
+
+                        {/* Icon */}
+                        <div className="w-14 h-14 bg-red-50 dark:bg-red-900/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <Trash2 size={28} className="text-red-500" />
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white text-center mb-2">Eliminar Cierre de Caja</h3>
+
+                        {/* Message */}
+                        <p className="text-xs text-slate-500 dark:text-slate-400 text-center leading-relaxed mb-6">
+                            Elige cómo deseas proceder con este cierre de caja del historial:
+                        </p>
+
+                        {/* Actions */}
+                        <div className="flex flex-col gap-2.5 w-full">
+                            <button
+                                onClick={async () => {
+                                    const cId = cierreToDelete;
+                                    setCierreToDelete(null);
+                                    await handleDeleteCierre(cId, true);
+                                }}
+                                className="w-full py-3.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-600/20 active:scale-95 transition-all text-center"
+                            >
+                                Reabrir Turno y Activar Ventas
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    const cId = cierreToDelete;
+                                    setCierreToDelete(null);
+                                    await handleDeleteCierre(cId, false);
+                                }}
+                                className="w-full py-3.5 text-xs font-black text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-900/20 rounded-xl active:scale-95 transition-all text-center"
+                            >
+                                Solo Borrar Cierre (Ventas se quedan cerradas)
+                            </button>
+                            <button
+                                onClick={() => setCierreToDelete(null)}
+                                className="w-full py-3 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-center"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

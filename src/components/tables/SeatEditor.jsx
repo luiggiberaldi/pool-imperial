@@ -28,7 +28,7 @@ function ClientRow({ seat, index, onUpdate, onRemove, onSearchCustomer, duplicat
                             </span>
                         )}
                         <button
-                            onClick={() => onUpdate({ ...seat, customerId: null })}
+                            onClick={() => onUpdate({ ...seat, customerId: null, label: '' })}
                             className="p-0.5 rounded text-slate-400 hover:text-red-400 transition-colors"
                         >
                             <X size={12} />

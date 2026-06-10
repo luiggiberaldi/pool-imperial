@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Search, Users, UserPlus, Check, CreditCard, Phone } from 'lucide-react';
 import { showToast } from '../Toast';
 
@@ -41,7 +42,7 @@ export function CustomerSheet({ customers, selectedId, onSelect, onClose, onCrea
         finally { setSaving(false); }
     };
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center" onClick={e => e.target === e.currentTarget && onClose()}>
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150" onClick={onClose} />
             <div className="relative z-10 w-full sm:max-w-sm bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[85vh] sm:max-h-[75vh] flex flex-col animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
@@ -242,6 +243,7 @@ export function CustomerSheet({ customers, selectedId, onSelect, onClose, onCrea
                     </>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

@@ -1,6 +1,6 @@
 import { storageService } from './storageService';
 import { procesarImpactoCliente } from './financialLogic';
-import { round2, divR, mulR } from './dinero';
+import { round2 } from './dinero';
 
 /**
  * Procesa la lógica de abonar o endeudar a un cliente desde el TransactionModal.
@@ -8,40 +8,35 @@ import { round2, divR, mulR } from './dinero';
  */
 export async function processCustomerTransaction({
     transactionAmount, 
-    currencyMode, 
+    currencyMode: _currencyMode, 
     type, 
     customer, 
     paymentMethod, 
-    bcvRate, 
-    tasaCop, 
-    copEnabled
+    bcvRate: _bcvRate, 
+    tasaCop: _tasaCop, 
+    copEnabled: _copEnabled
 }) {
-    // 1. Convert to float and USD (with precision)
+    // En Pool Imperial todo se maneja en COP
     const rawAmount = parseFloat(transactionAmount);
-    let amountUsd = round2(rawAmount);
-    if (currencyMode === 'BS' && bcvRate > 0) amountUsd = divR(rawAmount, bcvRate);
-    if (currencyMode === 'COP' && tasaCop > 0) amountUsd = divR(rawAmount, tasaCop);
+    const amountCop = round2(rawAmount);
 
-    // 2. Financial quadrant logic
+    // Lógica financiera
     let transaccionOpts = {};
     if (type === 'ABONO') {
-        transaccionOpts = { costoTotal: 0, pagoReal: amountUsd, vueltoParaMonedero: amountUsd };
+        transaccionOpts = { costoTotal: 0, pagoReal: amountCop, vueltoParaMonedero: amountCop };
     } else if (type === 'CREDITO') {
-        transaccionOpts = { esCredito: true, deudaGenerada: amountUsd };
+        transaccionOpts = { esCredito: true, deudaGenerada: amountCop };
     }
 
     const updatedCustomer = procesarImpactoCliente(customer, transaccionOpts);
 
-    // 3. Update customer storage
+    // Actualizar clientes
     const customers = await storageService.getItem('bodega_customers_v1', []);
     const newCustomers = customers.map(c => c.id === customer.id ? updatedCustomer : c);
     await storageService.setItem('bodega_customers_v1', newCustomers);
 
-    // 4. Update sales storage
+    // Actualizar ventas
     const sales = await storageService.getItem('bodega_sales_v1', []);
-    const totalEnBs = currencyMode === 'BS' ? rawAmount : mulR(rawAmount, bcvRate);
-    const totalEnUsd = amountUsd;
-    const totalEnCop = currencyMode === 'COP' ? rawAmount : mulR(amountUsd, tasaCop);
 
     // Calcular correlativo secuencial
     const numericNums = sales
@@ -51,8 +46,7 @@ export async function processCustomerTransaction({
 
     if (type === 'ABONO') {
         // No crear registro si el monto es 0
-        if (totalEnUsd <= 0) {
-            await storageService.setItem('bodega_customers_v1', newCustomers);
+        if (amountCop <= 0) {
             return { updatedCustomer, newCustomers };
         }
         const cobroRecord = {
@@ -62,19 +56,19 @@ export async function processCustomerTransaction({
             tipo: 'COBRO_DEUDA',
             clienteId: customer.id,
             clienteName: customer.name,
-            totalBs: totalEnBs,
-            totalUsd: totalEnUsd,
-            ...(copEnabled && { totalCop: totalEnCop }),
+            totalBs: 0,
+            totalUsd: amountCop, // En Pool Imperial totalUsd almacena COP (campo heredado)
+            totalCop: amountCop,
             paymentMethod: paymentMethod,
             payments: [{
                 methodId: paymentMethod,
-                amount: currencyMode === 'USD' ? totalEnUsd : (currencyMode === 'COP' ? totalEnCop : totalEnBs),
-                currency: currencyMode,
-                amountUsd: totalEnUsd,
-                amountBs: totalEnBs,
+                amount: amountCop,
+                currency: 'COP',
+                amountUsd: amountCop,
+                amountBs: 0,
                 methodLabel: paymentMethod.replace('_', ' ')
             }],
-            items: [{ name: `Abono de deuda: ${customer.name}`, qty: 1, priceUsd: totalEnUsd, costBs: 0 }]
+            items: [{ name: `Abono de deuda: ${customer.name}`, qty: 1, priceUsd: amountCop, costBs: 0 }]
         };
         sales.unshift(cobroRecord);
     } else if (type === 'CREDITO') {
@@ -85,11 +79,11 @@ export async function processCustomerTransaction({
             tipo: 'VENTA_FIADA',
             clienteId: customer.id,
             clienteName: customer.name,
-            totalBs: totalEnBs,
-            totalUsd: totalEnUsd,
-            ...(copEnabled && { totalCop: totalEnCop }),
-            fiadoUsd: totalEnUsd,
-            items: [{ name: `Credito manual: ${customer.name}`, qty: 1, priceUsd: totalEnUsd, costBs: 0 }]
+            totalBs: 0,
+            totalUsd: amountCop, // En Pool Imperial totalUsd almacena COP (campo heredado)
+            totalCop: amountCop,
+            fiadoUsd: amountCop,
+            items: [{ name: `Credito manual: ${customer.name}`, qty: 1, priceUsd: amountCop, costBs: 0 }]
         };
         sales.unshift(fiadoRecord);
     }

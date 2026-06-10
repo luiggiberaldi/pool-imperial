@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, LockIcon, Printer, DollarSign, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, LockIcon, Printer, DollarSign, CheckCircle2, Trash2 } from 'lucide-react';
 import { formatCop } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentIcon, toTitleCase, PAYMENT_ICONS } from '../../config/paymentMethods';
 import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
 
-export default function CierreHistoryCard({ cierre, products: _products }) {
+export default function CierreHistoryCard({ cierre, products: _products, isAdmin, onDeleteCierre }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     const dateLabel = new Date(cierre.cierreId).toLocaleString('es-CO', { 
@@ -113,6 +113,19 @@ export default function CierreHistoryCard({ cierre, products: _products }) {
                         >
                             <Printer size={16} /> Re-imprimir PDF
                         </button>
+                        {isAdmin && onDeleteCierre && (
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteCierre(cierre.cierreId);
+                                }}
+                                className="py-2.5 px-4 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-450 hover:bg-rose-100 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95"
+                                title="Eliminar / Reabrir Cierre"
+                            >
+                                <Trash2 size={16} />
+                                <span>Eliminar</span>
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, ArrowDownRight, ArrowUpRight, CheckCircle2, Save } from 'lucide-react';
+import { X, ArrowDownRight, ArrowUpRight, CheckCircle2, Save, Banknote } from 'lucide-react';
 import { procesarImpactoCliente } from '../../utils/financialLogic';
 import CustomSelect from '../CustomSelect';
+import { getPaymentIcon } from '../../config/paymentMethods';
 
 export default function TransactionModal({
     transactionModal,
@@ -14,6 +15,17 @@ export default function TransactionModal({
     handleTransaction
 }) {
     if (!transactionModal.isOpen || !transactionModal.customer) return null;
+
+    const filteredMethods = activePaymentMethods.filter(m => m.currency === 'COP');
+    const defaultMethodId = filteredMethods[0]?.id || '';
+
+    React.useEffect(() => {
+        if (transactionModal.isOpen && (!paymentMethod || !filteredMethods.some(m => m.id === paymentMethod))) {
+            if (defaultMethodId) {
+                setPaymentMethod(defaultMethodId);
+            }
+        }
+    }, [transactionModal.isOpen, paymentMethod, defaultMethodId, setPaymentMethod]);
 
     // Calcular preview del saldo resultante en tiempo real
     const rawAmt = parseFloat(transactionAmount) || 0;
@@ -41,12 +53,10 @@ export default function TransactionModal({
     const saldoActual = formatSaldo(saldoActualUsd);
     const saldoPreview = formatSaldo(saldoPreviewUsd);
 
-    const filteredMethods = activePaymentMethods.filter(m => m.currency === 'COP');
-
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-t-3xl sm:rounded-3xl shadow-xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200">
-                <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-t-3xl sm:rounded-3xl shadow-xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200">
+                <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center rounded-t-3xl">
                     <h3 className="text-xl font-black text-slate-800 dark:text-white">Ajustar Cuenta</h3>
                     <button onClick={() => setTransactionModal({ isOpen: false, type: null, customer: null })} className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
                         <X size={20} />
@@ -118,10 +128,13 @@ export default function TransactionModal({
                                 className="w-full form-select bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500/50 transition-all"
                             >
                                 {filteredMethods.map(method => {
-                                    const emoji = typeof method.icon === 'string' && method.icon.length <= 2 ? method.icon : '';
+                                    const MethodIcon = method.Icon || getPaymentIcon(method.id) || Banknote;
                                     return (
                                     <option key={method.id} value={method.id}>
-                                        {emoji ? `${emoji} ${method.label}` : method.label}
+                                        <span className="flex items-center gap-2">
+                                            <MethodIcon size={16} className="text-slate-500 dark:text-slate-400 shrink-0" />
+                                            <span>{method.label}</span>
+                                        </span>
                                     </option>
                                     );
                                 })}
@@ -147,7 +160,7 @@ export default function TransactionModal({
 
                 </div>
 
-                <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+                <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 sm:rounded-b-3xl">
                     <button
                         onClick={handleTransaction}
                         disabled={!transactionAmount || parseFloat(transactionAmount) <= 0}

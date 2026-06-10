@@ -268,7 +268,6 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     // Auto-apertura rápida en plano de producción con delay para evitar colisiones de render/animación
     useEffect(() => {
         if (isAvailable && initialOpenMode) {
-            console.log(`[TableCard] Auto-apertura gatillada para: ${table.name} con modo: ${initialOpenMode}`);
             const timer = setTimeout(() => {
                 handleRequestOpen(initialOpenMode);
             }, 80);

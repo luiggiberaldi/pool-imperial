@@ -21,7 +21,6 @@ export async function initServerClock() {
         // Ajustamos sumando la latencia estimada
         serverOffset = (serverMs + latency) - end;
         initialized = true;
-        console.log(`[ServerClock] Sincronizado exitosamente vía RPC. Offset: ${serverOffset}ms (Latencia: ${latency}ms)`);
     } catch (e) {
         console.warn('[ServerClock] Error al sincronizar reloj:', e);
         // Intentar fallback si falla la rpc por excepción
@@ -41,7 +40,6 @@ async function fallbackHttpClock(startTime) {
             const serverMs = new Date(dateHeader).getTime();
             serverOffset = (serverMs + latency) - end;
             initialized = true;
-            console.log(`[ServerClock] Sincronizado vía HTTP header 'date'. Offset: ${serverOffset}ms`);
         } else {
             console.warn('[ServerClock] Header Date no expuesto en CORS. Se usará el reloj local (offset = 0)');
             serverOffset = 0;

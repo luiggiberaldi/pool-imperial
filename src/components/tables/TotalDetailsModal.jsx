@@ -114,8 +114,6 @@ export function TotalDetailsModal({
         }
     }
 
-    console.log("[TotalDetailsModal] products:", products?.length, "currentItems:", currentItems, "totalTax:", totalTax, "taxBreakdown:", taxBreakdown, "config:", config, "breakdown:", breakdown);
-
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Detalle de Cuenta">
              <div className="flex flex-col gap-3 py-4 text-slate-800 dark:text-white max-h-[70vh] overflow-y-auto pr-1">
