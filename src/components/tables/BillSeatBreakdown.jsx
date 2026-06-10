@@ -1,5 +1,5 @@
-import React from 'react';
-import { Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { Users, LogOut } from 'lucide-react';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -14,6 +14,7 @@ export function BillSeatBreakdown({
     onProceedToPayment, discount, itemDiscounts,
     includeServiceCharge,
     includeTip = 0,
+    onReleaseSeat,
 }) {
     return (
         <>
@@ -34,7 +35,22 @@ export function BillSeatBreakdown({
                                 <span className="text-sm font-black text-slate-800 dark:text-white">{label}</span>
                                 {seat.paid && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">PAGADO</span>}
                             </div>
-                            <span className="text-base font-black text-slate-800 dark:text-white">{formatCOP(seat.paid ? sb.subtotal : totalWithExtras)}</span>
+                            {seat.paid && onReleaseSeat ? (
+                                <button
+                                    onClick={() => {
+                                        if (window.confirm(`¿Retirar a ${label} de la mesa? Su slot quedará libre.`)) {
+                                            onReleaseSeat(seat.id);
+                                        }
+                                    }}
+                                    title="Liberar cliente"
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-800/40 active:scale-95 transition-all"
+                                >
+                                    <LogOut size={11} />
+                                    Liberar
+                                </button>
+                            ) : (
+                                <span className="text-base font-black text-slate-800 dark:text-white">{formatCOP(seat.paid ? sb.subtotal : totalWithExtras)}</span>
+                            )}
                         </div>
                         <div className="px-4 py-2 space-y-1 text-xs">
                             {/* Cargos de tiempo individuales */}

@@ -34,6 +34,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const config = useTablesStore(state => state.config);
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
+    const removeSeatFromSession = useTablesStore(state => state.removeSeatFromSession);
     const { currentUser } = useAuthStore();
     const { products: allProducts, effectiveRate: tasaUSD } = useProductContext();
     const canDiscount = currentUser?.role === 'ADMIN' || currentUser?.role === 'CAJERO';
@@ -225,6 +226,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             onProceedToPayment={onProceedToPayment} discount={discount} itemDiscounts={itemDiscounts}
                             includeServiceCharge={includeServiceCharge ? serviceChargePercent : 0}
                             includeTip={includeTip ? tipPercent : 0}
+                            onReleaseSeat={(seatId) => removeSeatFromSession(session.id, seatId)}
                         />
                     )}
 

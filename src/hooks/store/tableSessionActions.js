@@ -331,6 +331,26 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         return allPaid;
     },
 
+    removeSeatFromSession: async (sessionId, seatId) => {
+        const session = get().activeSessions.find(s => s.id === sessionId);
+        if (!session) return;
+        const newSeats = (session.seats || []).filter(s => s.id !== seatId);
+        const payload = { seats: newSeats, guest_count: newSeats.length };
+        const newSessions = get().activeSessions.map(s =>
+            s.id === sessionId ? { ...s, ...payload } : s
+        );
+        set({ activeSessions: newSessions });
+        await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
+        const seatLabel = (session.seats || []).find(s => s.id === seatId)?.label || seatId;
+        logEvent('MESAS', 'CLIENTE_LIBERADO', `Cliente "${seatLabel}" retirado de la sesión`, getUser(), { sessionId, seatId });
+        try {
+            const { error } = await supabaseCloud.from('table_sessions').update(payload).eq('id', sessionId);
+            if (error) throw error;
+        } catch (e) {
+            await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload });
+        }
+    },
+
     transferSession: async (sourceSessionId, targetTableId, transferType = 'ALL') => {
         const sourceSession = get().activeSessions.find(s => s.id === sourceSessionId);
         if (!sourceSession) throw new Error("Sesión origen no encontrada");
