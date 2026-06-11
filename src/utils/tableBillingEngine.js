@@ -362,7 +362,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 const billableHours = billableMinutes / 60;
                 syntheticCart.push({
                     id: crypto.randomUUID(),
-                    name: `Tiempo libre ${seatLabel}`,
+                    name: `Tiempo libre ${seatLabel} (${formatElapsedTime(Math.round(billableMinutes))})`,
                     priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
                     qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
                     taxType: config.tableTaxType || 'exento',
@@ -436,7 +436,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                     const billableHours = billableMinutes / 60;
                     syntheticCart.push({
                         id: crypto.randomUUID(),
-                        name: `Tiempo libre ${seatLabel}`,
+                        name: `Tiempo libre ${seatLabel} (${formatElapsedTime(Math.round(billableMinutes))})`,
                         priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
                         qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
                         taxType: config.tableTaxType || 'exento',
@@ -491,7 +491,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
             const billableHours = billableMinutes / 60;
             syntheticCart.push({
                 id: crypto.randomUUID(),
-                name: `Tiempo libre ${tableName}`,
+                name: `Tiempo libre ${tableName} (${formatElapsedTime(Math.round(billableMinutes))})`,
                 priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
                 qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
                 taxType: config.tableTaxType || 'exento',

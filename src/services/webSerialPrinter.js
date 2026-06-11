@@ -11,7 +11,7 @@
 import { capitalizeName } from '../utils/calculatorUtils';
 import { lookupPrinter } from './printerDatabase';
 import { useTablesStore } from '../hooks/store/useTablesStore';
-import { formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart } from '../utils/tableBillingEngine';
+import { formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart } from '../utils/tableBillingEngine';
 import { round2 } from '../utils/dinero';
 import { FinancialEngine } from '../core/FinancialEngine';
 
@@ -324,6 +324,13 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
                     const hourCost = round2(totalHours * ph);
                     p.row(`${formatHoursPaid(totalHours)} x ${formatCOP(ph)}`, `${formatCOP(hourCost)}`, W);
                 }
+                const isLibreShared = table.type === 'POOL' && session.game_mode === 'NORMAL' && totalHours === 0 && !seatHasHours;
+                if (isLibreShared && elapsed > 0) {
+                    const ph = config?.pricePerHour || 0;
+                    const billableMinutes = Math.max(0, elapsed - (hoursOffset * 60));
+                    const billableHours = billableMinutes / 60;
+                    p.row(`${formatElapsedTime(elapsed)} x ${formatCOP(ph)}`, `${formatCOP(billableHours * ph)}`, W);
+                }
                 if (breakdown.sharedItems.length > 0) {
                     breakdown.sharedItems.forEach(i => {
                         const t = i.qty * i.unit_price_usd;
@@ -399,18 +406,28 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
             p.newline();
         }
 
-        if (hasHours || seatHasHours) {
+        const isLibre = table.type === 'POOL' && session.game_mode === 'NORMAL' && totalHours === 0 && !seatHasHours;
+        if (hasHours || seatHasHours || (isLibre && elapsed > 0)) {
             const pricePerHour = config?.pricePerHour || 0;
-            const seatHoursTotal = seats.reduce((sum, s) => sum + (s.timeCharges || []).filter(tc => tc.type === 'hora').reduce((h, tc) => h + (Number(tc.amount) || 0), 0), 0);
-            const combinedHours = totalHours + seatHoursTotal;
-            const fullCost = round2(combinedHours * pricePerHour);
-            const paidCost = round2(hoursOffset * pricePerHour);
-
             p.bold(true).text('Tiempo de Mesa').newline().bold(true);
-            p.row(`${formatHoursPaid(combinedHours)} x ${formatCOP(pricePerHour)}`, `${formatCOP(fullCost)}`, W);
-
-            if (hoursOffset > 0) {
-                p.row(`Pagado (${formatHoursPaid(hoursOffset)})`, `-${formatCOP(paidCost)}`, W);
+            if (isLibre) {
+                const billableMinutes = Math.max(0, elapsed - (hoursOffset * 60));
+                const billableHours = billableMinutes / 60;
+                const fullCost = round2(billableHours * pricePerHour);
+                const paidCost = round2(hoursOffset * pricePerHour);
+                p.row(`${formatElapsedTime(elapsed)} x ${formatCOP(pricePerHour)}`, `${formatCOP(fullCost)}`, W);
+                if (hoursOffset > 0) {
+                    p.row(`Pagado (${formatElapsedTime(hoursOffset * 60)})`, `-${formatCOP(paidCost)}`, W);
+                }
+            } else {
+                const seatHoursTotal = seats.reduce((sum, s) => sum + (s.timeCharges || []).filter(tc => tc.type === 'hora').reduce((h, tc) => h + (Number(tc.amount) || 0), 0), 0);
+                const combinedHours = totalHours + seatHoursTotal;
+                const fullCost = round2(combinedHours * pricePerHour);
+                const paidCost = round2(hoursOffset * pricePerHour);
+                p.row(`${formatHoursPaid(combinedHours)} x ${formatCOP(pricePerHour)}`, `${formatCOP(fullCost)}`, W);
+                if (hoursOffset > 0) {
+                    p.row(`Pagado (${formatHoursPaid(hoursOffset)})`, `-${formatCOP(paidCost)}`, W);
+                }
             }
             p.newline();
         }

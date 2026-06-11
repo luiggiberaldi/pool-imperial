@@ -1,6 +1,6 @@
 import { printPreCuentaEscPos, getWebSerialConfig } from '../services/webSerialPrinter';
 import { useTablesStore } from '../hooks/store/useTablesStore';
-import { calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart } from './tableBillingEngine';
+import { calculateSessionCostBreakdown, formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart } from './tableBillingEngine';
 import { round2 } from './dinero';
 import { FinancialEngine } from '../core/FinancialEngine';
 
@@ -115,6 +115,13 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
                     const ph = config?.pricePerHour || 0;
                     push(itemRow(`${formatHoursPaid(totalHours)} x ${formatCOP(ph)}`, formatCOP(totalHours * ph)));
                 }
+                const isLibreShared = table.type === 'POOL' && session.game_mode === 'NORMAL' && totalHours === 0 && !seatHasHours;
+                if (isLibreShared && elapsed > 0) {
+                    const ph = config?.pricePerHour || 0;
+                    const billableMinutes = Math.max(0, elapsed - (hoursOffset * 60));
+                    const billableHours = billableMinutes / 60;
+                    push(itemRow(`${formatElapsedTime(elapsed)} x ${formatCOP(ph)}`, formatCOP(billableHours * ph)));
+                }
                 breakdown.sharedItems.forEach(i => {
                     const t = i.qty * i.unit_price_usd;
                     push(itemRow(`${i.qty}x ${(i.product_name || '').substring(0, 18)}`, formatCOP(t)));
@@ -170,16 +177,28 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         }
 
         // HORAS
-        if (hasHours || seatHasHours) {
+        const isLibre = table.type === 'POOL' && session.game_mode === 'NORMAL' && totalHours === 0 && !seatHasHours;
+        if (hasHours || seatHasHours || (isLibre && elapsed > 0)) {
             const pricePerHour = config?.pricePerHour || 0;
-            const seatHoursTotal = seats.reduce((sum, s) => sum + (s.timeCharges || []).filter(tc => tc.type === 'hora').reduce((h, tc) => h + (Number(tc.amount) || 0), 0), 0);
-            const combinedHours = totalHours + seatHoursTotal;
-            const fullCost = round2(combinedHours * pricePerHour);
-            const paidCost = round2(hoursOffset * pricePerHour);
             push(`<div class="section-title">Tiempo de Mesa</div>`);
-            push(itemRow(`${formatHoursPaid(combinedHours)} x ${formatCOP(pricePerHour)}`, formatCOP(fullCost)));
-            if (hoursOffset > 0) {
-                push(itemRow(`Pagado (${formatHoursPaid(hoursOffset)})`, `-${formatCOP(paidCost)}`, 'muted'));
+            if (isLibre) {
+                const billableMinutes = Math.max(0, elapsed - (hoursOffset * 60));
+                const billableHours = billableMinutes / 60;
+                const fullCost = round2(billableHours * pricePerHour);
+                const paidCost = round2(hoursOffset * pricePerHour);
+                push(itemRow(`${formatElapsedTime(elapsed)} x ${formatCOP(pricePerHour)}`, formatCOP(fullCost)));
+                if (hoursOffset > 0) {
+                    push(itemRow(`Pagado (${formatElapsedTime(hoursOffset * 60)})`, `-${formatCOP(paidCost)}`, 'muted'));
+                }
+            } else {
+                const seatHoursTotal = seats.reduce((sum, s) => sum + (s.timeCharges || []).filter(tc => tc.type === 'hora').reduce((h, tc) => h + (Number(tc.amount) || 0), 0), 0);
+                const combinedHours = totalHours + seatHoursTotal;
+                const fullCost = round2(combinedHours * pricePerHour);
+                const paidCost = round2(hoursOffset * pricePerHour);
+                push(itemRow(`${formatHoursPaid(combinedHours)} x ${formatCOP(pricePerHour)}`, formatCOP(fullCost)));
+                if (hoursOffset > 0) {
+                    push(itemRow(`Pagado (${formatHoursPaid(hoursOffset)})`, `-${formatCOP(paidCost)}`, 'muted'));
+                }
             }
         }
 
