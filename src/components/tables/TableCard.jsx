@@ -671,37 +671,49 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
             </div>
 
             {/* Timer & Cost display */}
-            <TableCardTimerDisplay
-                table={table}
-                session={session}
-                elapsed={elapsed}
-                isAvailable={isAvailable}
-                isTimeFree={isTimeFree}
-                isPaidIdle={isPaidIdle}
-                isMixedMode={isMixedMode}
-                hasPinas={hasPinas}
-                hasHoursActive={hasHoursActive}
-                hasLimit={hasLimit}
-                remainingMins={remainingMins}
-                elapsedSeconds={elapsedSeconds}
-                remainingSeconds={remainingSeconds}
-                isExceeded={isExceeded}
-                isPaused={isPaused}
-                isLockedForMe={isLockedForMe}
-                timeCost={timeCost}
-                grandTotal={grandTotal}
-                totalConsumption={totalConsumption}
-                consumptionBs={consumptionBs}
-                costBreakdown={costBreakdown}
-                config={config}
-                tasaUSD={tasaUSD}
-                roundsOffset={roundsOffset}
-                hoursOffset={hoursOffset}
-                onAdjustTime={handleAdjustTime}
-                onPauseTimer={handlePauseTimer}
-                onResumeTimer={handleResumeTimer}
-                onShowTotalDetails={() => setShowTotalDetails(true)}
-            />
+            {(() => {
+                const retiredPaidShared = (() => {
+                    if (!session?.notes || !session.notes.includes('|||RETIRED_PAID_SHARED:')) return 0;
+                    const parts = session.notes.split('|||RETIRED_PAID_SHARED:')[1];
+                    if (!parts) return 0;
+                    const val = parseFloat(parts.split('|||')[0].trim());
+                    return isNaN(val) ? 0 : val;
+                })();
+                return (
+                    <TableCardTimerDisplay
+                        table={table}
+                        session={session}
+                        elapsed={elapsed}
+                        isAvailable={isAvailable}
+                        isTimeFree={isTimeFree}
+                        isPaidIdle={isPaidIdle}
+                        isMixedMode={isMixedMode}
+                        hasPinas={hasPinas}
+                        hasHoursActive={hasHoursActive}
+                        hasLimit={hasLimit}
+                        remainingMins={remainingMins}
+                        elapsedSeconds={elapsedSeconds}
+                        remainingSeconds={remainingSeconds}
+                        isExceeded={isExceeded}
+                        isPaused={isPaused}
+                        isLockedForMe={isLockedForMe}
+                        timeCost={timeCost}
+                        grandTotal={grandTotal}
+                        totalConsumption={totalConsumption}
+                        consumptionBs={consumptionBs}
+                        costBreakdown={costBreakdown}
+                        config={config}
+                        tasaUSD={tasaUSD}
+                        roundsOffset={roundsOffset}
+                        hoursOffset={hoursOffset}
+                        retiredPaidShared={retiredPaidShared}
+                        onAdjustTime={handleAdjustTime}
+                        onPauseTimer={handlePauseTimer}
+                        onResumeTimer={handleResumeTimer}
+                        onShowTotalDetails={() => setShowTotalDetails(true)}
+                    />
+                );
+            })()}
 
 
 

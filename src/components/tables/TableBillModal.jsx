@@ -88,9 +88,8 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
     const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
     const seatBreakdown = hasSeats ? calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, sharedDivision, frozenActiveCount, isTimeFree, hoursOffset, roundsOffset, table.type) : null;
-    // H: Bloquear cobro si división manual no suma correctamente
     const customDivisionMismatch = seatBreakdown && sharedDivisionType === 'custom' &&
-        Math.abs(Object.values(customSharedAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0) - seatBreakdown.sharedTotal) >= 0.01;
+        Math.abs(Object.values(customSharedAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0) - seatBreakdown.remainingSharedTotal) >= 0.01;
     const zeroBreakdown = { pinaCost: 0, hourCost: 0, libreCost: 0, hasPinas: false, hasHours: false, isLibre: false, total: 0 };
     const breakdown = (isTimeFree || isPartial) ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, null, table.type);
     // Full breakdown (sin offsets) para mostrar totales completos
@@ -146,7 +145,24 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const finalTotal = subtotalAfterItems - discountAmountUsd;
     
     // Colombian optional service charge (Suggested tip) & Personal Tip
-    const baseTotal = hasSeats && seatBreakdown ? (seatBreakdown.grandTotal - discountAmountUsd) : finalTotal;
+    let baseTotal = finalTotal;
+    let discAmount = discountAmountUsd;
+    if (hasSeats && seatBreakdown) {
+        if (data.seatId) {
+            const targetSeatBd = seatBreakdown.seats.find(s => s.seat.id === data.seatId);
+            if (targetSeatBd) {
+                const seatSub = targetSeatBd.subtotal;
+                discAmount = discount.value > 0
+                    ? (discount.type === 'percentage' ? seatSub * (discount.value / 100) : Math.min(discount.value, seatSub))
+                    : 0;
+                baseTotal = seatSub - discAmount;
+            } else {
+                baseTotal = seatBreakdown.grandTotal - discountAmountUsd;
+            }
+        } else {
+            baseTotal = seatBreakdown.grandTotal - discountAmountUsd;
+        }
+    }
     const serviceChargeAmount = includeServiceCharge ? Math.round(baseTotal * (serviceChargePercent / 100)) : 0;
     const tipAmount = includeTip ? Math.round(baseTotal * (tipPercent / 100)) : 0;
     const finalTotalWithService = baseTotal + serviceChargeAmount + tipAmount;
@@ -227,6 +243,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             includeServiceCharge={includeServiceCharge ? serviceChargePercent : 0}
                             includeTip={includeTip ? tipPercent : 0}
                             onReleaseSeat={(seatId) => removeSeatFromSession(session.id, seatId)}
+                            activeSeatId={data.seatId}
                         />
                     )}
 
@@ -368,9 +385,13 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Total a Cobrar</p>
                             {hasSeats && seatBreakdown && (
                                 <p className="text-[10px] text-white/60 mt-0.5">
-                                    {seatBreakdown.seats.filter(s => !s.seat.paid).length} persona(s) activa(s)
-                                    {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
-                                    {includeServiceCharge ? ` + Propina (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {data.seatId 
+                                        ? `Cobrando individual: ${seats.find(s => s.id === data.seatId)?.label || 'Cliente'}`
+                                        : `${seatBreakdown.seats.filter(s => !s.seat.paid).length} persona(s) activa(s)`
+                                    }
+                                    {discAmount > 0 ? ` − Desc ${formatCOP(discAmount)}` : ''}
+                                    {includeServiceCharge ? ` + Servicio (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeTip ? ` + Propina (${tipPercent}%) ${formatCOP(tipAmount)}` : ''}
                                 </p>
                             )}
                             {!hasSeats && isMixed && (
@@ -378,16 +399,18 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     Jugadas {formatCOP(fullBreakdown.pinaCost)} + Tiempo {formatCOP(fullBreakdown.hourCost)}{adjustedConsumption > 0 ? ` + Consumos ${formatCOP(adjustedConsumption)}` : ''}
                                     {(roundsOffset > 0 || hoursOffset > 0) ? ` − Pagado ${formatCOP(roundsOffset * finalPina + hoursOffset * finalHora)}` : ''}
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
-                                    {includeServiceCharge ? ` + Propina (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeServiceCharge ? ` + Servicio (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeTip ? ` + Propina (${tipPercent}%) ${formatCOP(tipAmount)}` : ''}
                                 </p>
                             )}
-                            {!hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0 || includeServiceCharge) && (
+                            {!hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0 || includeServiceCharge || includeTip) && (
                                 <p className="text-[10px] text-white/60 mt-0.5">
                                     {timeCost > 0 ? `Tiempo ${formatCOP(timeCost)}` : ''}
                                     {timeCost > 0 && adjustedConsumption > 0 ? ' + ' : ''}
                                     {adjustedConsumption > 0 ? `Consumos ${formatCOP(adjustedConsumption)}` : ''}
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
-                                    {includeServiceCharge ? ` + Propina (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeServiceCharge ? ` + Servicio (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeTip ? ` + Propina (${tipPercent}%) ${formatCOP(tipAmount)}` : ''}
                                 </p>
                             )}
                         </div>
@@ -420,16 +443,23 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             )}
                             <button
                                 disabled={customDivisionMismatch}
-                                onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge ? serviceChargePercent : 0, includeTip ? tipPercent : 0)}
+                                onClick={() => {
+                                    if (data.seatId) {
+                                        const sb = seatBreakdown?.seats.find(s => s.seat.id === data.seatId);
+                                        onProceedToPayment(discount, itemDiscounts, data.seatId, sb?.subtotal, includeServiceCharge ? serviceChargePercent : 0, includeTip ? tipPercent : 0);
+                                    } else {
+                                        onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge ? serviceChargePercent : 0, includeTip ? tipPercent : 0);
+                                    }
+                                }}
                                 className={`flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-orange-500/25 ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
                                 style={{ background: customDivisionMismatch ? '#94a3b8' : 'linear-gradient(135deg, #F97316, #EA580C)' }}
                             >
-                                Cobrar Todo
+                                {data.seatId ? `Cobrar ${seats.find(s => s.id === data.seatId)?.label || 'Cliente'}` : 'Cobrar Todo'}
                                 <ChevronRight size={16} />
                             </button>
                         </div>
                     )}
-                    {hasSeats && payingSeatId === null && (
+                    {!data.seatId && hasSeats && payingSeatId === null && (
                         <div className="flex flex-wrap gap-1.5">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider py-1.5 mr-1">Cobrar individual:</span>
                             {seats.filter(s => !s.paid).map(seat => {

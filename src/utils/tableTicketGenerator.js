@@ -60,13 +60,21 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         ? session.notes.split('|||')[0].trim()
         : '';
 
+    const retiredPaidShared = (() => {
+        if (!session?.notes || !session.notes.includes('|||RETIRED_PAID_SHARED:')) return 0;
+        const parts = session.notes.split('|||RETIRED_PAID_SHARED:')[1];
+        if (!parts) return 0;
+        const val = parseFloat(parts.split('|||')[0].trim());
+        return isNaN(val) ? 0 : val;
+    })();
+
     // Calcular datos de pagos previos
     const isPina = session.game_mode === 'PINA';
     const pinaCount = isPina ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
     const hasPinas = isPina || pinaCount > 0;
     const totalHours = Number(session.hours_paid) || 0;
     const hasHours = totalHours > 0;
-    const hasPaidBefore = roundsOffset > 0 || hoursOffset > 0 || historialAbonos.length > 0;
+    const hasPaidBefore = roundsOffset > 0 || hoursOffset > 0 || historialAbonos.length > 0 || retiredPaidShared > 0;
 
     // Seat-level charges
     const seatHasPinas = seats.some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
@@ -111,7 +119,12 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
                     const t = i.qty * i.unit_price_usd;
                     push(itemRow(`${i.qty}x ${(i.product_name || '').substring(0, 18)}`, formatCOP(t)));
                 });
-                push(`<div class="muted small">Total compartido: ${formatCOP(breakdown.sharedTotal)} (÷${seats.filter(s => !s.paid).length})</div>`);
+                if (breakdown.retiredPaidShared > 0) {
+                    push(itemRow('Pagado por retirados:', `-${formatCOP(breakdown.retiredPaidShared)}`, 'muted small'));
+                    push(`<div class="muted small">Total compartido restante: ${formatCOP(breakdown.remainingSharedTotal)} (÷${seats.filter(s => !s.paid).length})</div>`);
+                } else {
+                    push(`<div class="muted small">Total compartido: ${formatCOP(breakdown.sharedTotal)} (÷${seats.filter(s => !s.paid).length})</div>`);
+                }
                 push(`<hr>`);
             }
             breakdown.seats.forEach((sb) => {
@@ -228,6 +241,9 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
 
     if (tipAmt > 0) {
         push(itemRow(`Propina del Personal (${tipPercent}%):`, formatCOP(tipAmt), 'bold'));
+    }
+    if (!isMultiClient && retiredPaidShared > 0) {
+        push(itemRow('Pagado por retirados:', `-${formatCOP(retiredPaidShared)}`, 'bold'));
     }
     push(`<hr>`);
 

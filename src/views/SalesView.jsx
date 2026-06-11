@@ -321,13 +321,9 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
             <TableQueuePanel 
                 onCheckoutTable={(data) => {
                     setTableCheckoutData(data);
-                    if (data.seatId) {
-                        setShowTablePayment(true);
-                        const seatCustomer = data.session?.seats?.find(s => s.id === data.seatId)?.customerId;
-                        if (seatCustomer) setSelectedCustomerId(seatCustomer);
-                    } else {
-                        setShowTablePayment(false);
-                    }
+                    setShowTablePayment(false);
+                    const seatCustomer = data.seatId ? data.session?.seats?.find(s => s.id === data.seatId)?.customerId : null;
+                    if (seatCustomer) setSelectedCustomerId(seatCustomer);
                 }} 
                 effectiveRate={effectiveRate} 
             />
@@ -671,16 +667,17 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             } else if (!isSeatPayment) {
                                 setPostPaymentSession({ sessionId, tableName });
                             } else {
-                                // Verificar si todos quedaron pagados (allPaid triggers postPayment from useSalesCheckout)
+                                // Verificar si todos quedaron pagados
                                 const updatedSeats = tableCheckoutData.session?.seats || [];
                                 const allPaid = updatedSeats.every(s => s.paid || s.id === tableCheckoutData.seatId);
-                                if (allPaid) {
-                                    setPostPaymentSession({ sessionId, tableName });
-                                } else {
-                                    setTableCheckoutData(null);
-                                    setSelectedCustomerId('');
-                                    useTablesStore.getState().syncTablesAndSessions();
-                                }
+                                const seatLabel = updatedSeats.find(s => s.id === tableCheckoutData.seatId)?.label || 'Cliente';
+                                setPostPaymentSession({
+                                    sessionId,
+                                    tableName,
+                                    seatId: tableCheckoutData.seatId,
+                                    seatLabel,
+                                    allPaid
+                                });
                             }
                         });
                     }}
@@ -689,44 +686,92 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                 );
             })()}
 
-            {/* Post-payment dialog: ¿Liberar mesa o dejar activa? */}
+            {/* Post-payment dialog: ¿Liberar mesa o dejar activa / retirar cliente o mantenerlo? */}
             {postPaymentSession && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md" onClick={e => e.stopPropagation()}>
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full animate-in fade-in zoom-in-95">
-                        <div className="text-center mb-5">
-                            <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3">
-                                <span className="text-2xl">✓</span>
-                            </div>
-                            <h3 className="text-lg font-black text-slate-800 dark:text-white">Cobro Exitoso</h3>
-                            <p className="text-sm text-slate-500 mt-1">¿Qué deseas hacer con <strong>{postPaymentSession.tableName}</strong>?</p>
-                        </div>
-                        <div className="flex flex-col gap-2.5">
-                            <button
-                                onClick={async () => {
-                                    try {
-                                        await useTablesStore.getState().closeSession(postPaymentSession.sessionId);
-                                    } catch { showToast("Error al liberar mesa", "warning"); }
-                                    setPostPaymentSession(null);
-                                    setTableCheckoutData(null);
-                                }}
-                                className="w-full py-3.5 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
-                            >
-                                Liberar Mesa
-                            </button>
-                            <button
-                                onClick={async () => {
-                                    try {
-                                        await useTablesStore.getState().resetSessionAfterPayment(postPaymentSession.sessionId);
-                                        await useOrdersStore.getState().cancelOrderBySessionId(postPaymentSession.sessionId);
-                                    } catch { showToast("Error al resetear mesa", "warning"); }
-                                    setPostPaymentSession(null);
-                                    setTableCheckoutData(null);
-                                }}
-                                className="w-full py-3.5 rounded-xl font-black text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/30 border-2 border-violet-200 dark:border-violet-700/50 hover:bg-violet-100 dark:hover:bg-violet-900/50 active:scale-95 transition-all"
-                            >
-                                Dejar Activa
-                            </button>
-                        </div>
+                        {postPaymentSession.seatId ? (
+                            <>
+                                <div className="text-center mb-5">
+                                    <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3 animate-bounce">
+                                        <span className="text-2xl text-emerald-600 dark:text-emerald-400">✓</span>
+                                    </div>
+                                    <h3 className="text-lg font-black text-slate-800 dark:text-white">Cobro Exitoso</h3>
+                                    <p className="text-sm text-slate-500 mt-1">¿El cliente <strong>{postPaymentSession.seatLabel}</strong> continúa en la mesa?</p>
+                                </div>
+                                <div className="flex flex-col gap-2.5">
+                                    <button
+                                        onClick={async () => {
+                                            setPostPaymentSession(null);
+                                            setTableCheckoutData(null);
+                                            setSelectedCustomerId('');
+                                            await useTablesStore.getState().syncTablesAndSessions();
+                                        }}
+                                        className="w-full py-3.5 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                                    >
+                                        Sí, mantener en la mesa
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await useTablesStore.getState().removeSeatFromSession(postPaymentSession.sessionId, postPaymentSession.seatId);
+                                                if (postPaymentSession.allPaid) {
+                                                    await useTablesStore.getState().closeSession(postPaymentSession.sessionId);
+                                                    showToast("Mesa liberada", "success");
+                                                }
+                                            } catch (err) {
+                                                console.error(err);
+                                                showToast("Error al retirar cliente", "warning");
+                                            }
+                                            setPostPaymentSession(null);
+                                            setTableCheckoutData(null);
+                                            setSelectedCustomerId('');
+                                            await useTablesStore.getState().syncTablesAndSessions();
+                                        }}
+                                        className="w-full py-3.5 rounded-xl font-black text-rose-500 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 border-2 border-rose-200 dark:border-rose-700/50 hover:bg-rose-100 dark:hover:bg-rose-900/50 active:scale-95 transition-all"
+                                    >
+                                        No, retirar de la mesa
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="text-center mb-5">
+                                    <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3">
+                                        <span className="text-2xl">✓</span>
+                                    </div>
+                                    <h3 className="text-lg font-black text-slate-800 dark:text-white">Cobro Exitoso</h3>
+                                    <p className="text-sm text-slate-500 mt-1">¿Qué deseas hacer con <strong>{postPaymentSession.tableName}</strong>?</p>
+                                </div>
+                                <div className="flex flex-col gap-2.5">
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await useTablesStore.getState().closeSession(postPaymentSession.sessionId);
+                                            } catch { showToast("Error al liberar mesa", "warning"); }
+                                            setPostPaymentSession(null);
+                                            setTableCheckoutData(null);
+                                        }}
+                                        className="w-full py-3.5 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                                    >
+                                        Liberar Mesa
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                await useTablesStore.getState().resetSessionAfterPayment(postPaymentSession.sessionId);
+                                                await useOrdersStore.getState().cancelOrderBySessionId(postPaymentSession.sessionId);
+                                            } catch { showToast("Error al resetear mesa", "warning"); }
+                                            setPostPaymentSession(null);
+                                            setTableCheckoutData(null);
+                                        }}
+                                        className="w-full py-3.5 rounded-xl font-black text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/30 border-2 border-violet-200 dark:border-violet-700/50 hover:bg-violet-100 dark:hover:bg-violet-900/50 active:scale-95 transition-all"
+                                    >
+                                        Dejar Activa
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

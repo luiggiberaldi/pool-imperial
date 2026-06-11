@@ -238,17 +238,29 @@ export function calculateFullTableBreakdown(session, seats, elapsedMinutes, conf
         );
     const sharedTimeTotal = sessionTimeCost.total;
     const sharedTotal = round2(sharedConsumptionTotal + sharedTimeTotal);
+
+    // Extraer anterior retiredPaidShared de las notas de la sesión
+    let retiredPaidShared = 0;
+    if (session?.notes && session.notes.includes('|||RETIRED_PAID_SHARED:')) {
+        const parts = session.notes.split('|||RETIRED_PAID_SHARED:')[1];
+        if (parts) {
+            const val = parseFloat(parts.split('|||')[0].trim());
+            if (!isNaN(val)) retiredPaidShared = val;
+        }
+    }
+
+    const remainingSharedTotal = Math.max(0, sharedTotal - retiredPaidShared);
     const activeCount = (frozenDivisor !== null && frozenDivisor !== undefined && frozenDivisor > 0) ? frozenDivisor : activeSeats.length;
 
     const getSharedPortion = (seat) => {
         if (seat.paid) return 0;
         if (!sharedDivision || sharedDivision.type === 'equal') {
-            return activeCount > 0 ? round2(sharedTotal / activeCount) : 0;
+            return activeCount > 0 ? round2(remainingSharedTotal / activeCount) : 0;
         }
         if (sharedDivision.type === 'custom') {
             return round2(parseFloat(sharedDivision.amounts?.[seat.id]) || 0);
         }
-        return activeCount > 0 ? round2(sharedTotal / activeCount) : 0;
+        return activeCount > 0 ? round2(remainingSharedTotal / activeCount) : 0;
     };
 
     const seatBreakdowns = allSeats.map(seat => {
@@ -274,7 +286,9 @@ export function calculateFullTableBreakdown(session, seats, elapsedMinutes, conf
         sharedConsumptionTotal: round2(sharedConsumptionTotal),
         sharedTimeTotal: round2(sharedTimeTotal),
         sharedTotal: round2(sharedTotal),
-        sharedPerSeat: activeCount > 0 ? round2(sharedTotal / activeCount) : 0,
+        retiredPaidShared: round2(retiredPaidShared),
+        remainingSharedTotal: round2(remainingSharedTotal),
+        sharedPerSeat: activeCount > 0 ? round2(remainingSharedTotal / activeCount) : 0,
         sessionTimeCost,
         grandTotal: round2(grandTotal)
     };

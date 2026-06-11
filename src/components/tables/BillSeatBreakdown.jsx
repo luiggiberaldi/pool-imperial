@@ -15,12 +15,18 @@ export function BillSeatBreakdown({
     includeServiceCharge,
     includeTip = 0,
     onReleaseSeat,
+    activeSeatId,
 }) {
+    const seatsToRender = activeSeatId
+        ? seatBreakdown.seats.filter(sb => sb.seat.id === activeSeatId)
+        : seatBreakdown.seats;
+
     return (
         <>
-            {seatBreakdown.seats.map((sb, idx) => {
+            {seatsToRender.map((sb, idx) => {
                 const seat = sb.seat;
-                const label = seat.label || `Cliente ${idx + 1}`;
+                const originalIdx = seatBreakdown.seats.findIndex(s => s.seat.id === seat.id);
+                const label = seat.label || `Cliente ${(originalIdx !== -1 ? originalIdx : idx) + 1}`;
                 const svcAmount = includeServiceCharge > 0 && !seat.paid ? Math.round(sb.subtotal * (includeServiceCharge / 100)) : 0;
                 const tipAmount = includeTip > 0 && !seat.paid ? Math.round(sb.subtotal * (includeTip / 100)) : 0;
                 const totalWithExtras = sb.subtotal + svcAmount + tipAmount;
@@ -138,13 +144,20 @@ export function BillSeatBreakdown({
             })}
 
             {/* Sección Compartido */}
-            {seatBreakdown.sharedTotal > 0 && (
+            {!activeSeatId && seatBreakdown.sharedTotal > 0 && (
                 <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 dark:border-slate-700">
                         <div className="flex items-center gap-2">
                             <Users size={12} className="text-slate-400" />
                             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                                Compartido · {formatCOP(seatBreakdown.sharedTotal)}
+                                Compartido · {seatBreakdown.retiredPaidShared > 0 ? (
+                                    <>
+                                        <span className="line-through opacity-50">{formatCOP(seatBreakdown.sharedTotal)}</span>{' '}
+                                        <span className="text-emerald-600 dark:text-emerald-400">{formatCOP(seatBreakdown.remainingSharedTotal)}</span>
+                                    </>
+                                ) : (
+                                    formatCOP(seatBreakdown.sharedTotal)
+                                )}
                             </p>
                         </div>
                         {/* Toggle división — solo si hay 2+ asientos sin pagar */}
@@ -186,6 +199,12 @@ export function BillSeatBreakdown({
                                     <span className="text-xs font-bold text-slate-700 dark:text-white">{formatCOP(Number(item.unit_price_usd) * Number(item.qty))}</span>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                    {seatBreakdown.retiredPaidShared > 0 && (
+                        <div className="px-4 py-2 border-t border-emerald-100 dark:border-emerald-900/20 flex justify-between text-xs text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50/20 dark:bg-emerald-950/5">
+                            <span>✓ Pagado por clientes retirados</span>
+                            <span>-{formatCOP(seatBreakdown.retiredPaidShared)}</span>
                         </div>
                     )}
                     {/* División manual: inputs por cliente */}
@@ -245,13 +264,13 @@ export function BillSeatBreakdown({
                             {/* Estado de asignación */}
                             {(() => {
                                 const assigned = Object.values(customSharedAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0);
-                                const remaining = seatBreakdown.sharedTotal - assigned;
+                                const remaining = seatBreakdown.remainingSharedTotal - assigned;
                                 const isMatch = Math.abs(remaining) < 1; // 1 peso tolerancia
                                 const isOver = remaining < -1;
                                 return (
                                     <div className={`flex justify-between items-center text-xs font-bold px-3 py-2.5 rounded-xl ${isMatch ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600' : isOver ? 'bg-red-50 dark:bg-red-950/20 text-red-500' : 'bg-amber-50 dark:bg-amber-950/20 text-amber-600'}`}>
                                         <span>{isMatch ? '✓ Completo' : isOver ? '⚠ Excede el total' : `Falta asignar`}</span>
-                                        <span className="font-black text-sm">{isMatch ? formatCOP(seatBreakdown.sharedTotal) : isOver ? `-${formatCOP(Math.abs(remaining))}` : formatCOP(remaining)}</span>
+                                        <span className="font-black text-sm">{isMatch ? formatCOP(seatBreakdown.remainingSharedTotal) : isOver ? `-${formatCOP(Math.abs(remaining))}` : formatCOP(remaining)}</span>
                                     </div>
                                 );
                             })()}
@@ -259,7 +278,7 @@ export function BillSeatBreakdown({
                     )}
                     {sharedDivisionType === 'equal' && (
                         <div className="px-4 py-2 border-t border-slate-200 dark:border-slate-700 text-[10px] text-slate-400">
-                            ÷{seatBreakdown.seats.filter(s => !s.seat.paid).length} clientes = {formatCOP(seatBreakdown.sharedPerSeat)} c/u
+                            {seatBreakdown.retiredPaidShared > 0 ? 'Restante ÷' : '÷'}{seatBreakdown.seats.filter(s => !s.seat.paid).length} clientes = {formatCOP(seatBreakdown.sharedPerSeat)} c/u
                         </div>
                     )}
                 </div>

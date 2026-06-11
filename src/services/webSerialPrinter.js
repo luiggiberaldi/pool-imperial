@@ -287,6 +287,14 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
     }
     p.line('-', W);
 
+    const retiredPaidShared = (() => {
+        if (!session?.notes || !session.notes.includes('|||RETIRED_PAID_SHARED:')) return 0;
+        const parts = session.notes.split('|||RETIRED_PAID_SHARED:')[1];
+        if (!parts) return 0;
+        const val = parseFloat(parts.split('|||')[0].trim());
+        return isNaN(val) ? 0 : val;
+    })();
+
     const seats = session?.seats || [];
     const isMultiClient = seats.length > 1;
 
@@ -295,7 +303,7 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
     const hasPinas = isPina || pinaCount > 0;
     const totalHours = Number(session.hours_paid) || 0;
     const hasHours = totalHours > 0;
-    const hasPaidBefore = roundsOffset > 0 || hoursOffset > 0;
+    const hasPaidBefore = roundsOffset > 0 || hoursOffset > 0 || retiredPaidShared > 0;
 
     if (isMultiClient) {
         // ═══ MULTI-CLIENT BREAKDOWN ═══
@@ -323,7 +331,12 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
                     });
                 }
                 const unpaid = seats.filter(s => !s.paid).length;
-                p.text(`Total: ${formatCOP(breakdown.sharedTotal)} (/${unpaid})`).newline();
+                if (breakdown.retiredPaidShared > 0) {
+                    p.row('Pagado por retirados', `-${formatCOP(breakdown.retiredPaidShared)}`, W);
+                    p.text(`Total restante: ${formatCOP(breakdown.remainingSharedTotal)} (/${unpaid})`).newline();
+                } else {
+                    p.text(`Total: ${formatCOP(breakdown.sharedTotal)} (/${unpaid})`).newline();
+                }
                 p.line('-', W);
             }
 
@@ -425,6 +438,11 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
             }
         });
         p.smallFont(false).line('-', W);
+    }
+
+    if (!isMultiClient && retiredPaidShared > 0) {
+        p.row('Pagado por retirados', `-${formatCOP(retiredPaidShared)}`, W);
+        p.line('-', W);
     }
 
     p.align(1).bold(true).text(hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:').newline();

@@ -28,6 +28,14 @@ export function TotalDetailsModal({
     const seats = session?.seats || [];
     const isMultiClient = seats.length > 1;
 
+    const retiredPaidShared = (() => {
+        if (!session?.notes || !session.notes.includes('|||RETIRED_PAID_SHARED:')) return 0;
+        const parts = session.notes.split('|||RETIRED_PAID_SHARED:')[1];
+        if (!parts) return 0;
+        const val = parseFloat(parts.split('|||')[0].trim());
+        return isNaN(val) ? 0 : val;
+    })();
+
     const [activeTab, setActiveTab] = React.useState('clients');
 
     React.useEffect(() => {
@@ -153,7 +161,14 @@ export function TotalDetailsModal({
                                         Consumo Compartido
                                     </span>
                                     <span className="text-base font-black text-indigo-800 dark:text-indigo-300">
-                                        {formatCOP(breakdown.sharedTotal)}
+                                        {breakdown.retiredPaidShared > 0 ? (
+                                            <span className="flex flex-col items-end">
+                                                <span className="text-[10px] line-through opacity-55 font-normal">{formatCOP(breakdown.sharedTotal)}</span>
+                                                <span className="text-emerald-600 dark:text-emerald-450">{formatCOP(breakdown.remainingSharedTotal)}</span>
+                                            </span>
+                                        ) : (
+                                            formatCOP(breakdown.sharedTotal)
+                                        )}
                                     </span>
                                 </div>
                                 <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-350">
@@ -189,10 +204,16 @@ export function TotalDetailsModal({
                                         </div>
                                     ))}
                                 </div>
-                                <div className="mt-2 pt-2 border-t border-indigo-200/30 dark:border-indigo-900/30 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
-                                    Cuota por cliente (÷{seats.filter(s => !s.paid).length}): <span className="font-bold">{formatCOP(breakdown.sharedPerSeat)}</span>
+                                    {breakdown.retiredPaidShared > 0 && (
+                                        <div className="flex justify-between text-emerald-650 dark:text-emerald-400 font-bold border-t border-emerald-100/20 pt-1.5 mt-1.5">
+                                            <span>✓ Pagado por clientes retirados</span>
+                                            <span>-{formatCOP(breakdown.retiredPaidShared)}</span>
+                                        </div>
+                                    )}
+                                    <div className="mt-2 pt-2 border-t border-indigo-200/30 dark:border-indigo-900/30 text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
+                                        {breakdown.retiredPaidShared > 0 ? 'Cuota restante por cliente' : 'Cuota por cliente'} (÷{seats.filter(s => !s.paid).length}): <span className="font-bold">{formatCOP(breakdown.sharedPerSeat)}</span>
+                                    </div>
                                 </div>
-                            </div>
                         )}
 
                         {/* Cuentas de Clientes */}
@@ -393,6 +414,12 @@ export function TotalDetailsModal({
                                 <span className="text-xs text-slate-400 italic">No hay consumos registrados</span>
                             )}
                         </div>
+                        {retiredPaidShared > 0 && (
+                            <div className="flex justify-between items-center p-3 bg-emerald-50/50 dark:bg-emerald-950/10 rounded-xl border border-emerald-200/30 dark:border-emerald-800/20 text-sm">
+                                <span className="font-bold text-emerald-700 dark:text-emerald-400">✓ Pagado por clientes retirados</span>
+                                <span className="font-black text-emerald-600 dark:text-emerald-400">-{formatCOP(retiredPaidShared)}</span>
+                            </div>
+                        )}
                     </>
                 )}
 

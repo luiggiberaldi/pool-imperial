@@ -24,6 +24,13 @@ import { FLOOR_ITEMS } from '../../data/floorPlanData';
 import { calculateElapsedTime } from '../../utils/tableBillingEngine';
 import { showToast } from '../Toast';
 import { useSharedTick } from '../../hooks/useSharedTick';
+import mesaPoolSvg from '../../assets/mesa-pool.svg';
+import mesasNormalesSvg from '../../assets/mesas-normales.svg';
+import mesaRedondaSvg from '../../assets/mesa-redonda.svg';
+import bancosSvg from '../../assets/bancos.svg';
+import barraSvg from '../../assets/barra.svg';
+import pisoMaderaPng from '../../assets/piso-madera-clara.png';
+import logoPng from '../../assets/logo.png';
 
 
 
@@ -254,7 +261,7 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, stat
         : 'brightness(1.05) saturate(1.05)';
 
     // All pool tables use the same horizontal SVG image, rotated 90 degrees if the visual orientation is portrait
-    const imgSrc = '/mesa-pool.svg';
+    const imgSrc = mesaPoolSvg;
 
     const imageStyle = isPortrait ? {
         position: 'absolute',
@@ -321,6 +328,8 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, stat
                     ...imageStyle,
                     filter: filterStyle
                 }}
+                onLoad={() => console.log(`[FloorPlanView] Loaded PoolTable image for: ${item.label}`)}
+                onError={() => console.error(`[FloorPlanView] Error loading PoolTable image (${imgSrc}) for: ${item.label}`)}
             />
 
             {/* Tint overlay for visual status feedback */}
@@ -438,7 +447,7 @@ const DiningTableEl = React.memo(function DiningTableEl({ item, table, session, 
                 : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
     };
 
-    const imgSrc = '/mesas-normales.svg';
+    const imgSrc = mesasNormalesSvg;
 
     const handleClick = (e) => {
         if (onItemClick) {
@@ -476,6 +485,8 @@ const DiningTableEl = React.memo(function DiningTableEl({ item, table, session, 
                 alt={item.label}
                 className="pointer-events-none select-none w-full h-full object-fill"
                 style={{ transform: scale !== 1 ? `scale(${scale})` : undefined }}
+                onLoad={() => console.log(`[FloorPlanView] Loaded DiningTable image for: ${item.label}`)}
+                onError={() => console.error(`[FloorPlanView] Error loading DiningTable image (${imgSrc}) for: ${item.label}`)}
             />
 
             {/* Tint overlay for visual status feedback */}
@@ -546,7 +557,7 @@ const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, st
                 : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
     };
 
-    const imgSrc = '/mesa-redonda.svg';
+    const imgSrc = mesaRedondaSvg;
 
     const handleClick = (e) => {
         if (onItemClick) {
@@ -590,6 +601,8 @@ const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, st
                     alt={item.label}
                     className="pointer-events-none select-none w-full h-full object-contain"
                     style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
+                    onLoad={() => console.log(`[FloorPlanView] Loaded RoundStool image for: ${item.label}`)}
+                    onError={() => console.error(`[FloorPlanView] Error loading RoundStool image (${imgSrc}) for: ${item.label}`)}
                 />
                 <div 
                     className="absolute inset-0 z-10 pointer-events-none transition-colors duration-300 rounded-full"
@@ -649,7 +662,7 @@ const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, status
                 : '0 0 12px rgba(239, 68, 68, 0.65), inset 0 0 4px rgba(239, 68, 68, 0.3)'
     };
 
-    const imgSrc = '/bancos.svg';
+    const imgSrc = bancosSvg;
 
     const handleClick = (e) => {
         if (onItemClick) {
@@ -692,6 +705,8 @@ const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, status
                     alt={item.label}
                     className="pointer-events-none select-none w-full h-full object-contain"
                     style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
+                    onLoad={() => console.log(`[FloorPlanView] Loaded BarStool image for: ${item.label}`)}
+                    onError={() => console.error(`[FloorPlanView] Error loading BarStool image (${imgSrc}) for: ${item.label}`)}
                 />
                 <div 
                     className="absolute inset-0 z-10 pointer-events-none transition-colors duration-300 rounded-full"
@@ -763,10 +778,12 @@ const BarCounterEl = React.memo(function BarCounterEl({ item, isCanvasRotated, o
             className={`overflow-hidden flex items-center justify-center ${props.className || ''}`}
         >
             <img 
-                src="/barra.svg" 
+                src={barraSvg} 
                 alt={item.label} 
                 className="pointer-events-none select-none"
                 style={imageStyle}
+                onLoad={() => console.log(`[FloorPlanView] Loaded BarCounter image for: ${item.label || 'Bar'}`)}
+                onError={() => console.error(`[FloorPlanView] Error loading BarCounter image (${barraSvg}) for: ${item.label || 'Bar'}`)}
             />
             {/* Etiqueta */}
             {item.label && (
@@ -868,10 +885,12 @@ const LogoEl = React.memo(function LogoEl({ item, isCanvasRotated, onItemClick, 
             className={`flex items-center justify-center select-none overflow-hidden ${props.className || ''}`}
         >
             <img 
-                src="/logo.png" 
+                src={logoPng} 
                 alt="Pool Imperial" 
                 className="h-full object-contain select-none pointer-events-none transition-transform duration-300"
                 style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
+                onLoad={() => console.log(`[FloorPlanView] Loaded Logo image`)}
+                onError={() => console.error(`[FloorPlanView] Error loading Logo image (${logoPng})`)}
             />
         </div>
     );
@@ -1375,13 +1394,29 @@ function FloorPlanEditorPanel({ selectedItemId, items, setItems, onClose }) {
 export default function FloorPlanView({ onTableSelect, selectedTableId, isEditing, onExitEditing }) {
     const tables = useTablesStore(s => s.tables);
     const activeSessions = useTablesStore(s => s.activeSessions);
-
     const tick = useSharedTick();
 
     // Auto-scaling responsive logic
     const canvasParentRef = useRef(null);
     const [dimensions, setDimensions] = useState({ width: 1000, height: 562.5, scale: 1, isRotated: false });
     const [isMeasured, setIsMeasured] = useState(false);
+
+    // Console logging to monitor loading and state issues
+    useEffect(() => {
+        console.log("[FloorPlanView] Component mounted/updated. Context details:", {
+            totalTablesStore: tables?.length,
+            activeSessionsStore: activeSessions?.length,
+            isEditing
+        });
+    }, [tables?.length, activeSessions?.length, isEditing]);
+
+    useEffect(() => {
+        if (isMeasured) {
+            console.log("[FloorPlanView] Responsive canvas measured successfully:", dimensions);
+        } else {
+            console.warn("[FloorPlanView] Responsive canvas measurement pending...");
+        }
+    }, [isMeasured, dimensions]);
 
     // Zoom & Pan states for Mobile & Touch optimization
     const [zoomLevel, setZoomLevel] = useState(1);
@@ -2102,7 +2137,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                             left: 0;
                             width: 1000px;
                             height: 562.5px;
-                            background-image: url('/piso-madera-clara.png');
+                            background-image: url('${pisoMaderaPng}');
                             background-repeat: repeat;
                             background-size: 220px 220px;
                             border: 3.5px solid #d97706; /* Luxurious brass/gold frame */

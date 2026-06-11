@@ -2,7 +2,7 @@ import { supabaseCloud } from '../../config/supabaseCloud';
 import { logEvent } from '../../services/auditService';
 import { useAuthStore } from './authStore';
 import { useOrdersStore } from './useOrdersStore';
-import { calculateElapsedTime } from '../../utils/tableBillingEngine';
+import { calculateElapsedTime, calculateFullTableBreakdown } from '../../utils/tableBillingEngine';
 import { getServerNow } from '../../utils/serverClock';
 
 const getUser = () => useAuthStore.getState().currentUser;
@@ -334,15 +334,91 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
     removeSeatFromSession: async (sessionId, seatId) => {
         const session = get().activeSessions.find(s => s.id === sessionId);
         if (!session) return;
+        
+        const seatToRemove = (session.seats || []).find(s => s.id === seatId);
+        let notesUpdate = session.notes || '';
+        
+        // If removing a PAID seat, persist their shared portion before deletion
+        if (seatToRemove?.paid) {
+            try {
+                const { orders, orderItems } = useOrdersStore.getState();
+                const order = orders.find(o => o.table_session_id === sessionId);
+                const currentItems = order ? orderItems.filter(i => i.order_id === order.id) : [];
+                const config = get().config;
+                const tableId = session.table_id;
+                const table = get().tables.find(t => t.id === tableId);
+                const tableType = table?.type || 'POOL';
+                const isTimeFree = tableType === 'NORMAL';
+                const elapsed = calculateElapsedTime(session.started_at);
+                const hoursOff = get().paidHoursOffsets?.[sessionId] || 0;
+                const roundsOff = get().paidRoundsOffsets?.[sessionId] || 0;
+                
+                // Calculate breakdown treating the seat to remove as unpaid to get its share
+                const calculationSeats = (session.seats || []).map(s =>
+                    s.id === seatId ? { ...s, paid: false } : s
+                );
+                
+                const breakdown = calculateFullTableBreakdown(
+                    session, calculationSeats, elapsed, config, currentItems,
+                    null, null, isTimeFree, hoursOff, roundsOff, tableType
+                );
+                
+                if (breakdown) {
+                    const seatBd = breakdown.seats.find(s => s.seat.id === seatId);
+                    const seatSharedPortion = seatBd?.sharedPortion || 0;
+                    
+                    if (seatSharedPortion > 0) {
+                        // Parse existing RETIRED_PAID_SHARED
+                        let existing = 0;
+                        if (notesUpdate.includes('|||RETIRED_PAID_SHARED:')) {
+                            const parts = notesUpdate.split('|||RETIRED_PAID_SHARED:')[1];
+                            if (parts) {
+                                const val = parseFloat(parts.split('|||')[0].trim());
+                                if (!isNaN(val)) existing = val;
+                            }
+                        }
+                        const newTotal = existing + seatSharedPortion;
+                        // Replace or append the tag
+                        notesUpdate = notesUpdate.replace(/\|\|\|RETIRED_PAID_SHARED:[^|]*\|\|\|/g, '').trim();
+                        notesUpdate = `${notesUpdate}${notesUpdate ? ' ' : ''}|||RETIRED_PAID_SHARED:${newTotal}|||`;
+                    }
+                }
+            } catch (e) {
+                console.warn('[removeSeatFromSession] Could not compute retired shared portion:', e);
+            }
+        }
+        
         const newSeats = (session.seats || []).filter(s => s.id !== seatId);
-        const payload = { seats: newSeats, guest_count: newSeats.length };
+        
+        // Auto-update client_name/client_id if it matched the retiring seat
+        let clientNameUpdate = session.client_name;
+        let clientIdUpdate = session.client_id;
+        const firstRemaining = newSeats.find(s => !s.paid);
+        if (firstRemaining && seatToRemove) {
+            const retiredLabel = seatToRemove.label || '';
+            if (session.client_name === retiredLabel || (seatToRemove.customerId && seatToRemove.customerId === session.client_id)) {
+                clientNameUpdate = firstRemaining.label || null;
+                clientIdUpdate = firstRemaining.customerId || null;
+            }
+        }
+        
+        const payload = {
+            seats: newSeats,
+            guest_count: newSeats.length,
+            notes: notesUpdate || null,
+            client_name: clientNameUpdate || null,
+            client_id: clientIdUpdate || null
+        };
+        
         const newSessions = get().activeSessions.map(s =>
             s.id === sessionId ? { ...s, ...payload } : s
         );
         set({ activeSessions: newSessions });
         await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
-        const seatLabel = (session.seats || []).find(s => s.id === seatId)?.label || seatId;
+        
+        const seatLabel = seatToRemove?.label || seatId;
         logEvent('MESAS', 'CLIENTE_LIBERADO', `Cliente "${seatLabel}" retirado de la sesión`, getUser(), { sessionId, seatId });
+        
         try {
             const { error } = await supabaseCloud.from('table_sessions').update(payload).eq('id', sessionId);
             if (error) throw error;

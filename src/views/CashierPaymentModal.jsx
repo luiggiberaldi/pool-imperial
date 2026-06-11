@@ -35,7 +35,12 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
     // Service charge & tip toggles
     const [includeServiceCharge, setIncludeServiceCharge] = useState(() => config?.defaultServiceChargeEnabled ?? true);
     const [serviceChargePercent, setServiceChargePercent] = useState(() => config?.defaultServiceChargePercent ?? 10);
-    const [includeTip, setIncludeTip] = useState(() => config?.defaultTipEnabled ?? false);
+    const [includeTip, setIncludeTip] = useState(() => {
+        const notes = session?.notes || '';
+        const match = notes.match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
+        if (match) return match[1] === '1';
+        return config?.defaultTipEnabled ?? false;
+    });
     const [tipPercent, setTipPercent] = useState(() => config?.defaultTipPercent ?? 8);
 
     // Customer selection state
@@ -424,28 +429,23 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
             // 6. Mostrar diálogo post-pago o marcar asiento como pagado
             if (seatId) {
                 const allPaid = await useTablesStore.getState().markSeatAsPaid(session.id, seatId);
-                if (allPaid) {
-                    setPostPaymentAction({
-                        sessionId: session.id,
-                        tableName: table.name,
-                        grandTotal,
-                        method: isFiado ? 'FIADO' : method,
-                        customerName: selectedCustomer?.name || selectedCustomer?.nombre || null,
-                        isFiado
-                    });
-                    showToast(
-                        'Cobro Exitoso',
-                        `El último cliente fue pagado. Se requiere liberar la mesa.`,
-                        'success'
-                    );
-                } else {
-                    showToast(
-                        'Cobro Exitoso',
-                        `Cliente pagado correctamente. La mesa sigue activa con otros clientes.`,
-                        'success'
-                    );
-                    onSuccess();
-                }
+                const seatLabel = session?.seats?.find(s => s.id === seatId)?.label || 'Cliente';
+                setPostPaymentAction({
+                    sessionId: session.id,
+                    tableName: table.name,
+                    grandTotal,
+                    method: isFiado ? 'FIADO' : method,
+                    customerName: selectedCustomer?.name || selectedCustomer?.nombre || null,
+                    isFiado,
+                    seatId: seatId,
+                    seatLabel,
+                    allPaid: allPaid
+                });
+                showToast(
+                    'Cobro Exitoso',
+                    `Cliente pagado correctamente.`,
+                    'success'
+                );
             } else {
                 setPostPaymentAction({
                     sessionId: session.id,
@@ -765,40 +765,84 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
         {postPaymentAction && (
             <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md">
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-6 mx-4 max-w-sm w-full animate-in zoom-in-95">
-                    <div className="text-center mb-5">
-                        <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3">
-                            <span className="text-2xl">✓</span>
-                        </div>
-                        <h3 className="text-lg font-black text-slate-800 dark:text-white">Cobro Exitoso</h3>
-                        <p className="text-sm text-slate-500 mt-1">¿Qué deseas hacer con <strong>{postPaymentAction.tableName}</strong>?</p>
-                    </div>
-                    <div className="flex flex-col gap-2.5">
-                        <button
-                            onClick={async () => {
-                                try {
-                                    await closeSession(postPaymentAction.sessionId);
-                                } catch { showToast("Error al liberar mesa", "warning"); }
-                                setPostPaymentAction(null);
-                                onSuccess();
-                            }}
-                            className="w-full py-3.5 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
-                        >
-                            Liberar Mesa
-                        </button>
-                        <button
-                            onClick={async () => {
-                                try {
-                                    await resetSessionAfterPayment(postPaymentAction.sessionId);
-                                    await cancelOrderBySessionId(postPaymentAction.sessionId);
-                                } catch { showToast("Error al resetear mesa", "warning"); }
-                                setPostPaymentAction(null);
-                                onSuccess();
-                            }}
-                            className="w-full py-3.5 rounded-xl font-black text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/30 border-2 border-violet-200 dark:border-violet-700/50 hover:bg-violet-100 dark:hover:bg-violet-900/50 active:scale-95 transition-all"
-                        >
-                            Dejar Activa
-                        </button>
-                    </div>
+                    {postPaymentAction.seatId ? (
+                        <>
+                            <div className="text-center mb-5">
+                                <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3 animate-bounce">
+                                    <span className="text-2xl text-emerald-600 dark:text-emerald-400">✓</span>
+                                </div>
+                                <h3 className="text-lg font-black text-slate-800 dark:text-white">Cobro Exitoso</h3>
+                                <p className="text-sm text-slate-500 mt-1">¿El cliente <strong>{postPaymentAction.seatLabel}</strong> continúa en la mesa?</p>
+                            </div>
+                            <div className="flex flex-col gap-2.5">
+                                <button
+                                    onClick={async () => {
+                                        setPostPaymentAction(null);
+                                        onSuccess();
+                                    }}
+                                    className="w-full py-3.5 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                                >
+                                    Sí, mantener en la mesa
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await useTablesStore.getState().removeSeatFromSession(postPaymentAction.sessionId, postPaymentAction.seatId);
+                                            if (postPaymentAction.allPaid) {
+                                                await closeSession(postPaymentAction.sessionId);
+                                                showToast("Mesa liberada", "success");
+                                            }
+                                        } catch (err) {
+                                            console.error(err);
+                                            showToast("Error al retirar cliente", "warning");
+                                        }
+                                        setPostPaymentAction(null);
+                                        onSuccess();
+                                    }}
+                                    className="w-full py-3.5 rounded-xl font-black text-rose-500 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 border-2 border-rose-200 dark:border-rose-700/50 hover:bg-rose-100 dark:hover:bg-rose-900/50 active:scale-95 transition-all"
+                                >
+                                    No, retirar de la mesa
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="text-center mb-5">
+                                <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3">
+                                    <span className="text-2xl">✓</span>
+                                </div>
+                                <h3 className="text-lg font-black text-slate-800 dark:text-white">Cobro Exitoso</h3>
+                                <p className="text-sm text-slate-500 mt-1">¿Qué deseas hacer con <strong>{postPaymentAction.tableName}</strong>?</p>
+                            </div>
+                            <div className="flex flex-col gap-2.5">
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await closeSession(postPaymentAction.sessionId);
+                                        } catch { showToast("Error al liberar mesa", "warning"); }
+                                        setPostPaymentAction(null);
+                                        onSuccess();
+                                    }}
+                                    className="w-full py-3.5 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                                >
+                                    Liberar Mesa
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await resetSessionAfterPayment(postPaymentAction.sessionId);
+                                            await cancelOrderBySessionId(postPaymentAction.sessionId);
+                                        } catch { showToast("Error al resetear mesa", "warning"); }
+                                        setPostPaymentAction(null);
+                                        onSuccess();
+                                    }}
+                                    className="w-full py-3.5 rounded-xl font-black text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/30 border-2 border-violet-200 dark:border-violet-700/50 hover:bg-violet-100 dark:hover:bg-violet-900/50 active:scale-95 transition-all"
+                                >
+                                    Dejar Activa
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         )}

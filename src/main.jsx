@@ -7,10 +7,93 @@ import { supabaseCloud } from './config/supabaseCloud.js'
 import { storageService } from './utils/storageService.js'
 import './index.css'
 
+window.supabaseCloud = supabaseCloud;
+window.storageService = storageService;
+
 // ── ELIMINACIÓN TEMPORAL CORRELATIVO 7 Y HOMOLOGACIÓN EN LA NUBE ──
 (async () => {
   try {
+    // ── AUTO-ELIMINACIÓN DE VENTAS DE ATAIR DEL DÍA DE HOY (11-JUN-2026) ──
+    try {
+      const SALES_KEY = 'bodega_sales_v1';
+      const localSales = await storageService.getItem(SALES_KEY, []);
+      if (Array.isArray(localSales)) {
+        const { data: { session } } = await supabaseCloud.auth.getSession();
+        const userId = session?.user?.id;
+        
+        let dbSaleIds = [];
+        if (userId) {
+          try {
+            // Consultar sync_documents en la nube para encontrar ventas de hoy asociadas a Atair
+            const { data: syncDocs } = await supabaseCloud
+              .from('sync_documents')
+              .select('doc_id, data')
+              .eq('user_id', userId)
+              .eq('collection', 'sale');
+            
+            if (Array.isArray(syncDocs)) {
+              const targetDocs = syncDocs.filter(doc => {
+                const s = doc.data?.payload;
+                return s && 
+                       (s.customerName?.toLowerCase().includes('atair') || s.clienteName?.toLowerCase().includes('atair')) && 
+                       s.timestamp?.startsWith('2026-06-11');
+              });
+              dbSaleIds = targetDocs.map(doc => doc.doc_id);
+            }
+          } catch (err) {
+            console.warn('⚠️ [Auto-Clean] Error consultando syncDocs de la nube:', err.message);
+          }
+        }
 
+        // Obtener las ventas locales que coincidan
+        const localAtairSales = localSales.filter(s => 
+          s && 
+          (s.customerName?.toLowerCase().includes('atair') || s.clienteName?.toLowerCase().includes('atair')) && 
+          s.timestamp?.startsWith('2026-06-11')
+        );
+        const localAtairIds = localAtairSales.map(s => s.id);
+
+        // Consolidar todos los IDs únicos a eliminar
+        const allTargetIds = Array.from(new Set([...localAtairIds, ...dbSaleIds]));
+
+        if (allTargetIds.length > 0) {
+          console.log(`🗑️ [Auto-Clean] Encontradas ${allTargetIds.length} ventas de Atair para hoy a eliminar:`, allTargetIds);
+          
+          if (userId) {
+            for (const saleId of allTargetIds) {
+              try {
+                // 1. Borrar de las tablas relacionales y documentos en la nube
+                await supabaseCloud.from('sale_items').delete().eq('sale_id', saleId);
+                await supabaseCloud.from('sales').delete().eq('id', saleId);
+                await supabaseCloud.from('sync_documents').delete()
+                  .eq('user_id', userId)
+                  .eq('collection', 'sale')
+                  .eq('doc_id', saleId);
+                console.log(`✅ [Auto-Clean] Eliminada de la nube: ${saleId}`);
+              } catch (err) {
+                console.warn(`⚠️ [Auto-Clean] Error eliminando ${saleId} de la nube:`, err.message);
+              }
+            }
+          }
+
+          // 2. Borrar localmente
+          const cleanSales = localSales.filter(s => !allTargetIds.includes(s.id));
+          await storageService.setItem(SALES_KEY, cleanSales);
+          
+          // 3. Resetear timestamp de sincronización de ventas para forzar recarga limpia
+          localStorage.removeItem('_cloud_last_sales_pull_at__poolimperialbar@gmail.com');
+          localStorage.removeItem('_cloud_last_sales_pull_at');
+
+          console.log('✅ [Auto-Clean] Eliminadas localmente de IndexedDB y reset de timestamp.');
+          window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
+          
+          console.log(`✅ [Auto-Clean] Limpieza completada: Se eliminaron ${allTargetIds.length} ventas de Atair de hoy.`);
+          window.location.reload();
+        }
+      }
+    } catch (cleanErr) {
+      console.error('❌ [Auto-Clean] Error en script de limpieza:', cleanErr);
+    }
 
     // --- PLAN B: RECONSTRUCCIÓN DE CLIENTES DESDE VENTAS ---
     try {

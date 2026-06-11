@@ -306,7 +306,11 @@ export default function TableCardInlineModals({
         {/* CustomerSheet para Abrir Mesa (y buscar cliente por seat) */}
         {showCustomerSheet && (
             <CustomerSheet
-                customers={allCustomers}
+                customers={allCustomers.filter(c => {
+                    const selectedIds = sessionSeats.map(s => s.customerId).filter(Boolean);
+                    const currentId = searchingSeatIndex !== null ? sessionSeats[searchingSeatIndex]?.customerId : null;
+                    return !selectedIds.includes(c.id) || c.id === currentId;
+                })}
                 selectedId={searchingSeatIndex !== null ? sessionSeats[searchingSeatIndex]?.customerId : sessionClientId}
                 onSelect={id => {
                     if (searchingSeatIndex !== null) {
@@ -330,7 +334,11 @@ export default function TableCardInlineModals({
         {/* CustomerSheet para Editar Mesa */}
         {showEditCustomerSheet && (
             <CustomerSheet
-                customers={allCustomers}
+                customers={allCustomers.filter(c => {
+                    const selectedIds = editSeats.map(s => s.customerId).filter(Boolean);
+                    const currentId = searchingEditSeatIndex !== null ? editSeats[searchingEditSeatIndex]?.customerId : null;
+                    return !selectedIds.includes(c.id) || c.id === currentId;
+                })}
                 selectedId={searchingEditSeatIndex !== null ? editSeats[searchingEditSeatIndex]?.customerId : editClientId}
                 onSelect={id => {
                     if (searchingEditSeatIndex !== null) {

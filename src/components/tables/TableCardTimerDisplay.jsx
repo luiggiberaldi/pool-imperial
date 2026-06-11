@@ -28,6 +28,7 @@ export default function TableCardTimerDisplay({
     roundsOffset, hoursOffset,
     onAdjustTime, onPauseTimer, onResumeTimer, onShowTotalDetails,
     elapsedSeconds = 0, remainingSeconds = 0,
+    retiredPaidShared = 0,
 }) {
     return (
         <div className="flex-1 flex flex-col justify-center items-center py-1 sm:py-3 min-h-[90px]">
@@ -171,23 +172,32 @@ export default function TableCardTimerDisplay({
                             </button>
                         </div>
 
-                        {(() => {
-                            if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return null;
-                            try {
-                                const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
-                                const list = JSON.parse(histStr);
-                                const total = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                                if (total <= 0) return null;
-                                return (
-                                    <div className="text-[10px] sm:text-xs font-black bg-emerald-500/20 border border-emerald-450/30 text-emerald-300 px-2.5 py-1 rounded-lg flex items-center gap-1 animate-in fade-in duration-200">
-                                        <span>Abonado:</span>
-                                        <span>{formatCOP(total)}</span>
-                                    </div>
-                                );
-                            } catch (_) {
-                                return null;
-                            }
-                        })()}
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                            {(() => {
+                                if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return null;
+                                try {
+                                    const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+                                    const list = JSON.parse(histStr);
+                                    const total = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                                    if (total <= 0) return null;
+                                    return (
+                                        <div className="text-[10px] sm:text-xs font-black bg-emerald-500/20 border border-emerald-450/30 text-emerald-300 px-2.5 py-1 rounded-lg flex items-center gap-1 animate-in fade-in duration-200">
+                                            <span>Abonado:</span>
+                                            <span>{formatCOP(total)}</span>
+                                        </div>
+                                    );
+                                } catch (_) {
+                                    return null;
+                                }
+                            })()}
+
+                            {retiredPaidShared > 0 && (
+                                <div className="text-[10px] sm:text-xs font-black bg-teal-500/20 border border-teal-450/30 text-teal-300 px-2.5 py-1 rounded-lg flex items-center gap-1 animate-in fade-in duration-200">
+                                    <span>Retirados:</span>
+                                    <span>{formatCOP(retiredPaidShared)}</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                     {hasPinas && !isMixedMode && (() => {
                         const sharedRounds = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
