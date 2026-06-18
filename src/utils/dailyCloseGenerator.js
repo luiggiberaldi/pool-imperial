@@ -175,17 +175,34 @@ export async function generateDailyClosePDF({
     //  DESGLOSE POR MÉTODO DE PAGO
     // ════════════════════════════════════
     if (paymentRows > 0) {
-        y = sectionTitle('PAGOS POR MÉTODO', y);
+        y = sectionTitle('PAGOS POR METODO', y);
+
+        // Contar transacciones por methodId desde allSales
+        const countMap = {};
+        allSales.forEach(s => {
+            if (s.status === 'ANULADA') return;
+            if (s.payments && s.payments.length > 0) {
+                s.payments.forEach(p => {
+                    if (p.isAbonoPrevio) return;
+                    countMap[p.methodId] = (countMap[p.methodId] || 0) + 1;
+                });
+            } else if (s.paymentMethod) {
+                countMap[s.paymentMethod] = (countMap[s.paymentMethod] || 0) + 1;
+            }
+        });
 
         Object.entries(paymentBreakdown).forEach(([methodId, data]) => {
             const label = toTitleCase(getPaymentLabel(methodId, data.label));
+            const count = countMap[methodId] || 0;
+            const countLabel = count > 0 ? ` (${count} ${count === 1 ? 'pago' : 'pagos'})` : '';
+            const labelWithCount = `${label}${countLabel}`;
             const isUsd = data.currency === 'USD';
             const val = isUsd ? formatUsd(data.total) : formatCOP(data.total);
 
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7);
             doc.setTextColor(...BODY);
-            doc.text(label, M, y);
+            doc.text(labelWithCount, M, y);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(...INK);
             doc.text(val, RIGHT, y, { align: 'right' });

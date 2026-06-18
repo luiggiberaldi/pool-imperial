@@ -14,6 +14,7 @@ import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart } from '../utils/tableBillingEngine';
 import { round2 } from '../utils/dinero';
 import { FinancialEngine } from '../core/FinancialEngine';
+import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 
 const formatCOP = (val) => {
     const rawVal = Math.round(val || 0);
@@ -695,6 +696,203 @@ export async function printReceiptEscPos(sale, bcvRate) {
     p.align(1).bold(true).text('Gracias por tu compra!').newline();
     p.bold(true).text('Comprobante de control interno').newline();
 
+    p.feed(4).cut();
+
+    await sendEscPosCommand(Array.from(p.build()));
+    return true;
+}
+
+export async function printDailyCloseEscPos({
+    sales = [],
+    allSales = [],
+    paymentBreakdown = {},
+    topProducts = [],
+    todayTotalCOP = 0,
+    todayProfit = 0,
+    todayItemsSold = 0,
+    reconData = null,
+    apertura = null,
+    totalTax = 0,
+    taxBreakdown = {},
+    cierreId = null
+}) {
+    const port = await getConnectedPrinter();
+    if (!port) return false;
+
+    const settings = {
+        name:    localStorage.getItem('business_name')  || 'Pool Imperial',
+        rif:     localStorage.getItem('business_rif')   || '',
+        address: localStorage.getItem('business_address') || '',
+        phone:   localStorage.getItem('business_phone') || '',
+    };
+
+    const cfg = getWebSerialConfig();
+    const W   = cfg.paperWidth >= 80 ? 42 : 32;
+    const WS  = cfg.paperWidth >= 80 ? 56 : 42;
+
+    const now = new Date(cierreId || Date.now());
+    const fecha = now.toLocaleDateString('es-CO');
+    const hora = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+
+    const totalCOP = todayTotalCOP || 0;
+    const netCOP = totalCOP - totalTax;
+
+    const totalUSD = allSales
+        .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
+        .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
+
+    // Propinas por personal
+    const tipsByUser = {};
+    let totalTips = 0;
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) {
+                const user = s.meseroNombre || s.vendedorNombre || 'Sistema';
+                const amt = (item.priceUsd || 0) * (item.qty || 1);
+                if (amt > 0) {
+                    tipsByUser[user] = (tipsByUser[user] || 0) + amt;
+                    totalTips += amt;
+                }
+            }
+        });
+    });
+
+    const p = escposEncoder().init();
+
+    // Logo o nombre del negocio
+    p.align(1).bold(true).doubleHeight(true).text(settings.name.toUpperCase()).newline();
+    p.doubleHeight(false).bold(false);
+    if (settings.rif) p.text('NIT: ' + settings.rif).newline();
+    if (settings.address) p.text(settings.address).newline();
+    if (settings.phone) p.text('Tel: ' + settings.phone).newline();
+    p.newline();
+
+    p.bold(true).text('CIERRE DE CAJA').newline();
+    p.bold(false).text(`${fecha} ${hora}`).newline();
+    p.line('-', W);
+
+    // ── Resumen General ──
+    p.align(1).bold(true).text('RESUMEN GENERAL').newline().bold(false).align(0);
+    p.row('Ventas realizadas:', String(sales.length), W);
+    p.row('Articulos vendidos:', String(todayItemsSold), W);
+    p.row('Ingresos Brutos COP:', formatCOP(totalCOP), W);
+    p.row('Ingresos Netos COP:', formatCOP(netCOP), W);
+    p.row('Ingresos USD equiv.:', `$ ${totalUSD.toFixed(2)}`, W);
+    p.row('Ganancia estimada:', formatCOP(todayProfit), W);
+    p.line('-', W);
+
+    // Contar transacciones por methodId desde allSales
+    const countMap = {};
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        if (s.payments && s.payments.length > 0) {
+            s.payments.forEach(pay => {
+                if (pay.isAbonoPrevio) return;
+                countMap[pay.methodId] = (countMap[pay.methodId] || 0) + 1;
+            });
+        } else if (s.paymentMethod) {
+            countMap[s.paymentMethod] = (countMap[s.paymentMethod] || 0) + 1;
+        }
+    });
+
+    // ── Pagos por Método ──
+    const paymentEntries = Object.entries(paymentBreakdown || {}).filter(([, d]) => d.total > 0);
+    if (paymentEntries.length > 0) {
+        p.align(1).bold(true).text('PAGOS POR METODO').newline().bold(false).align(0);
+        paymentEntries.forEach(([methodId, d]) => {
+            const label = toTitleCase(getPaymentLabel(methodId, d.label));
+            const count = countMap[methodId] || 0;
+            const countLabel = count > 0 ? ` (${count} ${count === 1 ? 'pago' : 'pagos'})` : '';
+            const labelWithCount = `${label}${countLabel}`;
+            const isUsd = d.currency === 'USD';
+            const val = isUsd ? `$ ${d.total.toFixed(2)}` : formatCOP(d.total);
+            p.row(labelWithCount, val, W);
+        });
+        p.line('-', W);
+    }
+
+    // ── Impuestos ──
+    if (totalTax > 0) {
+        p.align(1).bold(true).text('IMPUESTOS RECAUDADOS').newline().bold(false).align(0);
+        p.row('Total Impuestos:', formatCOP(totalTax), W);
+        Object.entries(taxBreakdown || {}).forEach(([key, val]) => {
+            if (val <= 0) return;
+            const config = useTablesStore.getState().config;
+            const label = key === 'iva_19' ? `IVA ${config?.taxRateIva ?? 19}%` : key === 'impoconsumo_8' ? `Impoconsumo ${config?.taxRateImpoconsumo ?? 8}%` : key;
+            p.smallFont(true).row('  ' + label + ':', formatCOP(val), WS);
+            p.smallFont(false);
+        });
+        p.line('-', W);
+    }
+
+    // ── Propinas ──
+    const tipsUserRows = Object.keys(tipsByUser).length;
+    if (tipsUserRows > 0) {
+        p.align(1).bold(true).text('PROPINAS POR PERSONAL').newline().bold(false).align(0);
+        Object.entries(tipsByUser).forEach(([user, total]) => {
+            p.row(user + ':', formatCOP(total), W);
+        });
+        p.bold(true).row('Total Propinas:', formatCOP(totalTips), W).bold(false);
+        p.line('-', W);
+    }
+
+    // ── Cuadre de caja ──
+    if (reconData) {
+        const openingCOP = apertura?.openingCOP || apertura?.openingUsd || 0;
+        const openingUSD = apertura?.openingBs || 0;
+
+        const expectedCOP = (paymentBreakdown['efectivo']?.total || 0) + (paymentBreakdown['efectivo_cop']?.total || 0) + (paymentBreakdown['_vuelto_cop']?.total || 0);
+        const declaredCOP = reconData.declaredCop || reconData.declaredCOP || 0;
+        const diffCOP = declaredCOP - expectedCOP;
+
+        const expectedUSD = paymentBreakdown['efectivo_usd']?.total || 0;
+        const declaredUSD = reconData.declaredUsd || reconData.declaredUSD || 0;
+        const diffUSD = declaredUSD - expectedUSD;
+
+        p.align(1).bold(true).text('CUADRE DE CAJA').newline().bold(false).align(0);
+        p.row('Fondo inicial COP:', formatCOP(openingCOP), W);
+        p.row('COP Esperado:', formatCOP(expectedCOP), W);
+        p.row('COP Declarado:', formatCOP(declaredCOP), W);
+        p.row('COP Diferencia:', (diffCOP >= 0 ? '+' : '') + formatCOP(diffCOP), W);
+        p.newline();
+        p.row('Fondo inicial USD:', `$ ${openingUSD.toFixed(2)}`, W);
+        p.row('USD Esperado:', `$ ${expectedUSD.toFixed(2)}`, W);
+        p.row('USD Declarado:', `$ ${declaredUSD.toFixed(2)}`, W);
+        p.row('USD Diferencia:', (diffUSD >= 0 ? '+' : '') + `$ ${diffUSD.toFixed(2)}`, W);
+        p.line('-', W);
+    }
+
+    // ── Top Productos ──
+    if (topProducts && topProducts.length > 0) {
+        p.align(1).bold(true).text('PRODUCTOS MAS VENDIDOS').newline().bold(false).align(0);
+        topProducts.forEach((prod, i) => {
+            const label = `${i+1}. ${prod.name}`;
+            const cleanLabel = label.length > W - 10 ? label.substring(0, W - 12) + '…' : label;
+            p.smallFont(true).row(`${prod.qty}u ${cleanLabel}`, formatCOP(prod.revenue), WS);
+            p.smallFont(false);
+        });
+        p.line('-', W);
+    }
+
+    // ── Historial de Ventas ──
+    if (allSales && allSales.length > 0) {
+        p.align(1).bold(true).text('HISTORIAL DE VENTAS').newline().bold(false).align(0);
+        allSales.forEach(s => {
+            const ref = String(s.saleNumber || 0).padStart(4, '0');
+            const staff = (s.meseroNombre || s.vendedorNombre || 'Sistema').substring(0, 8);
+            const isCanceled = s.status === 'ANULADA';
+            const amountStr = isCanceled ? 'ANULADA' : formatCOP(s.totalCop || s.totalUsd);
+            p.smallFont(true).row(`#${ref} ${staff}`, amountStr, WS);
+            p.smallFont(false);
+        });
+        p.line('-', W);
+    }
+
+    // Pie
+    p.align(1).bold(true).text('Pool Imperial').newline();
+    p.bold(false).text('Reporte generado automaticamente').newline();
+    p.text('Sin valor fiscal').newline();
     p.feed(4).cut();
 
     await sendEscPosCommand(Array.from(p.build()));

@@ -1,5 +1,5 @@
 import { capitalizeName } from './calculatorUtils';
-import { printReceiptEscPos, getWebSerialConfig } from '../services/webSerialPrinter';
+import { printReceiptEscPos, getWebSerialConfig, printDailyCloseEscPos } from '../services/webSerialPrinter';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { showToast } from '../components/Toast';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
@@ -371,6 +371,31 @@ export async function printThermalDailyClose({
     taxBreakdown = {},
     cierreId = null
 }) {
+    const cfg = getWebSerialConfig();
+
+    // Si la impresora NO es del sistema, intentar imprimir por ESC/POS nativo
+    if (cfg.printerType !== 'system') {
+        try {
+            const printed = await printDailyCloseEscPos({
+                sales,
+                allSales,
+                paymentBreakdown,
+                topProducts,
+                todayTotalCOP,
+                todayProfit,
+                todayItemsSold,
+                reconData,
+                apertura,
+                totalTax,
+                taxBreakdown,
+                cierreId
+            });
+            if (printed) return;
+        } catch (err) {
+            console.error('[Cierre ESC/POS] Error al imprimir, fallback a HTML:', err);
+        }
+    }
+
     const settings = {
         name: localStorage.getItem('business_name') || 'Pool Imperial',
         rif: localStorage.getItem('business_rif') || '',
@@ -411,12 +436,12 @@ export async function printThermalDailyClose({
     const resumenGeneralHtml = `
         <div class="section-title">Resumen General</div>
         <table>
-            <tr><td>Ventas realizadas</td><td style="text-align:right;font-weight:bold;">${sales.length}</td></tr>
-            <tr><td>Artículos vendidos</td><td style="text-align:right;font-weight:bold;">${todayItemsSold}</td></tr>
-            <tr><td>Ingresos Brutos COP</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalCOP)}</td></tr>
-            <tr><td>Ingresos Netos COP</td><td style="text-align:right;font-weight:bold;">${formatCOP(netCOP)}</td></tr>
-            <tr><td>Ingresos USD equiv.</td><td style="text-align:right;font-weight:bold;">$ ${totalUSD.toFixed(2)}</td></tr>
-            <tr><td>Ganancia estimada</td><td style="text-align:right;font-weight:bold;">${formatCOP(todayProfit)}</td></tr>
+            <tr><td>Ventas realizadas:</td><td style="text-align:right;font-weight:bold;">${sales.length}</td></tr>
+            <tr><td>Articulos vendidos:</td><td style="text-align:right;font-weight:bold;">${todayItemsSold}</td></tr>
+            <tr><td>Ingresos Brutos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalCOP)}</td></tr>
+            <tr><td>Ingresos Netos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(netCOP)}</td></tr>
+            <tr><td>Ingresos USD equiv.:</td><td style="text-align:right;font-weight:bold;">$ ${totalUSD.toFixed(2)}</td></tr>
+            <tr><td>Ganancia estimada:</td><td style="text-align:right;font-weight:bold;">${formatCOP(todayProfit)}</td></tr>
         </table>
     `;
 
@@ -424,14 +449,30 @@ export async function printThermalDailyClose({
     let pagosMetodoHtml = '';
     const paymentEntries = Object.entries(paymentBreakdown || {}).filter(([, d]) => d.total > 0);
     if (paymentEntries.length > 0) {
+        // Contar transacciones por methodId desde allSales
+        const countMap = {};
+        allSales.forEach(s => {
+            if (s.status === 'ANULADA') return;
+            if (s.payments && s.payments.length > 0) {
+                s.payments.forEach(p => {
+                    if (p.isAbonoPrevio) return;
+                    countMap[p.methodId] = (countMap[p.methodId] || 0) + 1;
+                });
+            } else if (s.paymentMethod) {
+                countMap[s.paymentMethod] = (countMap[s.paymentMethod] || 0) + 1;
+            }
+        });
+
         pagosMetodoHtml = `
-            <div class="section-title">Pagos por Método</div>
+            <div class="section-title">Pagos por Metodo</div>
             <table>
                 ${paymentEntries.map(([methodId, d]) => {
                     const label = toTitleCase(getPaymentLabel(methodId, d.label));
+                    const count = countMap[methodId] || 0;
+                    const countLabel = count > 0 ? ` (${count} ${count === 1 ? 'pago' : 'pagos'})` : '';
                     const isUsd = d.currency === 'USD';
                     const val = isUsd ? `$ ${d.total.toFixed(2)}` : formatCOP(d.total);
-                    return `<tr><td>${label}</td><td style="text-align:right;font-weight:bold;">${val}</td></tr>`;
+                    return `<tr><td>${label}${countLabel}:</td><td style="text-align:right;font-weight:bold;">${val}</td></tr>`;
                 }).join('')}
             </table>
         `;
@@ -443,12 +484,12 @@ export async function printThermalDailyClose({
         impuestosHtml = `
             <div class="section-title">Impuestos Recaudados</div>
             <table>
-                <tr><td>Total Impuestos</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalTax)}</td></tr>
+                <tr><td>Total Impuestos:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalTax)}</td></tr>
                 ${Object.entries(taxBreakdown || {}).map(([key, val]) => {
                     if (val <= 0) return '';
                     const config = useTablesStore.getState().config;
                     const label = key === 'iva_19' ? `IVA ${config?.taxRateIva ?? 19}%` : key === 'impoconsumo_8' ? `Impoconsumo ${config?.taxRateImpoconsumo ?? 8}%` : key;
-                    return `<tr><td style="padding-left: 6px; color: #555;">${label}</td><td style="text-align:right;font-weight:bold;">${formatCOP(val)}</td></tr>`;
+                    return `<tr><td style="padding-left: 6px; color: #555;">${label}:</td><td style="text-align:right;font-weight:bold;">${formatCOP(val)}</td></tr>`;
                 }).join('')}
             </table>
         `;
@@ -461,9 +502,9 @@ export async function printThermalDailyClose({
             <div class="section-title">Propinas por Personal</div>
             <table>
                 ${Object.entries(tipsByUser).map(([user, total]) => `
-                    <tr><td>${user}</td><td style="text-align:right;font-weight:bold;">${formatCOP(total)}</td></tr>
+                    <tr><td>${user}:</td><td style="text-align:right;font-weight:bold;">${formatCOP(total)}</td></tr>
                 `).join('')}
-                <tr style="border-top:1px dashed #555;font-weight:bold;"><td>Total Propinas</td><td style="text-align:right;color:#2563eb;">${formatCOP(totalTips)}</td></tr>
+                <tr style="border-top:1px dashed #555;font-weight:bold;"><td>Total Propinas:</td><td style="text-align:right;color:#2563eb;">${formatCOP(totalTips)}</td></tr>
             </table>
         `;
     }
@@ -487,15 +528,15 @@ export async function printThermalDailyClose({
         cuadreHtml = `
             <div class="section-title">Cuadre de Caja</div>
             <table>
-                <tr><td>Fondo inicial COP</td><td style="text-align:right;">${formatCOP(openingCOP)}</td></tr>
-                <tr><td>COP Esperado</td><td style="text-align:right;">${formatCOP(expectedCOP)}</td></tr>
-                <tr><td>COP Declarado</td><td style="text-align:right;font-weight:bold;">${formatCOP(declaredCOP)}</td></tr>
-                <tr style="font-weight:bold;${getDiffStyle(diffCOP)}"><td>COP Diferencia</td><td style="text-align:right;">${diffCOP >= 0 ? '+' : ''}${formatCOP(diffCOP)}</td></tr>
+                <tr><td>Fondo inicial COP:</td><td style="text-align:right;">${formatCOP(openingCOP)}</td></tr>
+                <tr><td>COP Esperado:</td><td style="text-align:right;">${formatCOP(expectedCOP)}</td></tr>
+                <tr><td>COP Declarado:</td><td style="text-align:right;font-weight:bold;">${formatCOP(declaredCOP)}</td></tr>
+                <tr style="font-weight:bold;${getDiffStyle(diffCOP)}"><td>COP Diferencia:</td><td style="text-align:right;">${diffCOP >= 0 ? '+' : ''}${formatCOP(diffCOP)}</td></tr>
                 
-                <tr><td style="padding-top:4px;">Fondo inicial USD</td><td style="text-align:right;padding-top:4px;">$ ${openingUSD.toFixed(2)}</td></tr>
-                <tr><td>USD Esperado</td><td style="text-align:right;">$ ${expectedUSD.toFixed(2)}</td></tr>
-                <tr><td>USD Declarado</td><td style="text-align:right;font-weight:bold;">$ ${declaredUSD.toFixed(2)}</td></tr>
-                <tr style="font-weight:bold;${getDiffStyle(diffUSD)}"><td>USD Diferencia</td><td style="text-align:right;">${diffUSD >= 0 ? '+' : ''}$ ${diffUSD.toFixed(2)}</td></tr>
+                <tr><td style="padding-top:4px;">Fondo inicial USD:</td><td style="text-align:right;padding-top:4px;">$ ${openingUSD.toFixed(2)}</td></tr>
+                <tr><td>USD Esperado:</td><td style="text-align:right;">$ ${expectedUSD.toFixed(2)}</td></tr>
+                <tr><td>USD Declarado:</td><td style="text-align:right;font-weight:bold;">$ ${declaredUSD.toFixed(2)}</td></tr>
+                <tr style="font-weight:bold;${getDiffStyle(diffUSD)}"><td>USD Diferencia:</td><td style="text-align:right;">${diffUSD >= 0 ? '+' : ''}$ ${diffUSD.toFixed(2)}</td></tr>
             </table>
         `;
     }
