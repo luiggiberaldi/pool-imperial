@@ -69,8 +69,25 @@ export async function requestPrinterPort() {
 }
 
 export async function getConnectedPrinter() {
-    // Retorno inmediato de null para evitar invocar a navigator.serial.getPorts() y prevenir interferencias de Bluetooth
-    return null;
+    if (!('serial' in navigator)) return null;
+    // Reutilizar el puerto cacheado si ya fue autorizado en esta sesión
+    if (activePort) return activePort;
+    if (_cachedPort) {
+        activePort = _cachedPort;
+        return activePort;
+    }
+    try {
+        const ports = await navigator.serial.getPorts();
+        if (ports.length > 0) {
+            activePort = ports[0];
+            _cachedPort = ports[0];
+            return activePort;
+        }
+        return null;
+    } catch (err) {
+        console.error('Error recuperando puertos', err);
+        return null;
+    }
 }
 
 // ── Auto-detección ────────────────────────────────────────────────────────────
@@ -307,6 +324,7 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
 
     if (isMultiClient) {
         // ═══ MULTI-CLIENT BREAKDOWN ═══
+        const seatHasHours = seats.some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
         const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset, table.type);
 
         if (breakdown) {
