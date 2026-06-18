@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
     "lint": "eslint .",
     "prettier": "prettier --write .",
     "linc": "eslint .",
@@ -42,6 +42,7 @@
     "postcss": "^8.5.6",
     "postcss-import": "^16.1.1",
     "prettier": "^3.8.1",
+    "sharp": "^0.35.1",
     "tailwindcss": "^3.4.17",
     "vite": "^7.2.4"
   }

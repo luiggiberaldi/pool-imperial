@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabaseCloud } from '../config/supabaseCloud';
 import { storageService } from '../utils/storageService';
 import { scopedKey } from './store/accountScope';
+import { useAuthStore } from './store/authStore';
 
 const SYNC_KEYS = [
     'bodega_products_v1',
@@ -279,7 +280,22 @@ export function scheduleCloudPush(key, value) {
     // Al añadirlo a la cola de sincronización inmediatamente, evitamos que un reinicio
     // accidental sobrescriba el dato local (Punto ACID)
     addToSyncQueue(key);
-    
+
+    // Broadcast P2P INMEDIATO a los dispositivos activos (no esperar el debounce de 1s
+    // ni la escritura en DB). La persistencia en sync_documents sigue por el push debounced.
+    if (SYNC_KEYS.includes(key) && isInitialSyncCompleted && !isSyncingFromCloud) {
+        try {
+            const userId = useAuthStore.getState().cloudSession?.user?.id;
+            if (userId) {
+                _getSyncBroadcastChannel(userId).send({
+                    type: 'broadcast',
+                    event: 'sync_doc_changed',
+                    payload: { doc_id: key, collection: LOCAL_KEYS.includes(key) ? 'local' : 'store', data: value },
+                });
+            }
+        } catch (_) { /* no-fatal: el push debounced re-emite tras escribir en DB */ }
+    }
+
     if (pendingPush[key]) clearTimeout(pendingPush[key]);
     pendingPush[key] = setTimeout(() => {
         delete pendingPush[key];

@@ -55,6 +55,27 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => ({
                     }));
                 }
             })
+            .on('broadcast', { event: 'table_checkout_request' }, ({ payload }) => {
+                console.log("[REALTIME] broadcast table_checkout_request:", payload);
+                if (!payload?.sessionId) return;
+                const { sessionId, tableId, notes, demotedIds = [] } = payload;
+                set(state => ({
+                    activeSessions: state.activeSessions.map(s => {
+                        if (s.id === sessionId) return { ...s, status: 'CHECKOUT', ...(notes !== undefined ? { notes } : {}) };
+                        if (demotedIds.includes(s.id) || (s.table_id === tableId && s.status === 'CHECKOUT')) return { ...s, status: 'ACTIVE' };
+                        return s;
+                    })
+                }));
+            })
+            .on('broadcast', { event: 'table_checkout_cancel' }, ({ payload }) => {
+                console.log("[REALTIME] broadcast table_checkout_cancel:", payload);
+                if (!payload?.sessionId) return;
+                set(state => ({
+                    activeSessions: state.activeSessions.map(s =>
+                        s.id === payload.sessionId ? { ...s, status: 'ACTIVE' } : s
+                    )
+                }));
+            })
             .on('broadcast', { event: 'table_payment_reset' }, async ({ payload }) => {
                 console.log("[REALTIME] broadcast table_payment_reset:", payload);
                 if (!payload?.sessionId) return;

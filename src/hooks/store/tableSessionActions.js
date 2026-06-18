@@ -269,6 +269,13 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         set({ activeSessions: newSessions });
         await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
 
+        // Broadcast inmediato a los demás dispositivos (no esperar a postgres_changes)
+        get().realtimeChannel?.send({
+            type: 'broadcast',
+            event: 'table_checkout_request',
+            payload: { sessionId, tableId, notes: updatedNotes, demotedIds: otherCheckouts.map(o => o.id) }
+        });
+
         for (const other of otherCheckouts) {
             try {
                 await supabaseCloud.from('table_sessions').update({ status: 'ACTIVE' }).eq('id', other.id);
@@ -303,6 +310,14 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         );
         set({ activeSessions: newSessions });
         await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
+
+        // Broadcast inmediato a los demás dispositivos
+        get().realtimeChannel?.send({
+            type: 'broadcast',
+            event: 'table_checkout_cancel',
+            payload: { sessionId }
+        });
+
         try {
             const { error } = await supabaseCloud.from('table_sessions').update({ status: 'ACTIVE' }).eq('id', sessionId);
             if (error) throw error;

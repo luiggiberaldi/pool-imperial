@@ -29,7 +29,7 @@ import mesasNormalesSvg from '../../assets/mesas-normales.svg';
 import mesaRedondaSvg from '../../assets/mesa-redonda.svg';
 import bancosSvg from '../../assets/bancos.svg';
 import barraSvg from '../../assets/barra.svg';
-import pisoMaderaPng from '../../assets/piso-madera-clara.png';
+import pisoMaderaPng from '../../assets/piso-madera-clara.webp';
 import logoPng from '../../assets/logo.png';
 
 

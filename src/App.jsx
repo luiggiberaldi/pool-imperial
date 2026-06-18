@@ -3,13 +3,12 @@ import { Home, ShoppingCart, Store, Users, Download, FlaskConical, BarChart3, Wi
 
 import SalesView from './views/SalesView';
 import DashboardView from './views/DashboardView';
-import { ProductsView } from './views/ProductsView';
-import SettingsView from './views/SettingsView';
 import ResetPasswordView from './views/ResetPasswordView';
-import TablesView from './views/TablesView';
-import CashierCheckoutView from './views/CashierCheckoutView';
 
 // Lazy-loaded views (no se usan al inicio)
+const ProductsView = lazy(() => import('./views/ProductsView').then(m => ({ default: m.ProductsView })));
+const SettingsView = lazy(() => import('./views/SettingsView'));
+const TablesView = lazy(() => import('./views/TablesView'));
 const CustomersView = lazy(() => import('./views/CustomersView'));
 const ReportsView = lazy(() => import('./views/ReportsView'));
 const TesterView = lazy(() => import('./views/TesterView').then(m => ({ default: m.TesterView })));
@@ -283,20 +282,12 @@ export default function App() {
 
           {/* Admin panel trigger moved to DashboardView logo */}
 
-        {/* Eager views — always mounted, visibility toggled via CSS */}
+        {/* Eager views — núcleo del POS, montadas al inicio (visibilidad por CSS) */}
         <div className={`flex-1 min-h-0 flex flex-col ${effectiveTab === 'ventas' ? '' : 'hidden'}`}>
           <ErrorBoundary>
             <AnyStaffRoute>
               <SalesView rates={rates} triggerHaptic={triggerHaptic} onNavigate={setActiveTab} isActive={effectiveTab === 'ventas'} />
             </AnyStaffRoute>
-          </ErrorBoundary>
-        </div>
-
-        <div className={`flex-1 flex flex-col ${effectiveTab === 'catalogo' ? '' : 'hidden'}`}>
-          <ErrorBoundary>
-            <AdminRoute>
-              <ProductsView rates={rates} triggerHaptic={triggerHaptic} />
-            </AdminRoute>
           </ErrorBoundary>
         </div>
 
@@ -308,17 +299,26 @@ export default function App() {
           </ErrorBoundary>
         </div>
 
-        {/* Mesas de Pool / Cola de Cobros */}
-        <div className={`flex-1 flex flex-col ${effectiveTab === 'mesas' ? '' : 'hidden'}`}>
-          <ErrorBoundary>
-            <AnyStaffRoute>
-              <TablesView triggerHaptic={triggerHaptic} isActive={effectiveTab === 'mesas'} />
-            </AnyStaffRoute>
-          </ErrorBoundary>
-        </div>
-
-        {/* Lazy views — mount on first access, then stay persistent */}
+        {/* Lazy views — montan al primer acceso y luego persisten */}
         <Suspense fallback={<div className="flex-1 p-4 space-y-4"><div className="skeleton h-10 w-40" /><div className="skeleton h-32" /><div className="skeleton h-48" /></div>}>
+          {(effectiveTab === 'catalogo' || document.querySelector('[data-view="catalogo"]')) && (
+            <div data-view="catalogo" className={`flex-1 flex flex-col ${effectiveTab === 'catalogo' ? '' : 'hidden'}`}>
+              <ErrorBoundary>
+                <AdminRoute>
+                  <ProductsView rates={rates} triggerHaptic={triggerHaptic} />
+                </AdminRoute>
+              </ErrorBoundary>
+            </div>
+          )}
+          {(effectiveTab === 'mesas' || document.querySelector('[data-view="mesas"]')) && (
+            <div data-view="mesas" className={`flex-1 flex flex-col ${effectiveTab === 'mesas' ? '' : 'hidden'}`}>
+              <ErrorBoundary>
+                <AnyStaffRoute>
+                  <TablesView triggerHaptic={triggerHaptic} isActive={effectiveTab === 'mesas'} />
+                </AnyStaffRoute>
+              </ErrorBoundary>
+            </div>
+          )}
           {(effectiveTab === 'clientes' || document.querySelector('[data-view="clientes"]')) && (
             <div data-view="clientes" className={`flex-1 flex flex-col ${effectiveTab === 'clientes' ? '' : 'hidden'}`}>
               <ErrorBoundary>
@@ -337,21 +337,21 @@ export default function App() {
               </ErrorBoundary>
             </div>
           )}
+          {(effectiveTab === 'ajustes' || document.querySelector('[data-view="ajustes"]')) && (
+            <div data-view="ajustes" className={`flex-1 flex flex-col min-h-0 ${effectiveTab === 'ajustes' ? '' : 'hidden'}`}>
+              <ErrorBoundary>
+                <AdminRoute>
+                  <SettingsView
+                    onClose={() => setActiveTab('inicio')}
+                    theme={theme}
+                    toggleTheme={toggleTheme}
+                    triggerHaptic={triggerHaptic}
+                  />
+                </AdminRoute>
+              </ErrorBoundary>
+            </div>
+          )}
         </Suspense>
-
-        {/* Settings — mounted as tab inside providers */}
-        <div className={`flex-1 flex flex-col min-h-0 ${effectiveTab === 'ajustes' ? '' : 'hidden'}`}>
-          <ErrorBoundary>
-            <AdminRoute>
-              <SettingsView
-                onClose={() => setActiveTab('inicio')}
-                theme={theme}
-                toggleTheme={toggleTheme}
-                triggerHaptic={triggerHaptic}
-              />
-            </AdminRoute>
-          </ErrorBoundary>
-        </div>
 
       </main>
 

@@ -16,8 +16,6 @@ export default defineConfig({
         'pwa-512x512.png',
         'logo.png',
         'logo-ticket.png',
-        'piso-madera-clara.png',
-        'piso-alfombra.png',
         'mesa-pool.svg',
         'mesa-pool-vertical.svg',
         'mesas-normales.svg',
