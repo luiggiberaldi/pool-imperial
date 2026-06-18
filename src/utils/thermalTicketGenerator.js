@@ -103,6 +103,15 @@ function _printThermalHTML(sale, _bcvRate) {
             </tr>`;
     }).join('');
 
+    const hasChange = (sale.changeUsd || 0) > 0;
+    const changeHtml = hasChange ? `
+        <div style="margin-top:6px;padding:4px 0;border-top:1px dashed #ccc;">
+            <table style="width:100%"><tr>
+                <td style="color:#107c41;font-weight:bold;font-size:11px;">Vuelto:</td>
+                <td style="color:#107c41;font-weight:bold;font-size:11px;text-align:right;">${formatCOP(sale.changeUsd)}</td>
+            </tr></table>
+        </div>` : '';
+
     const fiadoHtml = hasFiado ? `
         <div style="margin-top:6px;padding:4px 0;border-top:1px dashed #ccc;">
             <table style="width:100%"><tr>
@@ -299,10 +308,11 @@ function _printThermalHTML(sale, _bcvRate) {
     <hr class="dash">
 
     <!-- Pagos -->
-    ${(sale.payments && sale.payments.length > 0) || hasFiado ? `
+    ${(sale.payments && sale.payments.length > 0) || hasFiado || hasChange ? `
     <div style="margin:4px 0;">
         <div style="font-size:${fTiny};color:#000;font-weight:bold;margin-bottom:4px;">PAGOS REALIZADOS</div>
         <table>${paymentsHtml}</table>
+        ${changeHtml}
         ${fiadoHtml}
     </div>
     <hr class="dash">

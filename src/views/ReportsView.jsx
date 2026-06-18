@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
-import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent, Trash2 } from 'lucide-react';
+import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent, Trash2 } from 'lucide-react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatCop, formatUsd } from '../utils/calculatorUtils';
 import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
+import { generateSalesReportPDF } from '../utils/salesReportGenerator';
 import { useProductContext } from '../context/ProductContext';
 import { useCart } from '../context/CartContext';
 import EmptyState from '../components/EmptyState';
+import CustomSelect from '../components/CustomSelect';
 import ConfirmModal from '../components/ConfirmModal';
 import { processVoidSale } from '../utils/voidSaleProcessor';
 import CierreHistoryCard from '../components/Reports/CierreHistoryCard';
@@ -36,11 +38,12 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
     const [selectedRange, setSelectedRange] = useState('week');
     const [customFrom, setCustomFrom] = useState('');
     const [customTo, setCustomTo] = useState('');
-    const [showHistory, setShowHistory] = useState(false);
     const [expandedSaleId, setExpandedSaleId] = useState(null);
-    const [visibleCount, setVisibleCount] = useState(30);
+    const [currentPage, setCurrentPage] = useState(1);
+    const PAGE_SIZE = 20;
     const [historySearch, setHistorySearch] = useState('');
     const [historyFilter, setHistoryFilter] = useState('all');
+    const [userFilter, setUserFilter] = useState('all');
     const [voidSaleTarget, setVoidSaleTarget] = useState(null);
     const [recycleOffer, setRecycleOffer] = useState(null);
     const [articleSearch, setArticleSearch] = useState('');
@@ -227,6 +230,8 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
             || (historyFilter === 'completed' && s.status !== 'ANULADA')
             || (historyFilter === 'voided' && s.status === 'ANULADA');
         if (!matchesFilter) return false;
+        // Filtro por usuario (mesero/vendedor)
+        if (userFilter !== 'all' && (s.meseroNombre || s.vendedorNombre || '') !== userFilter) return false;
         if (!historySearch.trim()) return true;
         const q = historySearch.toLowerCase();
         if ((s.customerName || 'consumidor final').toLowerCase().includes(q)) return true;
@@ -237,12 +242,43 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         if (s.saleNumber !== undefined && String(s.saleNumber).padStart(7, '0').includes(q.replace('#', ''))) return true;
         // Búsqueda por nombre de mesa
         if (s.tableName && s.tableName.toLowerCase().includes(q)) return true;
+        // Búsqueda por nombre de usuario (mesero/vendedor que atendió)
+        if (s.meseroNombre && s.meseroNombre.toLowerCase().includes(q)) return true;
+        if (s.vendedorNombre && s.vendedorNombre.toLowerCase().includes(q)) return true;
         return false;
-    }), [historySales, historyFilter, historySearch]);
+    }), [historySales, historyFilter, historySearch, userFilter]);
 
     const completedInList = searchedSales.filter(s => s.status !== 'ANULADA');
     const voidedInList = searchedSales.filter(s => s.status === 'ANULADA');
     const sumUsd = completedInList.reduce((a, s) => a + (s.totalUsd || 0), 0);
+
+    // Lista de usuarios (meseros/vendedores) presentes en el periodo
+    const HIDDEN_USERS = ['sistema', 'super admin', 'administrador'];
+    const usersInPeriod = useMemo(() => {
+        const set = new Set();
+        historySales.forEach(s => {
+            const u = s.meseroNombre || s.vendedorNombre;
+            // Excluir cuentas de sistema y la oculta de desarrollador (Super Admin / Administrador semilla)
+            if (u && !HIDDEN_USERS.includes(u.toLowerCase())) set.add(u);
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [historySales]);
+
+    // Comisiones (propinas) generadas por el usuario seleccionado en el rango
+    const selectedUserCommission = useMemo(() => {
+        if (userFilter === 'all') return null;
+        let total = 0;
+        historySales.forEach(s => {
+            if (s.status === 'ANULADA') return;
+            if ((s.meseroNombre || s.vendedorNombre || '') !== userFilter) return;
+            (s.items || []).forEach(item => {
+                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) {
+                    total += (item.priceUsd || 0) * (item.qty || 1);
+                }
+            });
+        });
+        return total;
+    }, [historySales, userFilter]);
 
     if (isLoading) {
         return (
@@ -265,7 +301,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
     }
 
     return (
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 md:space-y-5 pb-32">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 md:space-y-5 pb-32 w-full max-w-5xl mx-auto">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <h2 className="text-xl md:text-2xl font-black text-slate-800 dark:text-white flex items-center gap-2">
@@ -284,25 +320,26 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
             </div>
 
             {/* Tab Selector */}
-            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                <button
-                    onClick={() => { triggerHaptic && triggerHaptic(); setActiveTab('metrics'); }}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'metrics' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
-                >
-                    <BarChart3 size={16} className="inline mr-1.5 align-text-bottom"/> Métricas
-                </button>
-                <button
-                    onClick={() => { triggerHaptic && triggerHaptic(); setActiveTab('articles'); setArticleSearch(''); }}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'articles' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
-                >
-                    <ListOrdered size={16} className="inline mr-1.5 align-text-bottom"/> Por Artículo
-                </button>
-                <button
-                    onClick={() => { triggerHaptic && triggerHaptic(); setActiveTab('history'); }}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'history' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
-                >
-                    <LockIcon size={16} className="inline mr-1.5 align-text-bottom"/> Cierres
-                </button>
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-0.5">
+                {[
+                    { id: 'metrics', label: 'Métricas', short: 'Métr.', icon: BarChart3, onClick: () => setActiveTab('metrics') },
+                    { id: 'articles', label: 'Por Artículo', short: 'Artíc.', icon: ListOrdered, onClick: () => { setActiveTab('articles'); setArticleSearch(''); } },
+                    { id: 'sales', label: 'Ventas', short: 'Ventas', icon: Clock, onClick: () => { setActiveTab('sales'); setCurrentPage(1); } },
+                    { id: 'history', label: 'Cierres', short: 'Cierres', icon: LockIcon, onClick: () => setActiveTab('history') },
+                ].map(tab => {
+                    const Icon = tab.icon;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => { triggerHaptic && triggerHaptic(); tab.onClick(); }}
+                            className={`flex-1 flex items-center justify-center gap-1 sm:gap-1.5 py-2 px-1 text-[11px] sm:text-sm font-bold rounded-lg transition-all ${activeTab === tab.id ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'}`}
+                        >
+                            <Icon size={15} className="shrink-0" />
+                            <span className="sm:hidden truncate">{tab.short}</span>
+                            <span className="hidden sm:inline truncate">{tab.label}</span>
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Range Selector */}
@@ -467,105 +504,6 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                         </div>
                     )}
 
-                    {/* Transaction List */}
-                    {historySales.length > 0 && (
-                        <div className="mt-2">
-                            <button
-                                onClick={() => { triggerHaptic && triggerHaptic(); setShowHistory(h => !h); setVisibleCount(30); setHistorySearch(''); setHistoryFilter('all'); }}
-                                className="w-full flex items-center justify-between bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm active:scale-[0.99] transition-all"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
-                                        <Clock size={16} className="text-indigo-600 dark:text-indigo-400" />
-                                    </div>
-                                    <div className="text-left">
-                                        <p className="text-xs font-bold text-slate-700 dark:text-white">Historial de Ventas</p>
-                                        <p className="text-[10px] text-slate-400">{historySales.length} {historySales.length === 1 ? 'venta' : 'ventas'} en este periodo</p>
-                                    </div>
-                                </div>
-                                {showHistory ? <ChevronUp size={18} className="text-slate-400" /> : <ChevronDown size={18} className="text-slate-400" />}
-                            </button>
-
-                            {showHistory && (
-                                <div className="mt-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                                    {/* Search + Filter Bar */}
-                                    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-3 space-y-2">
-                                        <div className="relative">
-                                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input
-                                                type="text"
-                                                value={historySearch}
-                                                onChange={e => { setHistorySearch(e.target.value); setVisibleCount(30); }}
-                                                placeholder="Buscar por N° factura, mesa, cliente o producto..."
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-9 pr-8 text-xs font-medium text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
-                                            />
-                                            {historySearch && (
-                                                <button onClick={() => setHistorySearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                                    <X size={14} />
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {[{ id: 'all', label: 'Todas' }, { id: 'completed', label: 'Completadas' }, { id: 'voided', label: 'Anuladas' }].map(f => (
-                                                <button
-                                                    key={f.id}
-                                                    onClick={() => { setHistoryFilter(f.id); setVisibleCount(30); }}
-                                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${historyFilter === f.id
-                                                        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}
-                                                >{f.label}</button>
-                                            ))}
-                                            <div className="flex-1" />
-                                            <span className="text-[10px] font-bold text-slate-400">{searchedSales.length} resultado{searchedSales.length !== 1 ? 's' : ''}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Mini Summary Strip */}
-                                    {searchedSales.length > 0 && (
-                                        <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-500">
-                                            <span className="flex items-center gap-1"><DollarSign size={12} className="text-emerald-500" /> {formatCop(sumUsd)}</span>
-                                            <span className="w-px h-3 bg-slate-300 dark:bg-slate-700" />
-                                            <span>{completedInList.length} venta{completedInList.length !== 1 ? 's' : ''}</span>
-                                            {voidedInList.length > 0 && (
-                                                <><span className="w-px h-3 bg-slate-300 dark:bg-slate-700" /><span className="text-red-400">{voidedInList.length} anulada{voidedInList.length !== 1 ? 's' : ''}</span></>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {/* Transaction Rows */}
-                                    {searchedSales.slice(0, visibleCount).map(s => (
-                                        <TransactionRow
-                                            key={s.id}
-                                            sale={s}
-                                            bcvRate={bcvRate}
-                                            isExpanded={expandedSaleId === s.id}
-                                            onToggle={() => setExpandedSaleId(prev => prev === s.id ? null : s.id)}
-                                            onVoidSale={setVoidSaleTarget}
-                                            onRecycleSale={setRecycleOffer}
-                                            onDownloadPDF={(sale) => generateTicketPDF(sale, bcvRate)}
-                                            onPrintTicket={(sale) => printThermalTicket(sale, bcvRate)}
-                                        />
-                                    ))}
-
-                                    {searchedSales.length === 0 && (
-                                        <div className="text-center py-6">
-                                            <Search size={24} className="text-slate-300 mx-auto mb-2" />
-                                            <p className="text-xs font-bold text-slate-400">Sin resultados para esta busqueda</p>
-                                        </div>
-                                    )}
-
-                                    {visibleCount < searchedSales.length && (
-                                        <button
-                                            onClick={() => setVisibleCount(c => c + 30)}
-                                            className="w-full py-3 text-xs font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors active:scale-[0.98]"
-                                        >
-                                            Mostrar mas ({searchedSales.length - visibleCount} restantes)
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
 
                     {/* Empty state */}
                     {salesForStats.length === 0 && salesForCashFlow.length === 0 && (
@@ -666,6 +604,162 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             />
                         </div>
                     )}
+                </div>
+            ) : activeTab === 'sales' ? (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3">
+                    {/* Header + Descargar PDF */}
+                    <div className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-2xl px-4 py-3 border border-slate-100 dark:border-slate-800 shadow-sm">
+                        <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+                            <Clock size={16} className="text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-700 dark:text-white">Historial de Ventas</p>
+                            <p className="text-[10px] text-slate-400">{historySales.length} {historySales.length === 1 ? 'venta' : 'ventas'} en este periodo</p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                triggerHaptic && triggerHaptic();
+                                if (searchedSales.length === 0) return;
+                                const rangeOpt = RANGE_OPTIONS.find(o => o.id === selectedRange);
+                                let rangeLabel = rangeOpt ? rangeOpt.label : '';
+                                if (selectedRange === 'custom' && (customFrom || customTo)) rangeLabel = `${customFrom || '...'} a ${customTo || '...'}`;
+                                const filterLabel = { all: 'Todas', completed: 'Completadas', voided: 'Anuladas' }[historyFilter] || 'Todas';
+                                generateSalesReportPDF(searchedSales, {
+                                    rangeLabel,
+                                    search: historySearch,
+                                    filterLabel,
+                                    userName: userFilter !== 'all' ? userFilter : '',
+                                    commission: userFilter !== 'all' ? selectedUserCommission : null,
+                                });
+                            }}
+                            disabled={searchedSales.length === 0}
+                            className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-sm shadow-indigo-500/30 active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100"
+                        >
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
+
+                    {/* Search + Filter Bar */}
+                    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-3 space-y-2">
+                        <div className="relative">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                                type="text"
+                                value={historySearch}
+                                onChange={e => { setHistorySearch(e.target.value); setCurrentPage(1); }}
+                                placeholder="Buscar por N° factura, mesa, cliente, usuario o producto..."
+                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-2 pl-9 pr-8 text-xs font-medium text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all"
+                            />
+                            {historySearch && (
+                                <button onClick={() => setHistorySearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex items-center flex-wrap gap-1.5">
+                            {[{ id: 'all', label: 'Todas' }, { id: 'completed', label: 'Completadas' }, { id: 'voided', label: 'Anuladas' }].map(f => (
+                                <button
+                                    key={f.id}
+                                    onClick={() => { setHistoryFilter(f.id); setCurrentPage(1); }}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${historyFilter === f.id
+                                        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-600'}`}
+                                >{f.label}</button>
+                            ))}
+                            <div className="flex-1 min-w-0" />
+                            <span className="text-[10px] font-bold text-slate-400 shrink-0">{searchedSales.length} resultado{searchedSales.length !== 1 ? 's' : ''}</span>
+                        </div>
+
+                        {/* Filtro por usuario */}
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0">Usuario</span>
+                            <div className="flex-1 sm:w-64 sm:flex-none">
+                                <CustomSelect
+                                    value={userFilter}
+                                    onChange={e => { setUserFilter(e.target.value); setCurrentPage(1); }}
+                                    className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-2 px-3 text-xs font-bold text-slate-700 dark:text-white"
+                                >
+                                    <option value="all">Todos los usuarios</option>
+                                    {usersInPeriod.map(u => (
+                                        <option key={u} value={u}>{u}</option>
+                                    ))}
+                                </CustomSelect>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mini Summary Strip */}
+                    {searchedSales.length > 0 && (
+                        <div className="flex items-center flex-wrap gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-500">
+                            <span className="flex items-center gap-1"><DollarSign size={12} className="text-emerald-500" /> {formatCop(sumUsd)}</span>
+                            <span className="w-px h-3 bg-slate-300 dark:bg-slate-700" />
+                            <span>{completedInList.length} venta{completedInList.length !== 1 ? 's' : ''}</span>
+                            {voidedInList.length > 0 && (
+                                <><span className="w-px h-3 bg-slate-300 dark:bg-slate-700" /><span className="text-red-400">{voidedInList.length} anulada{voidedInList.length !== 1 ? 's' : ''}</span></>
+                            )}
+                            {userFilter !== 'all' && selectedUserCommission > 0 && (
+                                <><span className="w-px h-3 bg-slate-300 dark:bg-slate-700" /><span className="text-amber-500">Comisiones: {formatCop(selectedUserCommission)}</span></>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Transaction Rows (paginadas) */}
+                    {(() => {
+                        const totalPages = Math.max(1, Math.ceil(searchedSales.length / PAGE_SIZE));
+                        const page = Math.min(currentPage, totalPages);
+                        const start = (page - 1) * PAGE_SIZE;
+                        const pageSales = searchedSales.slice(start, start + PAGE_SIZE);
+                        return (
+                            <>
+                                {pageSales.map(s => (
+                                    <TransactionRow
+                                        key={s.id}
+                                        sale={s}
+                                        bcvRate={bcvRate}
+                                        isExpanded={expandedSaleId === s.id}
+                                        onToggle={() => setExpandedSaleId(prev => prev === s.id ? null : s.id)}
+                                        onVoidSale={setVoidSaleTarget}
+                                        onRecycleSale={setRecycleOffer}
+                                        onDownloadPDF={(sale) => generateTicketPDF(sale, bcvRate)}
+                                        onPrintTicket={(sale) => printThermalTicket(sale, bcvRate)}
+                                    />
+                                ))}
+
+                                {searchedSales.length === 0 && (
+                                    <div className="mt-8">
+                                        <EmptyState
+                                            icon={Search}
+                                            title={historySearch ? 'Sin resultados' : 'Sin ventas en este periodo'}
+                                            description={historySearch ? 'No se encontraron ventas con ese criterio.' : 'Selecciona otro rango de fechas para ver el historial.'}
+                                        />
+                                    </div>
+                                )}
+
+                                {totalPages > 1 && (
+                                    <div className="flex items-center justify-between gap-2 pt-1">
+                                        <button
+                                            onClick={() => { triggerHaptic && triggerHaptic(); setCurrentPage(p => Math.max(1, p - 1)); }}
+                                            disabled={page <= 1}
+                                            className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100"
+                                        >
+                                            <ChevronLeft size={14} /> Anterior
+                                        </button>
+                                        <span className="text-[11px] font-bold text-slate-500">
+                                            Página {page} de {totalPages}
+                                            <span className="text-slate-400 font-medium"> · {searchedSales.length} ventas</span>
+                                        </span>
+                                        <button
+                                            onClick={() => { triggerHaptic && triggerHaptic(); setCurrentPage(p => Math.min(totalPages, p + 1)); }}
+                                            disabled={page >= totalPages}
+                                            className="flex items-center gap-1 px-3 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100"
+                                        >
+                                            Siguiente <ChevronRight size={14} />
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
                 </div>
             ) : (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">

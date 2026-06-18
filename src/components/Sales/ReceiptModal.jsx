@@ -37,7 +37,7 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                             <CheckCircle size={36} className="text-emerald-500 relative z-10" />
                             <div className="absolute inset-0 bg-emerald-400 rounded-full animate-ping opacity-20"></div>
                         </div>
-                        <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-1">Orden #{(receipt.id.substring(0, 6)).toUpperCase()}</h3>
+                        <h3 className="text-2xl font-black text-slate-800 tracking-tight mb-1">Orden #{receipt.saleNumber ? String(receipt.saleNumber).padStart(7, '0') : (receipt.id.substring(0, 6)).toUpperCase()}</h3>
                         {receipt.tableName && (
                             <p className="text-sm font-bold text-blue-500 mb-1">Mesa {receipt.tableName}</p>
                         )}
@@ -83,6 +83,20 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                                 </div>
                             ))}
                         </div>
+
+                        {/* Descuento aplicado */}
+                        {receipt.discountAmountUsd > 0 && (
+                            <div className="mt-4 pt-3.5 border-t border-slate-200 text-xs text-slate-500 space-y-1.5">
+                                <div className="flex justify-between">
+                                    <span>Subtotal:</span>
+                                    <span className="font-bold text-slate-600">{formatCop(receipt.cartSubtotalUsd || (receipt.totalUsd + receipt.discountAmountUsd))}</span>
+                                </div>
+                                <div className="flex justify-between font-black text-red-500">
+                                    <span>{receipt.discountType === 'percentage' ? `Descuento (${receipt.discountValue}%):` : 'Descuento:'}</span>
+                                    <span>-{formatCop(receipt.discountAmountUsd)}</span>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Desglose de IVA y otros impuestos dinámico */}
                         {receipt.ivaAmount > 0 && (

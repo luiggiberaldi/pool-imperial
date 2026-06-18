@@ -622,6 +622,14 @@ export async function printReceiptEscPos(sale, bcvRate) {
 
     p.line('=', W);
 
+    if (sale.discountAmountUsd > 0) {
+        const subtotal = sale.cartSubtotalUsd || (sale.totalUsd + sale.discountAmountUsd);
+        p.smallFont(true).row('Subtotal:', formatCOP(subtotal), WS);
+        const discountLabel = sale.discountType === 'percentage' ? `Descuento (${sale.discountValue}%):` : 'Descuento:';
+        p.smallFont(true).row(discountLabel, '-' + formatCOP(sale.discountAmountUsd), WS);
+        p.smallFont(false).line('-', W);
+    }
+
     if (sale.ivaAmount > 0) {
         const base = sale.totalUsd - (sale.ivaAmount || 0);
         p.smallFont(true).row('Base Gravable:', formatCOP(base), WS);
