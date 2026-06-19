@@ -6,7 +6,7 @@ import { Clock, AlertTriangle, Coffee, Timer, ArrowRight, CheckCircle2, Shopping
 import { calculateElapsedTime, calculateSessionCost } from '../../utils/tableBillingEngine';
 import { storageService } from '../../utils/storageService';
 import { useConfirm } from '../../hooks/useConfirm';
-import { capitalizeName } from '../../utils/calculatorUtils';
+import { capitalizeName, formatCop } from '../../utils/calculatorUtils';
 
 function getGreeting() {
     const h = new Date().getHours();
@@ -33,7 +33,7 @@ export default function OperatorDashboardPanel({ onNavigate }) {
     const isMesero = role === 'MESERO' || role === 'BARRA';
     const isBarra = role === 'BARRA';
     const [now, setNow] = useState(new Date());
-    const [myStats, setMyStats] = useState({ cobros: 0, mesas: 0, pedidos: 0 });
+    const [myStats, setMyStats] = useState({ cobros: 0, mesas: 0, pedidos: 0, tips: 0 });
     const [lastSale, setLastSale] = useState(null);
     const [topMeseros, setTopMeseros] = useState([]);
     const [rankingSince, setRankingSince] = useState(() => localStorage.getItem('ranking_meseros_since') || null);
@@ -59,7 +59,15 @@ export default function OperatorDashboardPanel({ onNavigate }) {
             // Para mesero: contar pedidos (items totales)
             const pedidosHoy = isMesero ? mySales.reduce((sum, s) => sum + (s.items?.reduce((is, i) => is + i.qty, 0) || 0), 0) : 0;
 
-            setMyStats({ cobros: mySales.length, mesas: mesasHoy, pedidos: pedidosHoy });
+            // Propinas de hoy: suma de items propina en ventas ya pagadas (mySales ya excluye ANULADA/COBRO_DEUDA)
+            const tipsHoy = mySales.reduce((sum, s) => {
+                return sum + (s.items || []).reduce((is, i) => {
+                    const isTip = i.isTip || (i.name && i.name.toLowerCase().includes('propina'));
+                    return isTip ? is + (i.priceUsd || 0) * (i.qty || 1) : is;
+                }, 0);
+            }, 0);
+
+            setMyStats({ cobros: mySales.length, mesas: mesasHoy, pedidos: pedidosHoy, tips: tipsHoy });
             setLastSale(mySales[0] || null);
 
             // Ranking de meseros (solo para rol MESERO)
@@ -207,6 +215,10 @@ export default function OperatorDashboardPanel({ onNavigate }) {
                                 <div className="bg-white/15 rounded-2xl p-3">
                                     <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mb-1">Pedidos hoy</p>
                                     <p className="text-3xl font-black text-white leading-none">{myStats.pedidos}</p>
+                                </div>
+                                <div className="col-span-2 bg-emerald-400/20 border border-emerald-300/30 rounded-2xl p-3 flex items-center justify-between">
+                                    <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest">💰 Propinas hoy</p>
+                                    <p className="text-2xl font-black text-white leading-none">{formatCop(myStats.tips)}</p>
                                 </div>
                             </>
                         ) : (

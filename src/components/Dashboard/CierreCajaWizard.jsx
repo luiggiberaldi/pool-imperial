@@ -27,6 +27,11 @@ export default function CierreCajaWizard({
     const [actualCop, setActualCop] = useState('');
     const [actualUsd, setActualUsd] = useState('');
     const [cierreId, setCierreId] = useState(null);
+    // Foto de los datos del día tomada ANTES de confirmar el cierre. Al confirmar,
+    // onConfirm marca las ventas como cajaCerrada y las métricas (todaySales,
+    // todayTotalUsd, paymentBreakdown, etc.) se vacían a 0. Sin esta foto, el ticket
+    // y el PDF del paso 4 saldrían todos en $0.
+    const [reportSnapshot, setReportSnapshot] = useState(null);
 
     const tipsBreakdown = React.useMemo(() => {
         const tipsByUser = {};
@@ -93,13 +98,29 @@ export default function CierreCajaWizard({
 
     const handleConfirm = async () => {
         try {
-            const currentCierreId = await onConfirm({ 
-                declaredUsd: declaredUsd, 
-                declaredBs: 0, 
-                declaredCop, 
-                diffUsd: diffUsd, 
-                diffBs: 0, 
-                diffCop 
+            // Congelar los datos del día ANTES de confirmar: onConfirm marca las ventas
+            // como cajaCerrada y las métricas se vacían. Estas referencias siguen
+            // apuntando a los objetos originales (onConfirm no los muta, crea copias).
+            setReportSnapshot({
+                sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
+                allSales: todaySales,
+                paymentBreakdown,
+                topProducts: todayTopProducts,
+                todayTotalCOP: todayTotalUsd,
+                todayProfit,
+                todayItemsSold,
+                totalTax,
+                taxBreakdown,
+                apertura,
+            });
+
+            const currentCierreId = await onConfirm({
+                declaredUsd: declaredUsd,
+                declaredBs: 0,
+                declaredCop,
+                diffUsd: diffUsd,
+                diffBs: 0,
+                diffCop
             });
             setCierreId(currentCierreId || Date.now());
             setStep(4);
@@ -113,6 +134,7 @@ export default function CierreCajaWizard({
         setActualCop('');
         setActualUsd('');
         setCierreId(null);
+        setReportSnapshot(null);
         onClose();
     };
 
@@ -454,23 +476,28 @@ export default function CierreCajaWizard({
                             <div className="space-y-3 pt-2">
                                 <button
                                     onClick={() => {
-                                        printThermalDailyClose({
+                                        // Usa la foto tomada antes del cierre (datos reales).
+                                        // Fallback a props en vivo solo si la foto no existe.
+                                        const snap = reportSnapshot || {
                                             sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
                                             allSales: todaySales,
-                                            paymentBreakdown: paymentBreakdown,
+                                            paymentBreakdown,
                                             topProducts: todayTopProducts,
                                             todayTotalCOP: todayTotalUsd,
-                                            todayProfit: todayProfit,
-                                            todayItemsSold: todayItemsSold,
+                                            todayProfit,
+                                            todayItemsSold,
+                                            totalTax,
+                                            taxBreakdown,
+                                            apertura,
+                                        };
+                                        printThermalDailyClose({
+                                            ...snap,
                                             reconData: {
                                                 declaredCop,
                                                 declaredUsd,
                                                 diffCop,
                                                 diffUsd
                                             },
-                                            apertura,
-                                            totalTax,
-                                            taxBreakdown,
                                             cierreId: cierreId
                                         });
                                     }}
@@ -481,26 +508,29 @@ export default function CierreCajaWizard({
 
                                 <button
                                     onClick={() => {
-                                        generateDailyClosePDF({
+                                        const snap = reportSnapshot || {
                                             sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
                                             allSales: todaySales,
-                                            bcvRate: 0,
-                                            paymentBreakdown: paymentBreakdown,
+                                            paymentBreakdown,
                                             topProducts: todayTopProducts,
-                                            todayTotalUsd: todayTotalUsd,
+                                            todayTotalCOP: todayTotalUsd,
+                                            todayProfit,
+                                            todayItemsSold,
+                                            totalTax,
+                                            taxBreakdown,
+                                            apertura,
+                                        };
+                                        generateDailyClosePDF({
+                                            ...snap,
+                                            bcvRate: 0,
                                             todayTotalBs: 0,
-                                            todayProfit: todayProfit,
-                                            todayItemsSold: todayItemsSold,
                                             reconData: {
                                                 declaredCop,
                                                 declaredUsd,
                                                 diffCop,
                                                 diffUsd
                                             },
-                                            apertura,
                                             isReprint: false,
-                                            totalTax,
-                                            taxBreakdown,
                                         });
                                     }}
                                     className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95"
