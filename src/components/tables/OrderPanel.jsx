@@ -141,17 +141,15 @@ export function OrderPanel({ session, table, onClose }) {
         if (addingItem) return;
 
         // Stock validation
+        const available = getAvailableStock(product.id);
+        const inOrder = getQtyInOrder(product.id);
         if (!allowNegativeStock) {
-            const available = getAvailableStock(product.id);
-            const inOrder = getQtyInOrder(product.id);
-            if (inOrder + 1 > available) {
-                showToast(`${product.name}: stock máximo alcanzado (${available})`, 'warning');
+            if (available <= 0) {
+                showToast(`${product.name}: stock máximo alcanzado (${available + inOrder})`, 'warning');
                 return;
             }
         } else {
-            const available = getAvailableStock(product.id);
-            const inOrder = getQtyInOrder(product.id);
-            if (inOrder + 1 > available) {
+            if (available <= 0) {
                 showToast(`${product.name}: sin stock disponible (vendiendo en negativo)`, 'warning');
             }
         }
@@ -400,7 +398,7 @@ export function OrderPanel({ session, table, onClose }) {
                                 const qtyInOrder = getQtyInOrder(p.id);
                                 const isOutOfStock = !allowNegativeStock && availableStock <= 0 && !p.isCombo;
                                 const isNegativeStock = allowNegativeStock && availableStock <= 0 && !p.isCombo;
-                                const isMaxReached = !allowNegativeStock && qtyInOrder >= availableStock;
+                                const isMaxReached = !allowNegativeStock && availableStock <= 0;
                                 const isLowStock = availableStock > 0 && availableStock <= (p.lowStockAlert ?? 5);
                                 return (
                                     <div key={p.id}
@@ -523,8 +521,8 @@ export function OrderPanel({ session, table, onClose }) {
                             <button onClick={() => {
                                 if (!allowNegativeStock) {
                                     const available = getAvailableStock(qtyModalItem.product_id);
-                                    if (qtyInputValue + 1 > available) {
-                                        showToast(`Stock máximo: ${available}`, 'warning');
+                                    if ((qtyInputValue + 1 - qtyModalItem.qty) > available) {
+                                        showToast(`Stock máximo: ${qtyModalItem.qty + available}`, 'warning');
                                         return;
                                     }
                                 }
@@ -554,8 +552,8 @@ export function OrderPanel({ session, table, onClose }) {
                                     // Validate stock when increasing
                                     if (!allowNegativeStock && newQty > oldQty) {
                                         const available = getAvailableStock(qtyModalItem.product_id);
-                                        if (newQty > available) {
-                                            showToast(`Stock máximo: ${available}`, 'warning');
+                                        if ((newQty - oldQty) > available) {
+                                            showToast(`Stock máximo: ${oldQty + available}`, 'warning');
                                             return;
                                         }
                                     }
