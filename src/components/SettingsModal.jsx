@@ -26,7 +26,7 @@ export default function SettingsModal({ isOpen, onClose, products, onImport, tri
     // Used from context instead.
 
     // Configuración del negocio (Ticket WhatsApp)
-    const [businessName, setBusinessName] = useState(() => localStorage.getItem('business_name') || 'Pool los diaz');
+    const [businessName, setBusinessName] = useState(() => localStorage.getItem('business_name') || 'Pool Imperial');
     const [businessRif, setBusinessRif] = useState(() => localStorage.getItem('business_rif') || '');
     const [paperWidth, setPaperWidth] = useState(() => localStorage.getItem('printer_paper_width') || '58');
 

@@ -111,7 +111,7 @@ export const MessageService = {
 
         if (!selectedAccount) {
             // Fallback más limpio si falla la data
-            return `${greeting} ${intro}\n\n[Datos de cuenta no cargados]\n\nGenerado con Pool Los Diaz`;
+            return `${greeting} ${intro}\n\n[Datos de cuenta no cargados]\n\nGenerado con Pool Imperial`;
         }
 
         let details = '';
@@ -135,9 +135,9 @@ export const MessageService = {
 
         // Final Assembly
         if (tone === 'direct') {
-            return `${greeting}\n\n${intro}\n\n${details}\n\nPool Los Diaz`;
+            return `${greeting}\n\n${intro}\n\n${details}\n\nPool Imperial`;
         }
 
-        return `${greeting} ${intro}\n\n${details}\n\nGenerado con Pool Los Diaz`;
+        return `${greeting} ${intro}\n\n${details}\n\nGenerado con Pool Imperial`;
     }
 };

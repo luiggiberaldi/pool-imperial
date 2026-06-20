@@ -41,8 +41,12 @@ import AppVersionLock from './components/AppVersionLock';
 import { initServerClock } from './utils/serverClock';
 
 // Nombre del negocio fijo para todos los dispositivos (module-level, runs once on import)
-if (!localStorage.getItem('business_name')) {
+if (!localStorage.getItem('business_name') || localStorage.getItem('business_name') === 'BODEGA' || localStorage.getItem('business_name') === 'Pool los diaz') {
   localStorage.setItem('business_name', 'Pool Imperial');
+}
+// Quitar el número de teléfono heredado
+if (localStorage.getItem('business_phone')) {
+  localStorage.removeItem('business_phone');
 }
 
 export default function App() {
