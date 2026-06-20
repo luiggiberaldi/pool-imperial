@@ -450,7 +450,7 @@ export async function printThermalDailyClose({
             <tr><td>Articulos vendidos:</td><td style="text-align:right;font-weight:bold;">${todayItemsSold}</td></tr>
             <tr><td>Ingresos Brutos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalCOP)}</td></tr>
             <tr><td>Ingresos Netos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(netCOP)}</td></tr>
-            <tr><td>Ingresos USD equiv.:</td><td style="text-align:right;font-weight:bold;">$ ${totalUSD.toFixed(2)}</td></tr>
+            <tr><td>Ingresos USD equiv.:</td><td style="text-align:right;font-weight:bold;">$ ${totalUSD.toFixed(2)} USD</td></tr>
             <tr><td>Ganancia estimada:</td><td style="text-align:right;font-weight:bold;">${formatCOP(todayProfit)}</td></tr>
         </table>
     `;

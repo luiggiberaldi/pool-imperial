@@ -786,7 +786,7 @@ export async function printDailyCloseEscPos({
     p.row('Articulos vendidos:', String(todayItemsSold), W);
     p.row('Ingresos Brutos COP:', formatCOP(totalCOP), W);
     p.row('Ingresos Netos COP:', formatCOP(netCOP), W);
-    p.row('Ingresos USD equiv.:', `$ ${totalUSD.toFixed(2)}`, W);
+    p.row('Ingresos USD equiv.:', `$ ${totalUSD.toFixed(2)} USD`, W);
     p.row('Ganancia estimada:', formatCOP(todayProfit), W);
     p.line('-', W);
 

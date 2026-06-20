@@ -153,7 +153,7 @@ export async function generateDailyClosePDF({
         ['Artículos vendidos', `${todayItemsSold}`],
         ['Ingresos Brutos COP', formatCOP(totalCOP)],
         ['Ingresos Netos COP', formatCOP(netCOP)],
-        ['Ingresos USD equiv.', formatUsd(totalUSD)],
+        ['Ingresos USD equiv.', `${formatUsd(totalUSD)} USD`],
         ['Ganancia estimada', formatCOP(todayProfit || 0)],
     ];
 
