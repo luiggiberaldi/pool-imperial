@@ -42,7 +42,7 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
             topProducts: todayTopProducts,
             todayTotalUsd: cierre.totalUsd,
             todayTotalBs: 0,
-            todayProfit: 0,
+            todayProfit: cierre.profit || 0,
             todayItemsSold: cierre.totalItems,
             reconData: null,
             apertura: cierre.apertura,
@@ -79,7 +79,7 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
             paymentBreakdown: cierre.paymentBreakdown,
             topProducts: todayTopProducts,
             todayTotalCOP: cierre.totalUsd,
-            todayProfit: 0,
+            todayProfit: cierre.profit || 0,
             todayItemsSold: cierre.totalItems,
             reconData: {
                 declaredCop: cierre.declaredCop || cierre.declaredCOP || 0,

@@ -80,10 +80,10 @@ export function useReportsData({ isActive, products, bcvRate, selectedRange, cus
 
     const groupedClosings = useMemo(() => {
         if (activeTab === 'history') {
-            return groupSalesByCierreId(allSales, from, to);
+            return groupSalesByCierreId(allSales, from, to, products);
         }
         return [];
-    }, [allSales, from, to, activeTab]);
+    }, [allSales, from, to, activeTab, products]);
 
     const maxDayTotal = Math.max(...salesByDay.map(d => d.total), 1);
 

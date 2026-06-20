@@ -108,7 +108,7 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
     };
 }
 
-export function groupSalesByCierreId(allSales, from, to) {
+export function groupSalesByCierreId(allSales, from, to, products) {
     const entitiesInDateRange = allSales.filter(s => {
         const dateStr = getLocalISODate(new Date(s.timestamp));
         return dateStr >= from && dateStr <= to && s.cierreId;
@@ -151,6 +151,7 @@ export function groupSalesByCierreId(allSales, from, to) {
                 }
             });
             const totalItems = salesForStats.reduce((acc, s) => acc + (s.items ? s.items.reduce((is, it) => is + it.qty, 0) : 0), 0);
+            const profit = FinancialEngine.calculateAggregateProfit(salesForStats, 1, products);
             const paymentBreakdown = FinancialEngine.calculatePaymentBreakdown(salesForCashFlow);
 
             return {
@@ -162,6 +163,7 @@ export function groupSalesByCierreId(allSales, from, to) {
                 totalUsd: totalCOP,  // alias de compatibilidad
                 totalBs: 0,          // siempre 0 en Pool Imperial
                 totalItems,
+                profit,
                 paymentBreakdown,
                 totalTax,
                 taxBreakdown,
