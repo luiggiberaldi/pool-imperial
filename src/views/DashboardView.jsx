@@ -82,7 +82,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
     // ── Métricas extraídas al hook ──
     const {
-        today, todaySales, todayCashFlow, todayApertura,
+        today, todaySales, todayAllSales, todayCashFlow, todayApertura,
         todayTotalBs, todayTotalUsd, todayItemsSold,
         todayExpenses, todayExpensesUsd, todayProfit,
         todayTotalTax, todayTaxBreakdown,
@@ -779,7 +779,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 todaySales={todaySales} todayCashFlow={todayCashFlow} todayTotalUsd={todayTotalUsd} todayTotalBs={todayTotalBs} todayProfit={todayProfit}
                 todayItemsSold={todayItemsSold} todayExpensesUsd={todayExpensesUsd} paymentBreakdown={paymentBreakdown}
                 todayTopProducts={todayTopProducts} bcvRate={bcvRate} copEnabled={copEnabled} tasaCop={tasaCop} isAdmin={isAdmin}
-                apertura={todayApertura} totalTax={dashTab === 'hoy' ? dayTotalTax : todayTotalTax} taxBreakdown={dashTab === 'hoy' ? dayTaxBreakdown : todayTaxBreakdown} />
+                apertura={todayApertura} totalTax={dashTab === 'hoy' ? dayTotalTax : todayTotalTax} taxBreakdown={dashTab === 'hoy' ? dayTaxBreakdown : todayTaxBreakdown}
+                allSales={todayAllSales} />
 
             <AperturaCajaModal isOpen={isAperturaOpen} onClose={() => setIsAperturaOpen(false)} onConfirm={handleSaveApertura} />
 
@@ -795,6 +796,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 cajeroName={usuarioActivo?.name}
                 products={products}
                 role={role}
+                allSales={todayAllSales}
             />
         </div>
     );

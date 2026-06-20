@@ -36,6 +36,14 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
         [sales, today, sessionOpenedAt]
     );
 
+    const todayAllSales = useMemo(() =>
+        sales.filter(s => {
+            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA') return false;
+            return isInSessionPeriod(s);
+        }),
+        [sales, today, sessionOpenedAt]
+    );
+
     const todayCashFlow = useMemo(() =>
         sales.filter(s => {
             if (s.status === 'ANULADA') return false;
@@ -222,11 +230,11 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
                 map[item.name].revenue += item.priceUsd * item.qty;
             });
         });
-        return Object.values(map).sort((a, b) => b.qty - a.qty).slice(0, 10);
+        return Object.values(map).sort((a, b) => b.qty - a.qty);
     }, [todaySales, products]);
 
     return {
-        today, todaySales, todayCashFlow, todayApertura,
+        today, todaySales, todayAllSales, todayCashFlow, todayApertura,
         todayTotalBs, todayTotalUsd, todayItemsSold,
         todayExpenses, todayExpensesUsd, todayProfit,
         todayTotalTax, todayTaxBreakdown,

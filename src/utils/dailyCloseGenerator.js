@@ -359,26 +359,22 @@ export async function generateDailyClosePDF({
     }
 
     // ════════════════════════════════════
-    //  TOP PRODUCTOS
+    //  ARTÍCULOS VENDIDOS
     // ════════════════════════════════════
     if (topProdRows > 0) {
-        y = sectionTitle('PRODUCTOS MÁS VENDIDOS', y);
+        y = sectionTitle('ARTÍCULOS VENDIDOS', y);
 
-        topProducts.forEach((p, i) => {
-            const rank = `${i + 1}.`;
-            const name = p.name.length > 22 ? p.name.substring(0, 22) + '…' : p.name;
+        topProducts.forEach((p) => {
+            const name = p.name.length > 26 ? p.name.substring(0, 26) + '…' : p.name;
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7);
-            doc.setTextColor(...INK);
-            doc.text(rank, M, y);
-            doc.setFont('helvetica', 'bold');
             doc.setTextColor(...BODY);
-            doc.text(name, M + 5, y);
+            doc.text(name, M, y);
             y += 4;
 
             doc.setFontSize(6);
             doc.setTextColor(...MUTED);
-            doc.text(`${p.qty} vendidos · ${formatCOP(p.revenue)}`, M + 5, y);
+            doc.text(`${p.qty} vendidos · ${formatCOP(p.revenue)}`, M, y);
             y += 5;
         });
 

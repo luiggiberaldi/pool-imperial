@@ -240,10 +240,17 @@ export class FinancialEngine {
                 safeChangeUsd = 0;
             }
 
-            // Accumulate change in dedicated vuelto buckets (negative totals)
+            // Subtract change directly from the COP cash payment method (efectivo or efectivo_cop)
             if (safeChangeUsd > 0) {
-                if (!breakdown['_vuelto_cop']) breakdown['_vuelto_cop'] = { total: 0, currency: 'COP', label: 'Vuelto Entregado (COP)' };
-                breakdown['_vuelto_cop'].total = round2(breakdown['_vuelto_cop'].total - safeChangeUsd);
+                const cashMethod = breakdown['efectivo_cop'] ? 'efectivo_cop' : 'efectivo';
+                if (!breakdown[cashMethod]) {
+                    breakdown[cashMethod] = { 
+                        total: 0, 
+                        currency: 'COP', 
+                        label: cashMethod === 'efectivo_cop' ? 'Efectivo COP' : 'Efectivo' 
+                    };
+                }
+                breakdown[cashMethod].total = round2(breakdown[cashMethod].total - safeChangeUsd);
             }
         });
 

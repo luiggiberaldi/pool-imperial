@@ -21,7 +21,8 @@ export default function CierreCajaWizard({
     isAdmin = true,
     apertura = null,
     totalTax = 0,
-    taxBreakdown = {}
+    taxBreakdown = {},
+    allSales = []
 }) {
     const [step, setStep] = useState(1);
     const [actualCop, setActualCop] = useState('');
@@ -103,7 +104,7 @@ export default function CierreCajaWizard({
             // apuntando a los objetos originales (onConfirm no los muta, crea copias).
             setReportSnapshot({
                 sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
-                allSales: todaySales,
+                allSales: allSales.length > 0 ? allSales : todaySales,
                 paymentBreakdown,
                 topProducts: todayTopProducts,
                 todayTotalCOP: todayTotalUsd,
@@ -254,16 +255,15 @@ export default function CierreCajaWizard({
                                 </div>
                             )}
 
-                            {/* Top productos */}
+                            {/* Articulos vendidos */}
                             {todayTopProducts.length > 0 && (
                                 <div>
-                                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 pl-1">Mas vendidos hoy</h4>
-                                    <div className="space-y-1.5">
-                                        {todayTopProducts.slice(0, 5).map((p, i) => (
+                                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 pl-1">Articulos vendidos hoy</h4>
+                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                        {todayTopProducts.map((p, i) => (
                                             <div key={i} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2 border border-slate-100 dark:border-slate-700/50">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="w-5 h-5 bg-indigo-100 dark:bg-indigo-900/30 rounded-md flex items-center justify-center text-[10px] font-black text-indigo-500">{i + 1}</span>
-                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[160px]">{p.name}</span>
+                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[180px]">{p.name}</span>
                                                 </div>
                                                 <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md">{p.qty} uds</span>
                                             </div>
@@ -480,7 +480,7 @@ export default function CierreCajaWizard({
                                         // Fallback a props en vivo solo si la foto no existe.
                                         const snap = reportSnapshot || {
                                             sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
-                                            allSales: todaySales,
+                                            allSales: allSales.length > 0 ? allSales : todaySales,
                                             paymentBreakdown,
                                             topProducts: todayTopProducts,
                                             todayTotalCOP: todayTotalUsd,
@@ -510,7 +510,7 @@ export default function CierreCajaWizard({
                                     onClick={() => {
                                         const snap = reportSnapshot || {
                                             sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
-                                            allSales: todaySales,
+                                            allSales: allSales.length > 0 ? allSales : todaySales,
                                             paymentBreakdown,
                                             topProducts: todayTopProducts,
                                             todayTotalCOP: todayTotalUsd,

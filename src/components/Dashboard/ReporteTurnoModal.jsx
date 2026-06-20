@@ -19,9 +19,10 @@ function getSalePaymentLabel(s) {
     return '—';
 }
 
-export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTotalUsd, todayTotalBs, todayItemsSold, paymentBreakdown, activeCashSession, cajeroName, products = [], role = 'ADMIN' }) {
+export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTotalUsd, todayTotalBs, todayItemsSold, paymentBreakdown, activeCashSession, cajeroName, products = [], role = 'ADMIN', allSales = [] }) {
     if (!isOpen) return null;
 
+    const finalAllSales = allSales.length > 0 ? allSales : todaySales;
     const isAdmin = role === 'ADMIN';
 
     const totalSalesCop = useMemo(() => {
@@ -131,18 +132,19 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
         // Detalle de ventas
         rows.push(['=== DETALLE DE VENTAS ===']);
         rows.push(['Hora', 'Cliente', 'Productos', 'Cant. Items', 'Total COP', 'Total USD Equiv.', 'Método de Pago']);
-        todaySales.forEach(s => {
+        finalAllSales.forEach(s => {
+            const isCanceled = s.status === 'ANULADA';
             const productos = s.items ? s.items.map(i => `${i.name} x${i.qty}`).join(' | ') : '—';
             const saleCop = s.totalCop || s.totalUsd || 0;
             const saleUsd = saleCop / (s.rate || 4150);
             rows.push([
                 formatHora(s.timestamp),
-                s.clientName || 'Público General',
+                (s.customerName || s.clientName || 'Público General') + (isCanceled ? ' (ANULADA)' : ''),
                 productos,
                 s.items ? s.items.reduce((sum, i) => sum + i.qty, 0) : 0,
-                new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(saleCop),
-                new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(saleUsd),
-                getSalePaymentLabel(s),
+                isCanceled ? 'ANULADA' : new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(saleCop),
+                isCanceled ? 'ANULADA' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(saleUsd),
+                isCanceled ? 'ANULADA' : getSalePaymentLabel(s),
             ]);
         });
 
@@ -336,30 +338,35 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                     )}
 
                     {/* Listado de ventas del turno — solo admin */}
-                    {isAdmin && todaySales.length > 0 && (
+                    {isAdmin && finalAllSales.length > 0 && (
                         <div>
                             <div className="flex items-center gap-2 mb-2">
                                 <Clock size={13} className="text-slate-400" />
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Ventas del Turno ({todaySales.length})</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Ventas del Turno ({finalAllSales.length})</p>
                             </div>
                             <div className="space-y-1.5">
-                                {todaySales.map(s => (
-                                    <div key={s.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3.5 py-2.5">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <p className="text-[10px] text-slate-400 font-mono">{formatHora(s.timestamp)}</p>
-                                                <p className="text-[10px] text-slate-400">·</p>
-                                                <p className="text-[10px] text-slate-500 truncate">{getSalePaymentLabel(s)}</p>
+                                {finalAllSales.map(s => {
+                                    const isCanceled = s.status === 'ANULADA';
+                                    return (
+                                        <div key={s.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3.5 py-2.5">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-[10px] text-slate-400 font-mono">{formatHora(s.timestamp)}</p>
+                                                    <p className="text-[10px] text-slate-400">·</p>
+                                                    <p className={`text-[10px] ${isCanceled ? 'text-red-500 font-bold' : 'text-slate-500'} truncate`}>
+                                                        {isCanceled ? 'ANULADA' : getSalePaymentLabel(s)}
+                                                    </p>
+                                                </div>
+                                                <p className={`text-xs ${isCanceled ? 'text-slate-450 line-through' : 'text-slate-500 dark:text-slate-400'} truncate`}>
+                                                    {s.items ? s.items.map(i => `${i.name} x${i.qty}`).join(', ') : '—'}
+                                                </p>
                                             </div>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                                {s.items ? s.items.map(i => `${i.name} x${i.qty}`).join(', ') : '—'}
+                                            <p className={`text-sm font-black ${isCanceled ? 'text-red-500 line-through' : 'text-slate-800 dark:text-white'} ml-3 shrink-0`}>
+                                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(s.totalCop || s.totalUsd || 0)}
                                             </p>
                                         </div>
-                                        <p className="text-sm font-black text-slate-800 dark:text-white ml-3 shrink-0">
-                                            {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(s.totalCop || s.totalUsd || 0)}
-                                        </p>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

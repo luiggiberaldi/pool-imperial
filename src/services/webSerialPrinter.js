@@ -871,11 +871,11 @@ export async function printDailyCloseEscPos({
         p.line('-', W);
     }
 
-    // ── Top Productos ──
+    // ── Artículos Vendidos ──
     if (topProducts && topProducts.length > 0) {
-        p.align(1).bold(true).text('PRODUCTOS MAS VENDIDOS').newline().bold(false).align(0);
-        topProducts.forEach((prod, i) => {
-            const label = `${i+1}. ${prod.name}`;
+        p.align(1).bold(true).text('ARTICULOS VENDIDOS').newline().bold(false).align(0);
+        topProducts.forEach((prod) => {
+            const label = prod.name;
             const cleanLabel = label.length > W - 10 ? label.substring(0, W - 12) + '…' : label;
             p.smallFont(true).row(`${prod.qty}u ${cleanLabel}`, formatCOP(prod.revenue), WS);
             p.smallFont(false);

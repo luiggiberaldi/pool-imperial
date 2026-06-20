@@ -551,20 +551,20 @@ export async function printThermalDailyClose({
         `;
     }
 
-    // Top Products HTML
+    // Articles Sold HTML
     let topProductsHtml = '';
     if (topProducts && topProducts.length > 0) {
         topProductsHtml = `
-            <div class="section-title">Productos Más Vendidos</div>
+            <div class="section-title">Articulos Vendidos</div>
             <table style="font-size: 10px;">
                 <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
                     <td>Cant</td><td>Producto</td><td style="text-align:right;">Ingreso</td>
                 </tr>
                 ${topProducts.map(p => `
                     <tr>
-                        <td>${p.qty}u</td>
-                        <td>${p.name.length > 18 ? p.name.substring(0, 18) + '…' : p.name}</td>
-                        <td style="text-align:right;font-weight:bold;">${formatCOP(p.revenue)}</td>
+                         <td>${p.qty}u</td>
+                         <td>${p.name.length > 18 ? p.name.substring(0, 18) + '…' : p.name}</td>
+                         <td style="text-align:right;font-weight:bold;">${formatCOP(p.revenue)}</td>
                     </tr>
                 `).join('')}
             </table>
