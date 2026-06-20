@@ -199,6 +199,7 @@ export function useSalesCheckout({
             : (tableCheckoutData.table?.name || null);
         opts.tableSessionId = session?.id || null;
 
+        let meseroUser = null;
         if (tableCheckoutData.session?.opened_by) {
             const cachedUsers = useAuthStore.getState().cachedUsers || [];
             let openerUser = cachedUsers.find(u => u.id === tableCheckoutData.session.opened_by) || null;
@@ -209,11 +210,62 @@ export function useSalesCheckout({
                     if (data) openerUser = data;
                 } catch (_) {}
             }
-            const openerRole = (openerUser?.role || openerUser?.rol || '').toUpperCase();
-            if (openerRole === 'MESERO' || openerRole === 'BARRA') {
-                opts.meseroId = openerUser.id;
-                opts.meseroNombre = openerUser.name || openerUser.nombre || null;
+            const role = (openerUser?.role || openerUser?.rol || '').toUpperCase();
+            if (role === 'MESERO' || role === 'BARRA') {
+                meseroUser = openerUser;
             }
+        }
+
+        const allOrders = useOrdersStore.getState().orders || [];
+        const allItems = useOrdersStore.getState().orderItems || [];
+
+        if (!meseroUser && session?.id) {
+            const associatedOrder = allOrders.find(o => o.table_session_id === session.id);
+            if (associatedOrder && associatedOrder.created_by) {
+                const cachedUsers = useAuthStore.getState().cachedUsers || [];
+                let orderCreator = cachedUsers.find(u => u.id === associatedOrder.created_by) || null;
+                if (!orderCreator && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(associatedOrder.created_by)) {
+                    try {
+                        const { supabaseCloud } = await import('../config/supabaseCloud');
+                        const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', associatedOrder.created_by).single();
+                        if (data) orderCreator = data;
+                    } catch (_) {}
+                }
+                const role = (orderCreator?.role || orderCreator?.rol || '').toUpperCase();
+                if (role === 'MESERO' || role === 'BARRA') {
+                    meseroUser = orderCreator;
+                }
+            }
+        }
+
+        if (!meseroUser && session?.id) {
+            const associatedOrder = allOrders.find(o => o.table_session_id === session.id);
+            if (associatedOrder) {
+                const items = allItems.filter(i => i.order_id === associatedOrder.id);
+                for (const item of items) {
+                    if (item.added_by) {
+                        const cachedUsers = useAuthStore.getState().cachedUsers || [];
+                        let itemCreator = cachedUsers.find(u => u.id === item.added_by) || null;
+                        if (!itemCreator && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.added_by)) {
+                            try {
+                                const { supabaseCloud } = await import('../config/supabaseCloud');
+                                const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', item.added_by).single();
+                                if (data) itemCreator = data;
+                            } catch (_) {}
+                        }
+                        const role = (itemCreator?.role || itemCreator?.rol || '').toUpperCase();
+                        if (role === 'MESERO' || role === 'BARRA') {
+                            meseroUser = itemCreator;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (meseroUser) {
+            opts.meseroId = meseroUser.id;
+            opts.meseroNombre = meseroUser.name || meseroUser.nombre || null;
         }
 
         const result = await processSaleTransaction(opts);

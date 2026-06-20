@@ -424,7 +424,13 @@ BEGIN
         fiado_usd,
         split_meta,
         idempotency_key,
-        user_id
+        user_id,
+        vendedor_id,
+        vendedor_nombre,
+        vendedor_rol,
+        mesero_id,
+        mesero_nombre,
+        table_name
     ) VALUES (
         v_sale_number,
         CASE WHEN v_fiado_amount > 0 THEN 'VENTA_FIADA' ELSE 'VENTA' END,
@@ -447,7 +453,13 @@ BEGIN
         v_fiado_amount,
         payload->'splitMeta',
         (payload->>'idempotency_key')::UUID,
-        v_user_id
+        v_user_id,
+        (payload->>'vendedorId')::UUID,
+        payload->>'vendedorNombre',
+        payload->>'vendedorRol',
+        (payload->>'meseroId')::UUID,
+        payload->>'meseroNombre',
+        payload->>'tableName'
     ) RETURNING id INTO v_sale_id;
 
     -- Insertar ítems vendidos (usando el nombre enviado desde el cliente y protegiendo contra nulos o problemas de casing en price_usd)
