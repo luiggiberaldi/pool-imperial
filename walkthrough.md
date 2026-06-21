@@ -104,15 +104,64 @@ Se reemplazaron los selectores nativos por `<CustomSelect>` en los siguientes m�
 
 ---
 
-## 🕒 Sincronización del Reloj del Servidor (Timers Independientes de Dispositivos)
+## 🕒 Sincronización del Reloj del Servidor y cloudSession
 
-Se ha implementado una solución robusta para solucionar el desfase de los timers entre diferentes dispositivos que utilizan la aplicación debido a discrepancias en sus relojes locales.
+Se ha implementado una solución robusta para solucionar el desfase de los timers entre diferentes dispositivos que utilizan la aplicación debido a discrepancias en sus relojes locales y la falta de persistencia de la sesión en el store global.
 
 ### 1. Migración y RPC en Base de Datos
 - **[get_server_time.sql](file:///c:/Users/luigg/Desktop/URO/LOS%20DIAZ/pool%20imperial/get_server_time.sql)**:
   - Script SQL para crear la función RPC `get_server_time()` en Supabase que retorna el timestamp exacto del servidor Postgres.
 
-### 2. Módulo de Sincronización
+### 2. Corrección del Estado `cloudSession`
+- **Problema**: Componentes críticos como `voidSaleProcessor.js` fallaban al obtener el `userId` debido a que `cloudSession` era un estado local volátil en `useAppInit.js` en lugar de estar persistido en el store global `authStore.js`.
+- **Solución**: Se añadió `cloudSession` al estado de `authStore.js` y se sincronizó reactivamente mediante `useAppInit.js` para asegurar que el ID del usuario esté siempre disponible globalmente.
+
+## 6. Sincronización Resiliente de Ventas Anuladas
+
+Se implementó una solución de doble vía (tiempo real auto-recuperable + pull incremental periódico en segundo plano) para asegurar que cuando una venta se anule en un dispositivo, el cambio se refleje inmediatamente en todas las demás estaciones de trabajo.
+
+### Causas de las Discrepancias
+1. **Desconexiones de WebSocket sin Reintento**:
+   - Las suscripciones en tiempo real (Supabase Realtime channels) para la sincronización de documentos P2P y de ventas no tenían implementada una política de reintento/re-suscripción en caso de errores de red o desconexiones del WebSocket.
+   - Si la suscripción se caía una vez, el dispositivo quedaba desconectado indefinidamente del flujo en tiempo real de los demás dispositivos.
+2. **Ausencia de Pull de Ventas en Segundo Plano**:
+   - El método `pullNewSales` (que obtiene de forma incremental las ventas creadas o modificadas desde la base de datos central) solo se llamaba al iniciar la app o al regresar al primer plano, pero nunca de forma periódica mientras el usuario operaba activamente.
+3. **Discrepancia en Tabla sales Relacional**:
+   - Al anular una venta se modificaba la cola en `sync_documents`, pero no se actualizaba la columna `status` en la tabla SQL relacional principal `sales` de Supabase.
+4. **Falta de Estado `cloudSession` en `useAuthStore` (CAUSA CRÍTICA)**:
+   - Se detectó que componentes y servicios críticos (como `voidSaleProcessor.js`, `useCloudSync.js` en `scheduleCloudPush`, `tableRealtimeActions.js`, `useGlobalTableAlerts.js` y `ProductContext.jsx`) leían el ID de la cuenta de Supabase desde `useAuthStore.getState().cloudSession?.user?.id`.
+   - Sin embargo, la propiedad `cloudSession` **nunca se había declarado ni actualizado** en el store de Zustand (`authStore.js`). Se mantenía puramente como un hook de estado React interno dentro de `useAppInit.js`.
+   - Como consecuencia, el `userId` siempre se evaluaba como `undefined` al intentar anular una venta. Esto causaba que la llamada a `broadcastVoidSale()` y la actualización a Supabase (`supabaseCloud.from('sales').update(...)`) se saltaran por completo en `voidSaleProcessor.js`.
+
+### Cambios Realizados
+
+#### [MODIFY] [authStore.js](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/hooks/store/authStore.js)
+- Se añadió `cloudSession: null` en el estado inicial de la tienda de Zustand.
+
+#### [MODIFY] [useAppInit.js](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/hooks/useAppInit.js)
+- Se enlazaron llamadas a `useAuthStore.setState({ cloudSession: session })` en todos los puntos donde se establece o destruye la sesión (inicio de sesión, modo offline cached y cierre de sesión), sincronizando reactivamente la sesión de Supabase con el store.
+
+#### [MODIFY] [voidSaleProcessor.js](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/utils/voidSaleProcessor.js)
+- Se añadió un fallback resiliente para consultar la sesión en tiempo de ejecución usando `supabaseCloud.auth.getSession()` en caso de que la tienda de Zustand tarde en hidratar o recuperar el estado. Esto garantiza que la venta anulada se sincronice y difunda en cualquier circunstancia.
+
+#### [MODIFY] [salesSyncService.js](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/utils/salesSyncService.js)
+- **Función `broadcastVoidSale`**: Se creó este nuevo método que emite un evento P2P en tiempo real (`void_sale`) a las demás estaciones activas y actualiza la fila correspondiente en la tabla `sync_documents` de Supabase.
+- **Detector de cambios en tiempo real (`applyIncomingSale`)**: Se actualizó para que, al recibir actualizaciones de una venta existente, también compare su propiedad `status` y, si cambia (ej. a `ANULADA`), la sobrescriba en IndexedDB y dispare un evento de actualización en la interfaz React.
+- **Suscripción de eventos (`subscribeSalesRealtime`)**: Se configuró para escuchar activamente el canal de eventos `'void_sale'`.
+- **Descarga incremental (`pullNewSales`)**: Se añadió una validación para que al consultar la base de datos central de ventas nuevas, si una venta ya existe localmente pero su `status` es diferente al de la nube, actualice el estado local para reflejar la anulación.
+
+#### [MODIFY] [useCloudSync.js](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/hooks/useCloudSync.js)
+- Se aplicó la misma política de re-suscripción automática con delay para `globalSubscription` (canal P2P `sync_live`).
+- Se introdujo un `useEffect` que ejecuta de forma automática un pull incremental de ventas (`pullNewSales`) cada 30 segundos como mecanismo de respaldo robusto en caso de que los WebSockets no estén disponibles.
+
+---
+
+## Verificación y Compilación
+- Se compiló con éxito el bundle de producción de la PWA con `npm run build` en 32.84 segundos.
+- Se verificó que todos los componentes, contextos e importaciones funcionan correctamente en armonía sin arrojar excepciones.
+- Se realizó commit y push exitoso a la rama `master`.
+
+### 3. Módulo de Sincronización
 - **[serverClock.js](file:///c:/Users/luigg/Desktop/URO/LOS%20DIAZ/pool%20imperial/src/utils/serverClock.js)**:
   - Módulo singleton que consulta el tiempo del servidor en segundo plano.
   - Calcula la latencia de ida y vuelta (RTT / 2) y la diferencia de tiempo entre el reloj del servidor y el reloj del dispositivo local (`serverOffset`).
