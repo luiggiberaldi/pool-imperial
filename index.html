@@ -55,6 +55,14 @@
     })();
   </script>
 
+  <!-- Capture PWA Install Prompt early -->
+  <script>
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      window.deferredInstallPrompt = e;
+    });
+  </script>
+
   <!-- Tipografía -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

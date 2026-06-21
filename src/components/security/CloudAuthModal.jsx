@@ -52,7 +52,7 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
     const confirm = useConfirm();
 
     // ── PWA Install Prompt ────────────────────────────────────────────
-    const [deferredPrompt, setDeferredPrompt] = useState(null);
+    const [deferredPrompt, setDeferredPrompt] = useState(() => window.deferredInstallPrompt || null);
     const [isInstalled, setIsInstalled] = useState(false);
     const [showIosHint, setShowIosHint] = useState(false);
 
@@ -60,12 +60,19 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
     const isInStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
     useEffect(() => {
+        if (window.deferredInstallPrompt) {
+            setDeferredPrompt(window.deferredInstallPrompt);
+        }
         if (isInStandalone) { setIsInstalled(true); return; }
-        const handler = (e) => { e.preventDefault(); setDeferredPrompt(e); };
+        const handler = (e) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+            window.deferredInstallPrompt = e;
+        };
         window.addEventListener('beforeinstallprompt', handler);
         window.addEventListener('appinstalled', () => setIsInstalled(true));
         return () => window.removeEventListener('beforeinstallprompt', handler);
-    }, []);
+    }, [isInStandalone]);
 
     const handleInstallPWA = async () => {
         if (deferredPrompt) {
@@ -73,6 +80,7 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
             const { outcome } = await deferredPrompt.userChoice;
             if (outcome === 'accepted') setIsInstalled(true);
             setDeferredPrompt(null);
+            window.deferredInstallPrompt = null;
         } else if (isIos) {
             setShowIosHint(v => !v);
         } else {

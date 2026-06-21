@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 export function useInstallPrompt() {
-    const [installPrompt, setInstallPrompt] = useState(null);
+    const [installPrompt, setInstallPrompt] = useState(() => window.deferredInstallPrompt || null);
     const [showIOSInstall, setShowIOSInstall] = useState(false);
 
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -9,7 +9,14 @@ export function useInstallPrompt() {
     const showIOSButton = isIOS && !isStandalone && !localStorage.getItem('ios_install_dismissed');
 
     useEffect(() => {
-        const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+        if (window.deferredInstallPrompt) {
+            setInstallPrompt(window.deferredInstallPrompt);
+        }
+        const handler = (e) => {
+            e.preventDefault();
+            setInstallPrompt(e);
+            window.deferredInstallPrompt = e;
+        };
         window.addEventListener('beforeinstallprompt', handler);
         return () => window.removeEventListener('beforeinstallprompt', handler);
     }, []);
