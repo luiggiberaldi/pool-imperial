@@ -1427,8 +1427,20 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
 
     // Auto-scaling responsive logic
     const canvasParentRef = useRef(null);
-    const [dimensions, setDimensions] = useState({ width: 1000, height: 562.5, scale: 1, isRotated: false });
-    const [isMeasured, setIsMeasured] = useState(false);
+    const [dimensions, setDimensions] = useState(() => {
+        try {
+            const saved = sessionStorage.getItem('floor_plan_dimensions_cache');
+            if (saved) return JSON.parse(saved);
+        } catch (_) {}
+        return { width: 1000, height: 562.5, scale: 1, isRotated: false };
+    });
+    const [isMeasured, setIsMeasured] = useState(() => {
+        try {
+            return sessionStorage.getItem('floor_plan_dimensions_cache') !== null;
+        } catch (_) {
+            return false;
+        }
+    });
 
     // Console logging to monitor loading and state issues
     useEffect(() => {
@@ -1728,13 +1740,17 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
                     scale = canvasW / 1000;
                 }
                 
-                setDimensions({
+                const nextDims = {
                     width: canvasW,
                     height: canvasH,
                     scale,
                     isRotated: isPortrait
-                });
+                };
+                setDimensions(nextDims);
                 setIsMeasured(true);
+                try {
+                    sessionStorage.setItem('floor_plan_dimensions_cache', JSON.stringify(nextDims));
+                } catch (_) {}
             }
         });
         resizeObserver.observe(canvasParentRef.current);

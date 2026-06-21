@@ -1,8 +1,11 @@
 import { supabaseCloud } from '../../config/supabaseCloud';
 import { useAuthStore } from './authStore';
 
-export const createRealtimeActions = (set, get, tablesCache, scopedKey) => ({
-    subscribeToRealtime: () => {
+export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
+    let lastRequestTime = 0;
+
+    return {
+        subscribeToRealtime: () => {
         if (get().realtimeChannel) return;
 
         // Scope channel by userId to prevent cross-account notification leaks
@@ -55,26 +58,26 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => ({
                     }));
                 }
             })
-            .on('broadcast', { event: 'table_checkout_request' }, ({ payload }) => {
+            .on('broadcast', { event: 'table_checkout_request' }, async ({ payload }) => {
                 console.log("[REALTIME] broadcast table_checkout_request:", payload);
                 if (!payload?.sessionId) return;
                 const { sessionId, tableId, notes, demotedIds = [] } = payload;
-                set(state => ({
-                    activeSessions: state.activeSessions.map(s => {
-                        if (s.id === sessionId) return { ...s, status: 'CHECKOUT', ...(notes !== undefined ? { notes } : {}) };
-                        if (demotedIds.includes(s.id) || (s.table_id === tableId && s.status === 'CHECKOUT')) return { ...s, status: 'ACTIVE' };
-                        return s;
-                    })
-                }));
+                const newSessions = get().activeSessions.map(s => {
+                    if (s.id === sessionId) return { ...s, status: 'CHECKOUT', ...(notes !== undefined ? { notes } : {}) };
+                    if (demotedIds.includes(s.id) || (s.table_id === tableId && s.status === 'CHECKOUT')) return { ...s, status: 'ACTIVE' };
+                    return s;
+                });
+                set({ activeSessions: newSessions });
+                await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
             })
-            .on('broadcast', { event: 'table_checkout_cancel' }, ({ payload }) => {
+            .on('broadcast', { event: 'table_checkout_cancel' }, async ({ payload }) => {
                 console.log("[REALTIME] broadcast table_checkout_cancel:", payload);
                 if (!payload?.sessionId) return;
-                set(state => ({
-                    activeSessions: state.activeSessions.map(s =>
-                        s.id === payload.sessionId ? { ...s, status: 'ACTIVE' } : s
-                    )
-                }));
+                const newSessions = get().activeSessions.map(s =>
+                    s.id === payload.sessionId ? { ...s, status: 'ACTIVE' } : s
+                );
+                set({ activeSessions: newSessions });
+                await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
             })
             .on('broadcast', { event: 'table_payment_reset' }, async ({ payload }) => {
                 console.log("[REALTIME] broadcast table_payment_reset:", payload);
@@ -104,11 +107,11 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => ({
                     set(state => ({ paidRoundsOffsets: { ...state.paidRoundsOffsets, [sessionId]: roundsOffset } }));
                 }
 
-                set(state => ({
-                    activeSessions: state.activeSessions.map(s =>
-                        s.id === sessionId ? { ...s, paid_at: paidAt, status: 'ACTIVE', ...(clearedSeats ? { seats: clearedSeats } : {}) } : s
-                    )
-                }));
+                const newSessions = get().activeSessions.map(s =>
+                    s.id === sessionId ? { ...s, paid_at: paidAt, status: 'ACTIVE', ...(clearedSeats ? { seats: clearedSeats } : {}) } : s
+                );
+                set({ activeSessions: newSessions });
+                await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
             })
             .on('broadcast', { event: 'table_offsets_state_request' }, async () => {
                 const paidHoursOffsets = get().paidHoursOffsets;
@@ -278,18 +281,24 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => ({
             .subscribe((status) => {
                 console.log("[REALTIME] status pool_tables_sync_v2:", status);
                 if (status === 'SUBSCRIBED') {
-                    setTimeout(() => {
-                        channel.send({
-                            type: 'broadcast',
-                            event: 'table_pause_state_request',
-                            payload: {}
-                        });
-                        channel.send({
-                            type: 'broadcast',
-                            event: 'table_offsets_state_request',
-                            payload: {}
-                        });
-                    }, 500);
+                    const now = Date.now();
+                    if (now - lastRequestTime > 30000) { // 30 seconds rate-limit
+                        lastRequestTime = now;
+                        setTimeout(() => {
+                            channel.send({
+                                type: 'broadcast',
+                                event: 'table_pause_state_request',
+                                payload: {}
+                            });
+                            channel.send({
+                                type: 'broadcast',
+                                event: 'table_offsets_state_request',
+                                payload: {}
+                            });
+                        }, 500);
+                    } else {
+                        console.log("[REALTIME] Ignorando table_state_request por rate-limit (último hace < 30s)");
+                    }
                 }
             });
         set({ realtimeChannel: channel });
@@ -349,4 +358,5 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => ({
             payload: { sessionId }
         });
     },
-});
+};
+};

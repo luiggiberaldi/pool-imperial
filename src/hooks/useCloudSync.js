@@ -359,6 +359,13 @@ async function _applyFromCloud(docId, collection, payload) {
     isSyncingFromCloud = true;
     try {
         if (collection === 'local') {
+            if (docId === 'cajero_puede_ver_mesas') {
+                const isInvalid = payload === null || payload === undefined || payload === '' || payload === 'null' || payload === 'undefined';
+                if (isInvalid) {
+                    console.warn('[CloudSync] Ignorando payload vacío o inválido para cajero_puede_ver_mesas:', payload);
+                    return;
+                }
+            }
             const stringPayload = typeof payload === 'string' ? payload : JSON.stringify(payload);
             originalSetItem(docId, stringPayload);
             window.dispatchEvent(new StorageEvent('storage', {
@@ -574,7 +581,15 @@ export function useCloudSync() {
                             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                                 console.warn('[CloudSync] Canal P2P desconectado, reintentando...');
                                 setTimeout(() => {
-                                    try { subscribeSync(); } catch (_) {}
+                                    try {
+                                        ch.unsubscribe().then(() => {
+                                            subscribeSync();
+                                        }).catch(() => {
+                                            subscribeSync();
+                                        });
+                                    } catch (_) {
+                                        subscribeSync();
+                                    }
                                 }, 5000);
                             }
                         });

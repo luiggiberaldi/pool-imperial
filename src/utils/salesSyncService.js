@@ -410,7 +410,15 @@ export function subscribeSalesRealtime(userId, onSaleReceived) {
                 salesBroadcastSubscribed = false;
                 console.warn('[SalesSync] Canal de ventas desconectado, reintentando...');
                 setTimeout(() => {
-                    try { subscribeChannel(); } catch (_) {}
+                    try {
+                        ch.unsubscribe().then(() => {
+                            subscribeChannel();
+                        }).catch(() => {
+                            subscribeChannel();
+                        });
+                    } catch (_) {
+                        subscribeChannel();
+                    }
                 }, 5000);
             }
         });
