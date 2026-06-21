@@ -44,6 +44,9 @@ export async function processSaleTransaction({
     tasaCop,
     ivaRate = 19,
 }) {
+    // Obtener usuario actual del store
+    const currentUser = useAuthStore.getState().currentUser;
+
     // Compatibilidad con llamadores que aún usan el nombre legacy
     const totalCOP = cartTotalCOP ?? cartTotalUsd ?? 0;
     const subtotalCOP = cartSubtotalCOP ?? cartSubtotalUsd ?? 0;
@@ -178,7 +181,6 @@ export async function processSaleTransaction({
     }
 
     // ── CACHÉ LOCAL ──
-    const currentUser = useAuthStore.getState().currentUser;
     const finalTaxAmount = totalTax !== undefined ? totalTax : Math.round(totalCOP - (totalCOP / (1 + ((ivaRate || 19) / 100))));
 
     const sale = {

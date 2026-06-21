@@ -130,6 +130,32 @@ function statusOf(session, now) {
     return 'occupied';
 }
 
+/** Hook para calcular y actualizar el estado de una mesa en tiempo real */
+function useTableStatus(session) {
+    const baseStatus = !session ? 'free' : (session.status === 'CHECKOUT' ? 'checkout' : 'occupied');
+    const [isExceeded, setIsExceeded] = useState(false);
+
+    useEffect(() => {
+        if (!session || session.status === 'CHECKOUT' || session.game_mode !== 'NORMAL' || session.hours_paid <= 0) {
+            setIsExceeded(false);
+            return;
+        }
+
+        const checkExceeded = () => {
+            const started = new Date(session.started_at).getTime();
+            const elapsedMinutes = (Date.now() - started) / 60000;
+            const limitMinutes = session.hours_paid * 60;
+            setIsExceeded(elapsedMinutes > limitMinutes);
+        };
+
+        checkExceeded();
+        const interval = setInterval(checkExceeded, 5000); // Verificar cada 5 segundos
+        return () => clearInterval(interval);
+    }, [session]);
+
+    return isExceeded ? 'exceeded' : baseStatus;
+}
+
 // ═══════════════════════════════════════════════════════
 // SUBCOMPONENTES UTILITARIOS
 // ═══════════════════════════════════════════════════════
@@ -226,7 +252,8 @@ function StatusDot({ status }) {
  * Render: fieltro realístico cargando la imagen mesa-pool.svg, con soporte de rotación portrait
  * y capas de estado e información en tiempo real.
  */
-const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, status, isSelected, isCanvasRotated, onItemClick, ...props }) {
+const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, isSelected, isCanvasRotated, onItemClick, ...props }) {
+    const status = useTableStatus(session);
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
     
@@ -419,7 +446,8 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, stat
  * DiningTableEl — Mesa comedor/social (M1, M2, M3).
  * Render top-view: 4 sillas simplificadas en los costados + superficie de mesa plana.
  */
-const DiningTableEl = React.memo(function DiningTableEl({ item, table, session, status, isSelected, isCanvasRotated, onItemClick, ...props }) {
+const DiningTableEl = React.memo(function DiningTableEl({ item, table, session, isSelected, isCanvasRotated, onItemClick, ...props }) {
+    const status = useTableStatus(session);
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
 
@@ -529,7 +557,8 @@ const DiningTableEl = React.memo(function DiningTableEl({ item, table, session, 
  * RoundStoolEl — Taburete alto redondo / Mesa redonda (M4-M11).
  * Render: fieltro realístico cargando la imagen mesa-redonda.svg, con capas de estado e información en tiempo real.
  */
-const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, status, isSelected, isCanvasRotated, onItemClick, ...props }) {
+const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, isSelected, isCanvasRotated, onItemClick, ...props }) {
+    const status = useTableStatus(session);
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
 
@@ -634,7 +663,8 @@ const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, st
  * BarStoolEl — Taburete de barra (B1-B15).
  * Render: círculo compacto plano con etiqueta. Enforce aspect-ratio to keep it a perfect circle.
  */
-const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, status, isSelected, isCanvasRotated, onItemClick, ...props }) {
+const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, isSelected, isCanvasRotated, onItemClick, ...props }) {
+    const status = useTableStatus(session);
     const rotation = item.r || 0;
     const scale = (item.imgScale || 100) / 100;
 
@@ -1394,7 +1424,6 @@ function FloorPlanEditorPanel({ selectedItemId, items, setItems, onClose }) {
 export default function FloorPlanView({ onTableSelect, selectedTableId, isEditing, onExitEditing }) {
     const tables = useTablesStore(s => s.tables);
     const activeSessions = useTablesStore(s => s.activeSessions);
-    const tick = useSharedTick();
 
     // Auto-scaling responsive logic
     const canvasParentRef = useRef(null);
@@ -1792,7 +1821,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     };
 
     // Handler de Arrastre visual (Mouse & Touch)
-    const handleDragStart = (e, itemId) => {
+    const handleDragStart = useCallback((e, itemId) => {
         if (!isEditing) return;
         e.preventDefault();
         
@@ -1845,7 +1874,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         window.addEventListener('mouseup', handleDragEnd);
         window.addEventListener('touchmove', handleDragMove, { passive: false });
         window.addEventListener('touchend', handleDragEnd);
-    };
+    }, [isEditing, dynamicItems, dimensions.isRotated]);
 
     // Resuelve cada FloorItem dinámico con su mesa y sesión
     const resolvedItems = useMemo(() => {
@@ -1958,7 +1987,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     }, [onTableSelect]);
 
     /** Renderiza el elemento correcto según tipo, inyectando listeners de edición si aplica. */
-    const renderItem = useCallback(({ item, table, session, status }) => {
+    const renderItem = useCallback(({ item, table, session }) => {
         const key   = item.id;
         const isSelected = table && selectedTableId === table.id;
         const isEditSelected = isEditing && selectedEditItemId === item.id;
@@ -1991,14 +2020,14 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         const isCanvasRotated = dimensions.isRotated;
         switch (item.type) {
             case 'pool_table':
-                return <PoolTableEl   key={key} item={item} table={table} session={session} status={status} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
+                return <PoolTableEl   key={key} item={item} table={table} session={session} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'dining_table':
-                return <DiningTableEl key={key} item={item} table={table} session={session} status={status} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
+                return <DiningTableEl key={key} item={item} table={table} session={session} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'round_stool':
             case 'bar_table':
-                return <RoundStoolEl  key={key} item={item} table={table} session={session} status={status} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
+                return <RoundStoolEl  key={key} item={item} table={table} session={session} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'bar_stool':
-                return <BarStoolEl    key={key} item={item} table={table} session={session} status={status} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
+                return <BarStoolEl    key={key} item={item} table={table} session={session} isSelected={isEditing ? isEditSelected : isSelected} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'bar_counter':
                 return <BarCounterEl  key={key} item={item} isCanvasRotated={isCanvasRotated} {...editHighlight} />;
             case 'entry':
@@ -2008,7 +2037,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
             default:
                 return null;
         }
-    }, [isEditing, selectedEditItemId, selectedTableId, handleClick, dimensions.isRotated]);
+    }, [isEditing, selectedEditItemId, selectedTableId, handleClick, dimensions.isRotated, handleDragStart]);
 
     return (
         <div className="flex flex-col lg:flex-row h-full bg-[#f4f3f0] overflow-hidden w-full select-none">
@@ -2239,8 +2268,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
 
                                 {/* Todos los elementos del plano */}
                                 {resolvedItems.map(({ item, table, session }) => {
-                                    const status = statusOf(session, tick);
-                                    return renderItem({ item, table, session, status });
+                                    return renderItem({ item, table, session });
                                 })}
                             </div>
                         </div>
