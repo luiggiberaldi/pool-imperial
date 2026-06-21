@@ -339,17 +339,29 @@ export function subscribeSalesRealtime(userId, onSaleReceived) {
 
     const ch = getSalesBroadcastChannel(userId);
 
+    const subscribeChannel = () => {
+        ch.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('[SalesSync] Canal Broadcast de ventas activo');
+            }
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                console.warn('[SalesSync] Canal de ventas desconectado, reintentando...');
+                setTimeout(() => {
+                    try { subscribeChannel(); } catch (_) {}
+                }, 5000);
+            }
+        });
+    };
+
     ch.on('broadcast', { event: 'new_sale' }, ({ payload }) => {
         if (payload) onSaleReceived(payload);
     }).on('broadcast', { event: 'void_sale' }, ({ payload }) => {
         if (payload) onSaleReceived(payload);
     }).on('broadcast', { event: 'cierre_marks' }, ({ payload }) => {
         if (payload) applyCierreMarks(payload);
-    }).subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-            console.log('[SalesSync] Canal Broadcast de ventas activo');
-        }
     });
+
+    subscribeChannel();
 
     return () => {
         ch.unsubscribe();

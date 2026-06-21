@@ -2,6 +2,7 @@ import { storageService } from './storageService';
 import { logEvent } from '../services/auditService';
 import { useAuthStore } from '../hooks/store/authStore';
 import { round2 } from './dinero';
+import { supabaseCloud } from '../config/supabaseCloud';
 
 const SALES_KEY = 'bodega_sales_v1';
 const CUSTOMERS_KEY = 'bodega_customers_v1';
@@ -102,7 +103,10 @@ export async function processVoidSale(sale, currentSales, currentProducts) {
         if (userId) {
             const { broadcastVoidSale } = await import('./salesSyncService');
             const voidedSale = { ...sale, status: 'ANULADA' };
-            await broadcastVoidSale(voidedSale, userId);
+            await Promise.all([
+                broadcastVoidSale(voidedSale, userId),
+                supabaseCloud.from('sales').update({ status: 'ANULADA' }).eq('id', sale.id)
+            ]);
         }
     } catch (e) {
         console.error('[VoidSale] Error al sincronizar anulación:', e);

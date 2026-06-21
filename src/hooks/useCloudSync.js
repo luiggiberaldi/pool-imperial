@@ -565,6 +565,21 @@ export function useCloudSync() {
                 if (!globalSubscription) {
                     globalSubscriptionUserId = userId;
                     const ch = _getSyncBroadcastChannel(userId);
+                    
+                    const subscribeSync = () => {
+                        ch.subscribe((status) => {
+                            if (status === 'SUBSCRIBED') {
+                                console.log('[CloudSync] Conectado en Tiempo Real (Broadcast P2P)');
+                            }
+                            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                                console.warn('[CloudSync] Canal P2P desconectado, reintentando...');
+                                setTimeout(() => {
+                                    try { subscribeSync(); } catch (_) {}
+                                }, 5000);
+                            }
+                        });
+                    };
+
                     globalSubscription = ch
                         .on('broadcast', { event: 'sync_doc_changed' }, async ({ payload }) => {
                             if (!payload?.doc_id) return;
@@ -583,12 +598,9 @@ export function useCloudSync() {
 
                             console.log(`[CloudSync] Recibido P2P (broadcast): ${payload.doc_id}`);
                             await _applyFromCloud(payload.doc_id, payload.collection, payload.data);
-                        })
-                        .subscribe((status) => {
-                            if (status === 'SUBSCRIBED') {
-                                console.log('[CloudSync] Conectado en Tiempo Real (Broadcast P2P)');
-                            }
                         });
+
+                    subscribeSync();
                 }
 
                 // Suscripción Broadcast para ventas en tiempo real (0 DB egress)
@@ -612,6 +624,25 @@ export function useCloudSync() {
         };
 
         initSync();
+    }, [isCloudConfigured]);
+
+    // Periodic fallback sales pull every 30 seconds
+    useEffect(() => {
+        if (!isCloudConfigured) return;
+        
+        const interval = setInterval(async () => {
+            try {
+                const session = (await supabaseCloud.auth.getSession()).data.session;
+                if (session?.user?.id) {
+                    const { pullNewSales } = await import('../utils/salesSyncService');
+                    await pullNewSales(session.user.id);
+                }
+            } catch (e) {
+                // Ignore background errors
+            }
+        }, 30000); // 30 seconds
+        
+        return () => clearInterval(interval);
     }, [isCloudConfigured]);
 
     return {
