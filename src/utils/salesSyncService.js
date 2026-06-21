@@ -20,6 +20,8 @@ const getLastSalesPullKey = () => scopedKey(LAST_SALES_PULL_KEY_BASE);
 
 let salesBroadcastChannel = null;
 let salesBroadcastUserId = null;
+let salesBroadcastSubscribed = false;
+let salesStatusChannel = null;
 
 function getSalesBroadcastChannel(userId) {
     if (salesBroadcastChannel && salesBroadcastUserId === userId) {
@@ -30,6 +32,7 @@ function getSalesBroadcastChannel(userId) {
     }
     salesBroadcastChannel = supabaseCloud.channel(`sales_live:${userId}`);
     salesBroadcastUserId = userId;
+    salesBroadcastSubscribed = false;
     return salesBroadcastChannel;
 }
 
@@ -76,19 +79,23 @@ export async function broadcastNewSale(sale, userId) {
 export async function broadcastVoidSale(sale, userId) {
     if (!userId || !sale) return;
 
-    // 1. Broadcast P2P — instantáneo, sin pasar por la DB
-    try {
-        const ch = getSalesBroadcastChannel(userId);
-        await ch.send({
-            type: 'broadcast',
-            event: 'void_sale',
-            payload: sale,
-        });
-    } catch (e) {
-        console.warn('[SalesSync] Broadcast void_sale P2P falló:', e?.message);
+    // 1. Broadcast P2P — solo si el canal ya está suscrito
+    if (salesBroadcastSubscribed && salesBroadcastChannel) {
+        try {
+            await salesBroadcastChannel.send({
+                type: 'broadcast',
+                event: 'void_sale',
+                payload: sale,
+            });
+            console.log(`[SalesSync] Broadcast void_sale enviado para venta ${sale.id}`);
+        } catch (e) {
+            console.warn('[SalesSync] Broadcast void_sale P2P falló:', e?.message);
+        }
+    } else {
+        console.warn('[SalesSync] Canal P2P no suscrito aún — void_sale solo irá por DB');
     }
 
-    // 2. Persistir fila individual — fallback para dispositivos offline
+    // 2. Persistir fila individual en sync_documents — fallback para dispositivos offline
     try {
         await supabaseCloud.from('sync_documents').upsert({
             user_id: userId,
@@ -97,9 +104,9 @@ export async function broadcastVoidSale(sale, userId) {
             data: { payload: sale },
             updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id,collection,doc_id' });
-        console.log(`[SalesSync] Venta #${sale.saleNumber || '?'} marcada como ANULADA en la nube ✓`);
+        console.log(`[SalesSync] Venta #${sale.saleNumber || '?'} marcada como ANULADA en sync_documents ✓`);
     } catch (e) {
-        console.warn('[SalesSync] Persist void_sale en DB falló:', e?.message);
+        console.warn('[SalesSync] Persist void_sale en sync_documents falló:', e?.message);
     }
 }
 
@@ -334,6 +341,60 @@ export async function applyCierreMarks(marks) {
  * También escucha postgres_changes como capa de seguridad adicional.
  * Retorna función de cleanup.
  */
+/**
+ * Suscribe a postgres_changes en la tabla 'sales' para detectar cambios de status
+ * (principalmente ANULADA). Esta es la capa más confiable de sincronización porque
+ * funciona directamente a nivel de base de datos sin depender del broadcast P2P.
+ */
+export function subscribeSalesStatusChanges(userId, onStatusChange) {
+    if (!userId) return () => {};
+
+    // Evitar duplicar la suscripción
+    if (salesStatusChannel) {
+        salesStatusChannel.unsubscribe();
+        salesStatusChannel = null;
+    }
+
+    console.log('[SalesSync] Suscribiendo a cambios de status de ventas (postgres_changes)...');
+
+    salesStatusChannel = supabaseCloud
+        .channel(`sales_status:${userId}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'sales',
+                filter: `user_id=eq.${userId}`,
+            },
+            (payload) => {
+                const updated = payload.new;
+                if (!updated?.id) return;
+                console.log(`[SalesSync] postgres_changes UPDATE sales: id=${updated.id} status=${updated.status}`);
+                // Notificar para aplicar en IndexedDB local
+                onStatusChange(updated.id, updated.status);
+            }
+        )
+        .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('[SalesSync] ✅ postgres_changes sales activo — anulaciones se propagan en tiempo real');
+            }
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                console.warn('[SalesSync] postgres_changes sales desconectado, reintentando en 5s...');
+                setTimeout(() => {
+                    subscribeSalesStatusChanges(userId, onStatusChange);
+                }, 5000);
+            }
+        });
+
+    return () => {
+        if (salesStatusChannel) {
+            salesStatusChannel.unsubscribe();
+            salesStatusChannel = null;
+        }
+    };
+}
+
 export function subscribeSalesRealtime(userId, onSaleReceived) {
     if (!userId) return () => {};
 
@@ -342,9 +403,11 @@ export function subscribeSalesRealtime(userId, onSaleReceived) {
     const subscribeChannel = () => {
         ch.subscribe((status) => {
             if (status === 'SUBSCRIBED') {
+                salesBroadcastSubscribed = true;
                 console.log('[SalesSync] Canal Broadcast de ventas activo');
             }
             if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                salesBroadcastSubscribed = false;
                 console.warn('[SalesSync] Canal de ventas desconectado, reintentando...');
                 setTimeout(() => {
                     try { subscribeChannel(); } catch (_) {}
@@ -367,5 +430,31 @@ export function subscribeSalesRealtime(userId, onSaleReceived) {
         ch.unsubscribe();
         salesBroadcastChannel = null;
         salesBroadcastUserId = null;
+        salesBroadcastSubscribed = false;
     };
+}
+
+/**
+ * Aplica un cambio de status de una venta al IndexedDB local.
+ * Usado por subscribeSalesStatusChanges cuando llega un UPDATE de postgres_changes.
+ */
+export async function applySaleStatusChange(saleId, newStatus) {
+    if (!saleId || !newStatus) return;
+    try {
+        const existingSales = await storageService.getItem(SALES_KEY, []);
+        const idx = existingSales.findIndex(s => s.id === saleId);
+        if (idx < 0) {
+            console.log(`[SalesSync] Venta ${saleId} no encontrada localmente — se actualizará en el próximo pull`);
+            return;
+        }
+        const existing = existingSales[idx];
+        if (existing.status === newStatus) return; // Ya está actualizada
+
+        existingSales[idx] = { ...existing, status: newStatus };
+        await storageService.setItem(SALES_KEY, existingSales);
+        window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
+        console.log(`[SalesSync] ✅ Venta ${saleId} actualizada localmente a status=${newStatus}`);
+    } catch (e) {
+        console.warn('[SalesSync] Error aplicando cambio de status:', e?.message);
+    }
 }

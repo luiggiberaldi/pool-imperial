@@ -552,7 +552,7 @@ export function useCloudSync() {
                 processSyncQueue();
 
                 // Pull incremental de ventas (solo nuevas desde último sync)
-                const { pullNewSales, subscribeSalesRealtime, applyIncomingSale } = await import('../utils/salesSyncService');
+                const { pullNewSales, subscribeSalesRealtime, applyIncomingSale, subscribeSalesStatusChanges, applySaleStatusChange } = await import('../utils/salesSyncService');
                 await pullNewSales(userId);
 
                 // ── Suscripción Broadcast P2P (0 WAL egress) ─────────────────
@@ -605,6 +605,10 @@ export function useCloudSync() {
 
                 // Suscripción Broadcast para ventas en tiempo real (0 DB egress)
                 subscribeSalesRealtime(userId, applyIncomingSale);
+
+                // Suscripción postgres_changes a tabla 'sales' — capa más confiable para anulaciones
+                // Si el broadcast P2P falla, este canal garantiza que los cambios de status lleguen
+                subscribeSalesStatusChanges(userId, applySaleStatusChange);
 
                 // Suscripción a solicitudes de backup del admin
                 supabaseCloud
