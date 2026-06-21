@@ -96,6 +96,18 @@ export async function processVoidSale(sale, currentSales, currentProducts) {
     await storageService.setItem(SALES_KEY, updatedSales);
     await storageService.setItem(CUSTOMERS_KEY, updatedCustomers);
 
+    // 5. Sincronizar y notificar anulación a otros dispositivos
+    try {
+        const userId = useAuthStore.getState().cloudSession?.user?.id;
+        if (userId) {
+            const { broadcastVoidSale } = await import('./salesSyncService');
+            const voidedSale = { ...sale, status: 'ANULADA' };
+            await broadcastVoidSale(voidedSale, userId);
+        }
+    } catch (e) {
+        console.error('[VoidSale] Error al sincronizar anulación:', e);
+    }
+
     const user = useAuthStore.getState().usuarioActivo;
     logEvent('VENTA', 'VENTA_ANULADA', `Venta #${sale.saleNumber || '?'} anulada - $${sale.totalUsd?.toFixed(2)}`, user, { saleId: sale.id });
 

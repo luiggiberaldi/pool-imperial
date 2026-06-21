@@ -69,6 +69,41 @@ export async function broadcastNewSale(sale, userId) {
 }
 
 /**
+ * Envía la anulación de una venta a otros dispositivos.
+ * - Broadcast Realtime (P2P, 0 egress DB) para dispositivos activos.
+ * - Re-upsert en sync_documents con el nuevo estado 'ANULADA'.
+ */
+export async function broadcastVoidSale(sale, userId) {
+    if (!userId || !sale) return;
+
+    // 1. Broadcast P2P — instantáneo, sin pasar por la DB
+    try {
+        const ch = getSalesBroadcastChannel(userId);
+        await ch.send({
+            type: 'broadcast',
+            event: 'void_sale',
+            payload: sale,
+        });
+    } catch (e) {
+        console.warn('[SalesSync] Broadcast void_sale P2P falló:', e?.message);
+    }
+
+    // 2. Persistir fila individual — fallback para dispositivos offline
+    try {
+        await supabaseCloud.from('sync_documents').upsert({
+            user_id: userId,
+            collection: 'sale',
+            doc_id: sale.id,
+            data: { payload: sale },
+            updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,collection,doc_id' });
+        console.log(`[SalesSync] Venta #${sale.saleNumber || '?'} marcada como ANULADA en la nube ✓`);
+    } catch (e) {
+        console.warn('[SalesSync] Persist void_sale en DB falló:', e?.message);
+    }
+}
+
+/**
  * Reasigna correlativos duplicados en ventas sincronizadas.
  * Si una venta entrante tiene un saleNumber que ya existe localmente,
  * le asigna el siguiente número disponible.
@@ -139,10 +174,22 @@ export async function pullNewSales(userId) {
             const existing = existingMap.get(sale.id);
             if (!existing) {
                 newSales.push(sale);
-            } else if (sale.cajaCerrada && !existing.cajaCerrada) {
-                // Actualizar marcas de cierre en venta existente
-                existingMap.set(sale.id, { ...existing, cajaCerrada: sale.cajaCerrada, cierreId: sale.cierreId });
-                cierreUpdates++;
+            } else {
+                let changed = false;
+                const updated = { ...existing };
+                if (sale.cajaCerrada && !existing.cajaCerrada) {
+                    updated.cajaCerrada = sale.cajaCerrada;
+                    updated.cierreId = sale.cierreId;
+                    changed = true;
+                }
+                if (sale.status !== existing.status) {
+                    updated.status = sale.status;
+                    changed = true;
+                }
+                if (changed) {
+                    existingMap.set(sale.id, updated);
+                    cierreUpdates++;
+                }
             }
         }
 
@@ -219,13 +266,25 @@ export async function applyIncomingSale(sale) {
         const existingIdx = existingSales.findIndex(s => s.id === sale.id);
 
         if (existingIdx >= 0) {
-            // Ya existe — solo actualizar si trae marcas de cierre nuevas
             const existing = existingSales[existingIdx];
+            let changed = false;
+            const updated = { ...existing };
+            
             if (sale.cajaCerrada && !existing.cajaCerrada) {
-                existingSales[existingIdx] = { ...existing, cajaCerrada: sale.cajaCerrada, cierreId: sale.cierreId };
+                updated.cajaCerrada = sale.cajaCerrada;
+                updated.cierreId = sale.cierreId;
+                changed = true;
+            }
+            if (sale.status !== existing.status) {
+                updated.status = sale.status;
+                changed = true;
+            }
+            
+            if (changed) {
+                existingSales[existingIdx] = updated;
                 await storageService.setItem(SALES_KEY, existingSales);
                 window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
-                console.log(`[SalesSync] Venta ${sale.id} actualizada con marcas de cierre`);
+                console.log(`[SalesSync] Venta ${sale.id} actualizada en tiempo real (status: ${updated.status})`);
             }
             return;
         }
@@ -281,6 +340,8 @@ export function subscribeSalesRealtime(userId, onSaleReceived) {
     const ch = getSalesBroadcastChannel(userId);
 
     ch.on('broadcast', { event: 'new_sale' }, ({ payload }) => {
+        if (payload) onSaleReceived(payload);
+    }).on('broadcast', { event: 'void_sale' }, ({ payload }) => {
         if (payload) onSaleReceived(payload);
     }).on('broadcast', { event: 'cierre_marks' }, ({ payload }) => {
         if (payload) applyCierreMarks(payload);
