@@ -99,7 +99,11 @@ export async function processVoidSale(sale, currentSales, currentProducts) {
 
     // 5. Sincronizar y notificar anulación a otros dispositivos
     try {
-        const userId = useAuthStore.getState().cloudSession?.user?.id;
+        let userId = useAuthStore.getState().cloudSession?.user?.id;
+        if (!userId) {
+            const { data: { session } } = await supabaseCloud.auth.getSession().catch(() => ({ data: {} }));
+            userId = session?.user?.id;
+        }
         if (userId) {
             const { broadcastVoidSale } = await import('./salesSyncService');
             const voidedSale = { ...sale, status: 'ANULADA' };

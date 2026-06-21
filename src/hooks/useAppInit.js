@@ -68,6 +68,7 @@ export function useAppInit() {
 
             if (!session?.user?.email) {
                 setCloudEmail(null);
+                useAuthStore.setState({ cloudSession: null });
                 if (!navigator.onLine) {
                     try {
                         const { default: lf } = await import('localforage');
@@ -75,6 +76,7 @@ export function useAppInit() {
                         const cacheKey = email ? `poolbar_users_cache_${email}` : 'poolbar_users_cache';
                         const users = await lf.getItem(cacheKey);
                         if (Array.isArray(users) && users.length > 0) {
+                            useAuthStore.setState({ cloudSession: { offline: true } });
                             setCloudSession({ offline: true });
                             setCheckingSession(false);
                             return;
@@ -110,7 +112,11 @@ export function useAppInit() {
                 if (!error) {
                     if (result === 'license_inactive' || result === 'license_expired') {
                         await supabaseCloud.auth.signOut();
-                        if (mounted) { setCloudSession(null); setCheckingSession(false); }
+                        if (mounted) {
+                            useAuthStore.setState({ cloudSession: null });
+                            setCloudSession(null);
+                            setCheckingSession(false);
+                        }
                         return;
                     }
                 }
@@ -120,6 +126,7 @@ export function useAppInit() {
 
             if (mounted) {
                 localStorage.setItem('pool_had_cloud_session', 'true');
+                useAuthStore.setState({ cloudSession: session });
                 setCloudSession(session);
                 setCheckingSession(false);
             }
@@ -137,6 +144,7 @@ export function useAppInit() {
             } else if (event === 'SIGNED_IN') applySession(session);
             else if (event === 'SIGNED_OUT') {
                 clearUsersCache();
+                useAuthStore.setState({ cloudSession: null });
                 if (navigator.onLine) {
                     localStorage.removeItem('pool_had_cloud_session');
                     setCloudSession(null);

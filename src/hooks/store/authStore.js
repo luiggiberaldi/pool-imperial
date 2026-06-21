@@ -95,6 +95,7 @@ export const useAuthStore = create((set, get) => ({
     _hydrated: false,
     failedAttempts: 0,
     lockoutUntil: null,
+    cloudSession: null,
 
     // ── Aliases legados (compatibilidad con componentes no migrados) ──────────
     get usuarioActivo() { return get().currentUser; },
