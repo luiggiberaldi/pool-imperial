@@ -133,69 +133,7 @@ export function ProductProvider({ children, rates }) {
         }).catch(() => {});
     }, []);
 
-    // ── Sincronización de tasa entre dispositivos via Supabase Broadcast ──
-    const channelRef = useRef(null);
-    const isRemoteUpdate = useRef(false);
 
-    const broadcastRateSettings = useCallback((overrides = {}) => {
-        if (isRemoteUpdate.current || !channelRef.current) return;
-        channelRef.current.send({
-            type: 'broadcast',
-            event: 'rate_settings',
-            payload: {
-                senderId: DEVICE_ID,
-                useAutoRate,
-                customRate,
-                copEnabled,
-                autoCopEnabled,
-                tasaCopManual,
-                ...overrides
-            }
-        }).catch(() => {});
-    }, [useAutoRate, customRate, copEnabled, autoCopEnabled, tasaCopManual]);
-
-    useEffect(() => {
-        if (!userId) return;
-        const channel = supabaseCloud.channel(`rate_sync_v1:${userId}`);
-
-        channel.on('broadcast', { event: 'rate_settings' }, ({ payload }) => {
-            if (!payload || payload.senderId === DEVICE_ID) return;
-            console.log('[RateSync] Recibida actualización de tasa desde otro dispositivo');
-            isRemoteUpdate.current = true;
-
-            if (payload.useAutoRate !== undefined) {
-                setUseAutoRate(payload.useAutoRate);
-                localStorage.setItem('bodega_use_auto_rate', JSON.stringify(payload.useAutoRate));
-            }
-            if (payload.customRate !== undefined) {
-                setCustomRate(payload.customRate);
-                if (payload.customRate) localStorage.setItem('bodega_custom_rate', payload.customRate.toString());
-            }
-            if (payload.copEnabled !== undefined) {
-                setCopEnabled(payload.copEnabled);
-                localStorage.setItem('cop_enabled', String(payload.copEnabled));
-            }
-            if (payload.autoCopEnabled !== undefined) {
-                setAutoCopEnabled(payload.autoCopEnabled);
-                localStorage.setItem('auto_cop_enabled', String(payload.autoCopEnabled));
-            }
-            if (payload.tasaCopManual !== undefined) {
-                setTasaCopManual(payload.tasaCopManual);
-                if (payload.tasaCopManual) localStorage.setItem('tasa_cop', payload.tasaCopManual);
-            }
-
-            setTimeout(() => { isRemoteUpdate.current = false; }, 200);
-        });
-
-        channel.subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-                console.log('[RateSync] Canal de sincronización de tasas conectado');
-            }
-        });
-
-        channelRef.current = channel;
-        return () => { supabaseCloud.removeChannel(channel); };
-    }, [userId]);
 
     const effectiveRate = useAutoRate ? rates.bcv?.price : (parseFloat(customRate) > 0 ? parseFloat(customRate) : rates.bcv?.price);
     
@@ -318,10 +256,7 @@ export function ProductProvider({ children, rates }) {
         if (streetRate > 0) localStorage.setItem('street_rate_bs', streetRate.toString());
     }, [streetRate]);
 
-    useEffect(() => {
-        localStorage.setItem('bodega_use_auto_rate', JSON.stringify(useAutoRate));
-        if (customRate) localStorage.setItem('bodega_custom_rate', customRate.toString());
-    }, [useAutoRate, customRate]);
+
 
     // Listener para actualizar si cambia en otra pestaña/componente
     useEffect(() => {
@@ -384,28 +319,36 @@ export function ProductProvider({ children, rates }) {
     const setCustomRateWithAudit = (val) => {
         const prev = customRate;
         setCustomRate(val);
+        if (val) {
+            localStorage.setItem('bodega_custom_rate', val.toString());
+        } else {
+            localStorage.removeItem('bodega_custom_rate');
+        }
         if (val && val !== prev) {
             logEvent('CONFIG', 'TASA_MANUAL_CAMBIADA', `Tasa manual cambiada de ${prev || 'vacío'} a ${val}`, null, { prev: prev || null, next: val });
         }
-        broadcastRateSettings({ customRate: val });
     };
 
     const setUseAutoRateWithAudit = (val) => {
         const prev = useAutoRate;
         setUseAutoRate(val);
+        localStorage.setItem('bodega_use_auto_rate', JSON.stringify(val));
         if (val !== prev) {
             logEvent('CONFIG', 'TASA_AUTO_TOGGLE', `Tasa automática ${val ? 'activada' : 'desactivada'}`, null, { enabled: val });
         }
-        broadcastRateSettings({ useAutoRate: val });
     };
 
     const setTasaCopManualWithAudit = (val) => {
         const prev = tasaCopManual;
         setTasaCopManual(val);
+        if (val) {
+            localStorage.setItem('tasa_cop', val.toString());
+        } else {
+            localStorage.removeItem('tasa_cop');
+        }
         if (val && val !== prev) {
             logEvent('CONFIG', 'TASA_COP_CAMBIADA', `Tasa COP cambiada de ${prev || 'vacío'} a ${val}`, null, { prev: prev || null, next: val });
         }
-        broadcastRateSettings({ tasaCopManual: val });
     };
 
     const adjustStock = (productId, delta) => {
@@ -465,9 +408,9 @@ export function ProductProvider({ children, rates }) {
             setCustomRate: setCustomRateWithAudit,
             effectiveRate,
             copEnabled,
-            setCopEnabled: (val) => { setCopEnabled(val); localStorage.setItem('cop_enabled', String(val)); broadcastRateSettings({ copEnabled: val }); },
+            setCopEnabled: (val) => { setCopEnabled(val); localStorage.setItem('cop_enabled', String(val)); },
             autoCopEnabled,
-            setAutoCopEnabled: (val) => { setAutoCopEnabled(val); localStorage.setItem('auto_cop_enabled', String(val)); broadcastRateSettings({ autoCopEnabled: val }); },
+            setAutoCopEnabled: (val) => { setAutoCopEnabled(val); localStorage.setItem('auto_cop_enabled', String(val)); },
             tasaCopManual,
             setTasaCopManual: setTasaCopManualWithAudit,
             tasaCop,
