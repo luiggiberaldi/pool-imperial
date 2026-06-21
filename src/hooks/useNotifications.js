@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { formatCOP } from '../utils/dinero';
 
 /**
  * Hook de notificaciones del navegador para PreciosAlDía.
@@ -79,7 +80,7 @@ export function useNotifications() {
     const notifyMesaCobrar = useCallback((tableName, totalUsd) => {
         send(
             '💳 Mesa lista para cobrar',
-            `${tableName} — Total: $${totalUsd.toFixed(2)}`,
+            `${tableName} — Total: ${formatCOP(totalUsd)}`,
             `cobrar-${tableName}`
         );
     }, [send]);

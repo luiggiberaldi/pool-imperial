@@ -73,3 +73,17 @@ export const sumR = (...args) => {
  * @returns {number}
  */
 export const subR = (a, b) => round2((a || 0) - (b || 0));
+
+/**
+ * Formatea un valor numérico a pesos colombianos (COP) sin decimales.
+ * @param {number} val - El valor a formatear
+ * @returns {string} El valor formateado
+ */
+export const formatCOP = (val) => {
+    return new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0
+    }).format(val || 0);
+};
+

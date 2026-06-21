@@ -51,6 +51,11 @@ if (localStorage.getItem('business_phone')) {
   localStorage.removeItem('business_phone');
 }
 
+function GlobalTableAlertsTrigger() {
+  useGlobalTableAlerts();
+  return null;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('inicio');
 
@@ -76,7 +81,7 @@ export default function App() {
   const { isOnline, cacheRates } = useOfflineQueue();
   useAutoBackup(false, false, deviceId);
   useAutoLock(); // Auto-lock for ADMINs
-  useGlobalTableAlerts(); // Global timer alerts across all views + broadcast to all devices
+
 
   // Purge old audit log entries on startup and sync server clock
   useEffect(() => {
@@ -284,6 +289,7 @@ export default function App() {
 
       <CartProvider>
       <ProductProvider rates={rates}>
+        <GlobalTableAlertsTrigger />
         <main className={`flex-1 min-h-0 w-full max-w-md sm:max-w-xl md:max-w-3xl lg:max-w-5xl xl:max-w-7xl 2xl:max-w-none px-2 sm:px-4 lg:px-6 mx-auto relative ${isKeyboardOpen ? 'pb-4' : 'pb-24'} flex flex-col overflow-y-auto`}>
 
           {/* Admin panel trigger moved to DashboardView logo */}

@@ -6,6 +6,11 @@ import { useNotifications } from './useNotifications';
 import { showToast } from '../components/Toast';
 import { supabaseCloud } from '../config/supabaseCloud';
 import { round2 } from '../utils/dinero';
+import { useOrdersStore } from './store/useOrdersStore';
+import { useProductContext } from '../context/ProductContext';
+import { buildTableSyntheticCart } from '../utils/tableBillingEngine';
+import { FinancialEngine } from '../core/FinancialEngine';
+import { formatCOP } from '../utils/dinero';
 
 /**
  * Hook global que corre en App.jsx — monitorea TODAS las sesiones activas
@@ -20,6 +25,8 @@ import { round2 } from '../utils/dinero';
  */
 export function useGlobalTableAlerts() {
     const { notifyTiempoExcedido, notifyMesaCobrar, notifyMesaPagadaOciosa, notifyLowStock } = useNotifications();
+    const productContext = useProductContext();
+    const products = productContext?.products || [];
     const notifiedRef = useRef(new Set());
     const channelRef = useRef(null);
     const prevCheckoutIdsRef = useRef(new Set());
@@ -48,7 +55,7 @@ export function useGlobalTableAlerts() {
                 if (notifiedRef.current.has(key)) return;
                 notifiedRef.current.add(key);
                 notifyMesaCobrar(payload.tableName, payload.totalUsd || 0);
-                showToast(`💳 ${payload.tableName} — Lista para cobrar ($${(payload.totalUsd || 0).toFixed(2)})`, 'info', 6000);
+                showToast(`💳 ${payload.tableName} — Lista para cobrar (${formatCOP(payload.totalUsd || 0)})`, 'info', 6000);
             })
             .on('broadcast', { event: 'mesa_pagada_ociosa' }, ({ payload }) => {
                 if (!payload?.tableName) return;
@@ -100,9 +107,73 @@ export function useGlobalTableAlerts() {
                             const roundsOff = (paidRoundsOffsets || {})[session.id] || 0;
                             const isTimeFree = table.type === 'NORMAL';
                             const timeCost = isTimeFree ? 0 : calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, hoursOff, roundsOff, session.seats, table.type);
-                            const totalUsd = round2(timeCost);
+
+                            // Calculate actual checkout grand total (including products, seats, taxes, and tip)
+                            const taxRate = config?.tableTaxType === 'iva_19'
+                                ? (config?.taxRateIva ?? 19) / 100
+                                : config?.tableTaxType === 'impoconsumo_8'
+                                    ? (config?.taxRateImpoconsumo ?? 8) / 100
+                                    : 0;
+                            const isExclusive = config?.tableTaxMode === 'exclusive' && taxRate > 0;
+                            const finalPina = isExclusive ? (config?.pricePina || 0) * (1 + taxRate) : (config?.pricePina || 0);
+                            const finalHora = isExclusive ? (config?.pricePerHour || 0) * (1 + taxRate) : (config?.pricePerHour || 0);
+
+                            const seatTimeCost = (session.seats || []).filter(s => !s.paid).reduce((sum, s) => {
+                                const tc = (s.timeCharges || []);
+                                const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+                                const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+                                return sum + (h * finalHora) + (p * finalPina);
+                            }, 0);
+
+                            const { orders, orderItems } = useOrdersStore.getState();
+                            const order = orders.find(o => o.table_session_id === session.id);
+                            const currentItems = order ? orderItems.filter(i => i.order_id === order.id) : [];
+                            const totalConsumption = currentItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0);
+
+                            const baseTotal = round2(timeCost + seatTimeCost + totalConsumption);
+                            let totalBuilt = baseTotal;
+
+                            if (baseTotal > 0) {
+                                try {
+                                    const tableCheckoutData = {
+                                        table,
+                                        session,
+                                        elapsed,
+                                        timeCost,
+                                        totalConsumption,
+                                        currentItems,
+                                        config,
+                                        hoursOffset: hoursOff,
+                                        roundsOffset: roundsOff,
+                                        paidHoursOffsets: {},
+                                        paidRoundsOffsets: {}
+                                    };
+                                    const result = buildTableSyntheticCart(tableCheckoutData, config, products);
+                                    if (result && result.syntheticCart) {
+                                        const totals = FinancialEngine.buildCartTotals(result.syntheticCart, null, 1, 1);
+                                        totalBuilt = totals.totalUsd || 0;
+                                    }
+                                } catch (e) {
+                                    console.error("Error calculating background grand total:", e);
+                                }
+
+                                const isTipEnabled = (() => {
+                                    const match = (session.notes || '').match(/\|\|\|TIP_ENABLED:([01])\|\|\|/);
+                                    if (match) return match[1] === '1';
+                                    return config?.defaultTipEnabled ?? false;
+                                })();
+
+                                if (isTipEnabled) {
+                                    const tipPercent = config?.defaultTipPercent ?? 8;
+                                    const tipAmt = Math.round(totalBuilt * (tipPercent / 100));
+                                    totalBuilt = round2(totalBuilt + tipAmt);
+                                }
+                            }
+
+                            const totalUsd = totalBuilt;
+
                             notifyMesaCobrar(table.name, totalUsd);
-                            showToast(`💳 ${table.name} — Lista para cobrar`, 'info', 6000);
+                            showToast(`💳 ${table.name} — Lista para cobrar (${formatCOP(totalUsd)})`, 'info', 6000);
                             channelRef.current?.send({
                                 type: 'broadcast',
                                 event: 'mesa_cobrar',
@@ -194,7 +265,7 @@ export function useGlobalTableAlerts() {
         check(); // Run immediately
         const interval = setInterval(check, 15000); // Every 15 seconds
         return () => clearInterval(interval);
-    }, [notifyTiempoExcedido, notifyMesaCobrar, notifyMesaPagadaOciosa]);
+    }, [notifyTiempoExcedido, notifyMesaCobrar, notifyMesaPagadaOciosa, products]);
 
     // Expose broadcast for stock bajo (called from useSalesCheckout)
     return {
