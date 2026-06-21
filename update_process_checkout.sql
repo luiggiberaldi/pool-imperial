@@ -14,6 +14,9 @@ DECLARE
     v_sale_number INTEGER;
     v_user_id UUID;
     v_customer_id UUID;
+    v_vendedor_id UUID;
+    v_mesero_id UUID;
+    v_idempotency_key UUID;
     v_fiado_amount NUMERIC;
     v_item RECORD;
     v_payment RECORD;
@@ -29,7 +32,34 @@ BEGIN
     FROM public.sales
     WHERE user_id = v_user_id;
 
-    v_customer_id := (payload->>'customerId')::UUID;
+    -- Validar y castear de forma segura customerId
+    IF payload->>'customerId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        v_customer_id := (payload->>'customerId')::UUID;
+    ELSE
+        v_customer_id := NULL;
+    END IF;
+
+    -- Validar y castear de forma segura vendedorId
+    IF payload->>'vendedorId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        v_vendedor_id := (payload->>'vendedorId')::UUID;
+    ELSE
+        v_vendedor_id := NULL;
+    END IF;
+
+    -- Validar y castear de forma segura meseroId
+    IF payload->>'meseroId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        v_mesero_id := (payload->>'meseroId')::UUID;
+    ELSE
+        v_mesero_id := NULL;
+    END IF;
+
+    -- Validar y castear de forma segura idempotency_key
+    IF payload->>'idempotency_key' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        v_idempotency_key := (payload->>'idempotency_key')::UUID;
+    ELSE
+        v_idempotency_key := gen_random_uuid();
+    END IF;
+
     v_fiado_amount := COALESCE((payload->>'fiadoUsd')::NUMERIC, 0);
 
     -- Insertar venta principal
@@ -83,12 +113,12 @@ BEGIN
         payload->>'customerPhone',
         v_fiado_amount,
         payload->'splitMeta',
-        (payload->>'idempotency_key')::UUID,
+        v_idempotency_key,
         v_user_id,
-        (payload->>'vendedorId')::UUID,
+        v_vendedor_id,
         payload->>'vendedorNombre',
         payload->>'vendedorRol',
-        (payload->>'meseroId')::UUID,
+        v_mesero_id,
         payload->>'meseroNombre',
         payload->>'tableName'
     ) RETURNING id INTO v_sale_id;

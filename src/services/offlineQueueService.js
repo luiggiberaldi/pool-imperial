@@ -155,10 +155,22 @@ export const offlineQueueService = {
               };
             }
 
+            const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const isValidUUID = (id) => typeof id === 'string' && UUID_REGEX.test(id);
+
+            const cleanVendedorId = isValidUUID(item.payload?.vendedorId) ? item.payload.vendedorId : null;
+            const cleanMeseroId = isValidUUID(item.payload?.meseroId) ? item.payload.meseroId : null;
+            const cleanCustomerId = isValidUUID(item.payload?.customerId) ? item.payload.customerId : null;
+            const cleanIdempotencyKey = isValidUUID(item.payload?.idempotency_key) ? item.payload.idempotency_key : crypto.randomUUID();
+
             const payloadWithOrigin = {
               ...item.payload,
               total: saleTotal,
               payments: adjustedPayments,
+              vendedorId: cleanVendedorId,
+              meseroId: cleanMeseroId,
+              customerId: cleanCustomerId,
+              idempotency_key: cleanIdempotencyKey,
               sync_origin: 'offline_sync',
               original_created_at: item.created_at
             };

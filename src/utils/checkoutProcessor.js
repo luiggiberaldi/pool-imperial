@@ -138,12 +138,13 @@ export async function processSaleTransaction({
         cart: rpcCartItems,
         payments: rpcPayments,
         fiadoUsd: rpcFiado,
-        vendedorId: currentUser?.id || null,
+        vendedorId: isValidUUID(currentUser?.id) ? currentUser.id : null,
         vendedorNombre: capitalizeName(currentUser?.nombre || currentUser?.name || 'Sistema'),
         vendedorRol: currentUser?.rol || currentUser?.role || null,
-        meseroId: meseroId || null,
+        meseroId: isValidUUID(meseroId) ? meseroId : null,
         meseroNombre: capitalizeName(meseroNombre) || null,
-        tableName: tableName || null
+        tableName: tableName || null,
+        customerId: isValidUUID(selectedCustomerId) ? selectedCustomerId : null
     };
 
     let saleMode = 'online';
