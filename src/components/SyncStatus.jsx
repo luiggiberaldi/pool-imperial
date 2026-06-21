@@ -5,6 +5,7 @@ import { pullLatestFromCloud } from '../hooks/useCloudSync';
 import { offlineQueueService } from '../services/offlineQueueService';
 import localforage from 'localforage';
 import { scopedKey } from '../hooks/store/accountScope';
+import { useConfirm } from '../hooks/useConfirm';
 
 /**
  * SyncStatus — Indicador visual de conectividad + botón de sincronización forzada.
@@ -25,6 +26,8 @@ export default function SyncStatus() {
     const [justSynced, setJustSynced] = useState(false);
 
     const [failedCount, setFailedCount] = useState(0);
+    const [failedErrors, setFailedErrors] = useState([]);
+    const confirm = useConfirm();
 
     const checkQueue = useCallback(async () => {
         try {
@@ -33,6 +36,14 @@ export default function SyncStatus() {
             const failed  = queue.filter(q => q.sync_status === 'failed');
             setPendingCount(pending.length);
             setFailedCount(failed.length);
+
+            const errs = failed.map(f => {
+                const saleNum = f.payload?.saleNumber ? `#${f.payload.saleNumber}` : 'factura';
+                const client = f.payload?.customerName || 'Consumidor Final';
+                const total = f.payload?.total ? `($${f.payload.total.toFixed(2)})` : '';
+                return `Venta ${saleNum} - ${client} ${total}: ${f.last_error || 'Error desconocido'}`;
+            });
+            setFailedErrors(errs);
         } catch(err) { /* silent */ }
     }, []);
 
@@ -49,9 +60,32 @@ export default function SyncStatus() {
     // Re-encolar ventas fallidas para reintento
     const handleRequeueFailed = useCallback(async () => {
         if (isRequeuing) return;
+
+        // Obtener la cola y errores actuales
+        const queue = await localforage.getItem(scopedKey('offline_sales_queue')) || [];
+        const failedItems = queue.filter(q => q.sync_status === 'failed');
+        
+        if (failedItems.length === 0) return;
+
+        const errorMsgs = failedItems.map(f => {
+            const saleNum = f.payload?.saleNumber ? `#${f.payload.saleNumber}` : 'factura sin número';
+            const client = f.payload?.customerName || 'Consumidor Final';
+            const total = f.payload?.total ? `($${f.payload.total.toFixed(2)})` : '';
+            return `• Venta ${saleNum} ${total} de "${client}":\n  Detalle: ${f.last_error || 'Error desconocido'}`;
+        }).join('\n\n');
+
+        const ok = await confirm({
+            title: 'Detalle de Errores de Sincronización',
+            message: `Las siguientes ventas fallaron al subirse a la nube:\n\n${errorMsgs}\n\n¿Quieres volver a intentar la sincronización de estas ventas?`,
+            confirmText: 'Sí, reintentar',
+            cancelText: 'Cerrar',
+            variant: 'warning'
+        });
+
+        if (!ok) return;
+
         setIsRequeuing(true);
         try {
-            const queue = await localforage.getItem(scopedKey('offline_sales_queue')) || [];
             const requeued = queue.map(q => {
                 if (q.sync_status === 'failed') {
                     const { failed_at, last_error, ...rest } = q;
@@ -69,7 +103,7 @@ export default function SyncStatus() {
         } finally {
             setIsRequeuing(false);
         }
-    }, [isRequeuing, checkQueue]);
+    }, [isRequeuing, checkQueue, confirm]);
 
     // Botón de sincronización forzada
     const handleForceSync = useCallback(async () => {
@@ -183,7 +217,7 @@ export default function SyncStatus() {
         done: 'Inventario sincronizado correctamente.',
         syncing: 'Sincronizando inventario con la nube...',
         pending: `${pendingCount} venta(s) pendiente(s) por subir. Clic para sincronizar.`,
-        failed:  `${failedCount} venta(s) fallaron al sincronizar. Clic para reintentar.`,
+        failed:  `${failedCount} venta(s) fallaron al sincronizar. Clic para ver error y reintentar.`,
         offline: 'Sin conexión al servidor. Comprueba tu internet.',
     };
 
