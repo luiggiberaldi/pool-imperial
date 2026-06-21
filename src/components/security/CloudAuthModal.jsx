@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
     Mail, Key, Phone, ArrowRight, ShieldCheck,
-    Smartphone, Database, AlertCircle, X, Download, Eye, EyeOff, RefreshCw, Fingerprint, Share
+    Smartphone, Database, AlertCircle, X, Download, Eye, EyeOff, RefreshCw, Fingerprint, Share,
+    Monitor, HelpCircle
 } from 'lucide-react';
 import { useCloudAuthLogic } from '../../hooks/useCloudAuthLogic';
 import { useCloudSync } from '../../hooks/useCloudSync';
@@ -527,19 +528,44 @@ export default function CloudAuthModal({ isOpen, onClose, forceLogin = false }) 
 
                                         {/* Instrucciones para iOS */}
                                         {showIosHint && (
-                                            <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-medium space-y-1.5">
+                                            <div className="mt-3 p-4 rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50/90 to-orange-50/50 backdrop-blur-sm text-xs text-amber-800 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200 space-y-3 text-left">
                                                 {isIos ? (
                                                     <>
-                                                        <p className="font-black text-amber-800">Cómo instalar en iPhone / iPad:</p>
-                                                        <p>1. Toca el botón <span className="inline-flex items-center gap-1 font-black"><Share size={12} /> Compartir</span> en Safari</p>
-                                                        <p>2. Selecciona <strong>"Agregar a pantalla de inicio"</strong></p>
-                                                        <p>3. Toca <strong>"Agregar"</strong> para confirmar</p>
+                                                        <div className="flex items-center gap-2 pb-2 border-b border-amber-100/70">
+                                                            <span className="p-1 bg-amber-100 rounded-lg text-amber-700 shrink-0"><Share size={14} /></span>
+                                                            <span className="font-black text-sm text-amber-900">Instalación en iPhone / iPad</span>
+                                                        </div>
+                                                        <div className="space-y-2.5 pl-0.5 text-slate-700 font-medium">
+                                                            <div className="flex gap-2.5 items-start">
+                                                                <span className="w-5 h-5 rounded-full bg-amber-200/60 text-amber-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                                                                <p>Presiona el botón <span className="inline-flex items-center gap-1 font-bold bg-white px-2 py-0.5 rounded border border-slate-200 shadow-xs"><Share size={11} className="text-amber-600" /> Compartir</span> en la barra de Safari.</p>
+                                                            </div>
+                                                            <div className="flex gap-2.5 items-start">
+                                                                <span className="w-5 h-5 rounded-full bg-amber-200/60 text-amber-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                                                                <p>Desliza hacia abajo en el menú y selecciona <strong>"Agregar a pantalla de inicio"</strong>.</p>
+                                                            </div>
+                                                            <div className="flex gap-2.5 items-start">
+                                                                <span className="w-5 h-5 rounded-full bg-amber-200/60 text-amber-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">3</span>
+                                                                <p>Confirma tocando <strong>"Agregar"</strong> en la esquina superior derecha.</p>
+                                                            </div>
+                                                        </div>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <p className="font-black text-amber-800">Cómo instalar en tu PC o Android:</p>
-                                                        <p>1. Abre el menú del navegador <strong>( ⋮ )</strong></p>
-                                                        <p>2. Selecciona <strong>"Instalar aplicación"</strong> o <strong>"Agregar a pantalla de inicio"</strong></p>
+                                                        <div className="flex items-center gap-2 pb-2 border-b border-amber-100/70">
+                                                            <span className="p-1 bg-amber-100 rounded-lg text-amber-700 shrink-0"><Monitor size={14} /></span>
+                                                            <span className="font-black text-sm text-amber-900">Instalación Manual (PC / Android)</span>
+                                                        </div>
+                                                        <div className="space-y-2.5 pl-0.5 text-slate-700 font-medium">
+                                                            <div className="flex gap-2.5 items-start">
+                                                                <span className="w-5 h-5 rounded-full bg-amber-200/60 text-amber-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">1</span>
+                                                                <p>Haz clic en el menú del navegador <span className="inline-flex items-center font-bold bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-xs">⋮</span> (tres puntos) en la esquina superior derecha.</p>
+                                                            </div>
+                                                            <div className="flex gap-2.5 items-start">
+                                                                <span className="w-5 h-5 rounded-full bg-amber-200/60 text-amber-800 flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">2</span>
+                                                                <p>Selecciona la opción <strong>"Instalar aplicación"</strong> o bien <strong>"Agregar a pantalla de inicio"</strong>.</p>
+                                                            </div>
+                                                        </div>
                                                     </>
                                                 )}
                                             </div>
