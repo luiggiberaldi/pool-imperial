@@ -12,7 +12,17 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', maxWid
       {/* Backdrop con desenfoque */}
       <div 
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
-        onClick={onClose}
+        onClick={(e) => {
+          console.log("%c[SNIPER: Modal Backdrop Clicked]", "color: #ef4444; font-weight: bold;", {
+            target: e.target,
+            currentTarget: e.currentTarget,
+            isTrusted: e.isTrusted,
+            timeStamp: e.timeStamp,
+            clientX: e.clientX,
+            clientY: e.clientY
+          });
+          onClose();
+        }}
       />
       
       {/* Contenido del Modal */}

@@ -70,7 +70,14 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
     const [isEditingPlan, setIsEditingPlan] = useState(false);
 
     // When a table is selected from the floor plan, we open its TableCard via a mini panel
-    const [selectedTableId, setSelectedTableId] = useState(null);
+    const [selectedTableId, _setSelectedTableId] = useState(null);
+    const setSelectedTableId = useCallback((val) => {
+        console.log("%c[SNIPER: selectedTableId setter called]", "color: #ec4899; font-weight: bold;", {
+            to: val,
+            stack: new Error().stack
+        });
+        _setSelectedTableId(val);
+    }, []);
 
     const [transferSourceTableId, setTransferSourceTableId] = useState(null);
     const [transferTargetTable, setTransferTargetTable] = useState(null);
@@ -389,7 +396,20 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                             return (
                                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
                                     {/* Click fuera para cerrar */}
-                                    <div className="absolute inset-0" onClick={() => setSelectedTableId(null)} />
+                                    <div 
+                                        className="absolute inset-0" 
+                                        onClick={(e) => {
+                                            console.log("%c[SNIPER: TablesView Backdrop Clicked]", "color: #ef4444; font-weight: bold;", {
+                                                target: e.target,
+                                                currentTarget: e.currentTarget,
+                                                isTrusted: e.isTrusted,
+                                                timeStamp: e.timeStamp,
+                                                clientX: e.clientX,
+                                                clientY: e.clientY
+                                            });
+                                            setSelectedTableId(null);
+                                        }} 
+                                    />
                                     
                                     {/* Contenedor de la Tarjeta */}
                                     <div className="relative w-full max-w-sm z-10 animate-in zoom-in-95 duration-200">
