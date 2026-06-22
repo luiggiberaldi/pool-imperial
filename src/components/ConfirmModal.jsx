@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Trash2, ShoppingCart, X } from 'lucide-react';
+import { useBackdropClose } from '../hooks/useBackdropClose';
 
 const ICONS = {
     danger: <Trash2 size={28} className="text-red-500" />,
@@ -32,38 +33,21 @@ export default function ConfirmModal({
     cancelText = 'Cancelar',
     variant = 'danger', // 'danger' | 'warning' | 'cart'
 }) {
-    const mountTimeRef = React.useRef(0);
-
-    React.useEffect(() => {
-        if (isOpen) {
-            mountTimeRef.current = Date.now();
-        }
-    }, [isOpen]);
+    // Cierre agnóstico a mouse/táctil (pointerdown→pointerup sobre el fondo).
+    const backdropClose = useBackdropClose(onClose);
 
     if (!isOpen) return null;
 
     const colors = COLORS[variant] || COLORS.danger;
     const icon = ICONS[variant] || ICONS.danger;
 
-    const handleContentClickCapture = (e) => {
-        if (Date.now() - mountTimeRef.current < 350) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    };
-
     return (
-        <div 
-            className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" 
-            onClick={(e) => {
-                if (Date.now() - mountTimeRef.current < 350) return;
-                onClose();
-            }}
+        <div
+            className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+            {...backdropClose}
         >
-            <div 
-                onClickCapture={handleContentClickCapture}
+            <div
                 className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-6 max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200"
-                onClick={e => e.stopPropagation()}
             >
 
                 {/* Close button */}

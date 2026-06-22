@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useAuthStore } from '../hooks/store/authStore';
 import TableCard from '../components/tables/TableCard';
@@ -7,6 +7,7 @@ import { Layers, PauseCircle, PlayCircle, LayoutGrid, Map, X, ArrowRight, AlertT
 import { calculateElapsedTime } from '../utils/tableBillingEngine';
 import { showToast } from '../components/Toast';
 import { Modal } from '../components/Modal';
+import { useBackdropClose } from '../hooks/useBackdropClose';
 
 const TYPE_FILTERS   = ['Todas', 'Pool', 'Bar'];
 const STATUS_FILTERS = ['Todas', 'Libres', 'Ocupadas'];
@@ -76,9 +77,9 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
         console.log(new Error().stack);
         _setSelectedTableId(val);
     }, []);
-    const cardMountTimeRef = useRef(0);
-    const lastCardTouchTimeRef = useRef(0);
-    const lastCardClickTimeRef = useRef(0);
+    // Cierre agnóstico a mouse/táctil del panel flotante de mesa ocupada
+    // (pointerdown→pointerup sobre el fondo). Reemplaza las guardas de Date.now().
+    const tableBackdropClose = useBackdropClose(() => setSelectedTableId(null));
 
     useEffect(() => {
         console.log("%c[SNIPER: TablesView MONTADO]", "color: #10b981; font-weight: bold;");
@@ -87,12 +88,6 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
             console.log(new Error().stack);
         };
     }, []);
-
-    useEffect(() => {
-        if (selectedTableId) {
-            cardMountTimeRef.current = Date.now();
-        }
-    }, [selectedTableId]);
 
     const [transferSourceTableId, setTransferSourceTableId] = useState(null);
     const [transferTargetTable, setTransferTargetTable] = useState(null);
@@ -384,92 +379,47 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                 isTableAvailable
                             });
 
-                            if (isTableAvailable) {
-                                // Si está libre, ocultamos el contenedor flotante y su fondo
-                                // para que no se superpongan dos fondos oscuros.
-                                // Solo se verá el portal del Wizard de Apertura.
-                                return (
-                                    <div className="hidden">
-                                        <TableCard 
-                                            table={table} 
-                                            session={session} 
+                            // ⚠️ Render UNIFICADO (un solo return) para evitar que la TableCard
+                            // se desmonte y vuelva a montar al pasar de libre→ocupada (causaba el
+                            // flasheo). La TableCard queda SIEMPRE en la misma posición del árbol;
+                            // solo cambian los envoltorios (fondo oscuro / botón ✕) según el estado.
+                            // - Libre: el contenedor está `hidden` (solo se ve el portal del Wizard de Apertura).
+                            // - Ocupada: se muestra el Centro Operativo Flotante con su fondo.
+                            return (
+                                <div className={isTableAvailable
+                                    ? 'hidden'
+                                    : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200'}>
+                                    {/* Click fuera para cerrar — agnóstico mouse/táctil. Solo cuando está ocupada. */}
+                                    {!isTableAvailable && (
+                                        <div
+                                            className="absolute inset-0"
+                                            {...tableBackdropClose}
+                                        />
+                                    )}
+
+                                    {/* Contenedor de la Tarjeta — posición ESTABLE en ambos estados */}
+                                    <div className={isTableAvailable ? '' : 'relative w-full max-w-sm z-10 animate-in zoom-in-95 duration-200'}>
+                                        {!isTableAvailable && (
+                                            <button
+                                                onClick={() => setSelectedTableId(null)}
+                                                className="absolute -top-3 -right-3 z-30 w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-lg border border-slate-700/50 active:scale-95 transition-all text-sm font-bold animate-in zoom-in duration-300"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
+                                        <TableCard
+                                            table={table}
+                                            session={session}
                                             initialOpenMode={table.type === 'NORMAL' ? 'CONSUMPTION' : 'SHOW_MODE'}
                                             onClose={() => setSelectedTableId(null)}
                                             onStartTransfer={() => {
                                                 setTransferSourceTableId(selectedTableId);
-                                                setSelectedTableId(null);
+                                                setSelectedTableId(null); // Cerrar panel para ver plano con claridad
                                                 showToast("Selecciona la mesa de destino en el plano", "info");
                                             }}
                                         />
                                     </div>
-                                );
-                            }
-
-                             // Si está ocupada, se muestra de forma estándar el Centro Operativo Flotante con su fondo
-                             return (
-                                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-                                     {/* Click fuera para cerrar */}
-                                     <div 
-                                         className="absolute inset-0" 
-                                         onClick={(e) => {
-                                             // Evitar clics en elementos desmontados del DOM (ej. botones de portales o botones que se ocultaron al hacer clic)
-                                             if (e.target && !document.body.contains(e.target)) {
-                                                 console.log("%c[SNIPER: Clic en backdrop de mesas ignorado porque el elemento original se desmontó del DOM]", "color: #ef4444; font-weight: bold;");
-                                                 return;
-                                             }
-                                             // Solo cerrar si el clic fue directamente en el fondo oscuro y no burbujeó desde la tarjeta
-                                             if (e.target !== e.currentTarget) {
-                                                 return;
-                                             }
-                                             if (Date.now() - cardMountTimeRef.current < 350) return;
-                                             if (Date.now() - lastCardTouchTimeRef.current < 450) {
-                                                 console.log("%c[SNIPER: Clic en backdrop ignorado/bloqueado por touch reciente en la tarjeta]", "color: #ef4444; font-weight: bold;");
-                                                 return;
-                                             }
-                                             if (Date.now() - lastCardClickTimeRef.current < 450) {
-                                                 console.log("%c[SNIPER: Clic en backdrop ignorado/bloqueado por click reciente en la tarjeta]", "color: #f59e0b; font-weight: bold;");
-                                                 return;
-                                             }
-                                             setSelectedTableId(null);
-                                         }} 
-                                     />
-                                     
-                                     {/* Contenedor de la Tarjeta */}
-                                     <div 
-                                         onClickCapture={(e) => {
-                                             lastCardClickTimeRef.current = Date.now();
-                                             if (Date.now() - cardMountTimeRef.current < 350) {
-                                                 e.preventDefault();
-                                                 e.stopPropagation();
-                                             }
-                                         }}
-                                         onTouchStart={() => {
-                                             lastCardTouchTimeRef.current = Date.now();
-                                         }}
-                                         onTouchEnd={() => {
-                                             lastCardTouchTimeRef.current = Date.now();
-                                         }}
-                                         className="relative w-full max-w-sm z-10 animate-in zoom-in-95 duration-200"
-                                     >
-                                         <button 
-                                             onClick={() => setSelectedTableId(null)}
-                                             className="absolute -top-3 -right-3 z-30 w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-lg border border-slate-700/50 active:scale-95 transition-all text-sm font-bold animate-in zoom-in duration-300"
-                                         >
-                                             ✕
-                                         </button>
-                                         <TableCard 
-                                             table={table} 
-                                             session={session} 
-                                             initialOpenMode={table.type === 'NORMAL' ? 'CONSUMPTION' : 'SHOW_MODE'}
-                                             onClose={() => setSelectedTableId(null)}
-                                             onStartTransfer={() => {
-                                                 setTransferSourceTableId(selectedTableId);
-                                                 setSelectedTableId(null); // Cerrar panel para ver plano con claridad
-                                                 showToast("Selecciona la mesa de destino en el plano", "info");
-                                             }}
-                                         />
-                                     </div>
-                                 </div>
+                                </div>
                             );
                         })()}
                     </div>

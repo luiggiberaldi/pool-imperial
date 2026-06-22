@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { formatCop } from '../../utils/calculatorUtils';
 import { EPSILON } from '../../hooks/useCheckoutPayments';
+import { useBackdropClose } from '../../hooks/useBackdropClose';
 
 export function FiarConfirmModal({
     confirmFiar, setConfirmFiar,
@@ -9,35 +10,18 @@ export function FiarConfirmModal({
     selectedCustomer, totalPaidUsd,
     handleConfirm,
 }) {
-    const mountTimeRef = React.useRef(0);
-
-    React.useEffect(() => {
-        if (confirmFiar) {
-            mountTimeRef.current = Date.now();
-        }
-    }, [confirmFiar]);
+    // Cierre agnóstico a mouse/táctil (pointerdown→pointerup sobre el fondo).
+    const backdropClose = useBackdropClose(() => setConfirmFiar(false));
 
     if (!confirmFiar) return null;
 
-    const handleContentClickCapture = (e) => {
-        if (Date.now() - mountTimeRef.current < 350) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    };
-
     return (
-        <div 
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" 
-            onClick={(e) => {
-                if (Date.now() - mountTimeRef.current < 350) return;
-                setConfirmFiar(false);
-            }}
+        <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            {...backdropClose}
         >
-            <div 
-                onClickCapture={handleContentClickCapture}
-                className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800" 
-                onClick={e => e.stopPropagation()}
+            <div
+                className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800"
             >
                 <div className="flex items-center gap-4 mb-5">
                     <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center shrink-0">
@@ -95,13 +79,8 @@ export function OverpayAlertModal({
     overpayAlertData, setOverpayAlertData,
     confirmOverpay, cartTotalUsd, totalPaidUsd,
 }) {
-    const mountTimeRef = React.useRef(0);
-
-    React.useEffect(() => {
-        if (overpayAlertData) {
-            mountTimeRef.current = Date.now();
-        }
-    }, [overpayAlertData]);
+    // Cierre agnóstico a mouse/táctil (pointerdown→pointerup sobre el fondo).
+    const backdropClose = useBackdropClose(() => setOverpayAlertData(null));
 
     if (!overpayAlertData) return null;
     const d = overpayAlertData;
@@ -109,25 +88,13 @@ export function OverpayAlertModal({
     const title    = '¿Monto correcto?';
     const subtitle = `El pago es ${d.ratio}× el total de la compra`;
 
-    const handleContentClickCapture = (e) => {
-        if (Date.now() - mountTimeRef.current < 350) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    };
-
     return (
-        <div 
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" 
-            onClick={(e) => {
-                if (Date.now() - mountTimeRef.current < 350) return;
-                setOverpayAlertData(null);
-            }}
+        <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            {...backdropClose}
         >
-            <div 
-                onClickCapture={handleContentClickCapture}
-                className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800" 
-                onClick={e => e.stopPropagation()}
+            <div
+                className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800"
             >
                 <div className="flex items-center gap-4 mb-5">
                     <div className="w-12 h-12 sm:w-14 sm:h-14 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center shrink-0">

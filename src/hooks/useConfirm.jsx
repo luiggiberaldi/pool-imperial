@@ -1,5 +1,6 @@
 import React, { useState, useCallback, createContext, useContext } from 'react';
 import { AlertTriangle, LogOut, Trash2, Link2Off } from 'lucide-react';
+import { useBackdropClose } from './useBackdropClose';
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 const ConfirmContext = createContext(null);
@@ -13,37 +14,20 @@ const VARIANTS = {
 };
 
 function ConfirmDialog({ isOpen, title, message, confirmText, cancelText, variant, onConfirm, onCancel }) {
-    const mountTimeRef = React.useRef(0);
-
-    React.useEffect(() => {
-        if (isOpen) {
-            mountTimeRef.current = Date.now();
-        }
-    }, [isOpen]);
+    // Cierre agnóstico a mouse/táctil (pointerdown→pointerup sobre el fondo).
+    const backdropClose = useBackdropClose(onCancel);
 
     if (!isOpen) return null;
     const v = VARIANTS[variant] || VARIANTS.danger;
     const Icon = v.icon;
 
-    const handleContentClickCapture = (e) => {
-        if (Date.now() - mountTimeRef.current < 350) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    };
-
     return (
         <div
             className="fixed inset-0 z-[9999] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-            onClick={(e) => {
-                if (Date.now() - mountTimeRef.current < 350) return;
-                onCancel();
-            }}
+            {...backdropClose}
         >
             <div
-                onClickCapture={handleContentClickCapture}
                 className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-6 max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200"
-                onClick={e => e.stopPropagation()}
             >
                 {/* Icon */}
                 <div className={`w-14 h-14 ${v.iconBg} rounded-2xl flex items-center justify-center mx-auto mb-4`}>
