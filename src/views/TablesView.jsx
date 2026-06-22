@@ -156,6 +156,20 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
         }
     }, [isActive, syncTablesAndSessions]);
 
+    // ── [SNIPER LOGS] ──
+    useEffect(() => {
+        console.log("%c[SNIPER: TablesView Mounted]", "color: #10b981; font-weight: bold;");
+        return () => {
+            console.log("%c[SNIPER: TablesView Unmounted]", "color: #ef4444; font-weight: bold;");
+        };
+    }, []);
+
+    useEffect(() => {
+        console.log("%c[SNIPER: selectedTableId changed]", "color: #f59e0b; font-weight: bold;", {
+            to: selectedTableId
+        });
+    }, [selectedTableId]);
+
     // Handle floor plan table selection
     const handleFloorTableSelect = useCallback((table, session) => {
         if (isEditingPlan) return;
