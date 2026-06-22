@@ -1442,23 +1442,6 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         }
     });
 
-    // Console logging to monitor loading and state issues
-    useEffect(() => {
-        console.log("[FloorPlanView] Component mounted/updated. Context details:", {
-            totalTablesStore: tables?.length,
-            activeSessionsStore: activeSessions?.length,
-            isEditing
-        });
-    }, [tables?.length, activeSessions?.length, isEditing]);
-
-    useEffect(() => {
-        if (isMeasured) {
-            console.log("[FloorPlanView] Responsive canvas measured successfully:", dimensions);
-        } else {
-            console.warn("[FloorPlanView] Responsive canvas measurement pending...");
-        }
-    }, [isMeasured, dimensions]);
-
     // Zoom & Pan states for Mobile & Touch optimization
     const [zoomLevel, setZoomLevel] = useState(1);
     const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });

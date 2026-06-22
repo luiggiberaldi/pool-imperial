@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, Suspense, lazy, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense, lazy } from 'react';
 import { Home, ShoppingCart, Store, Users, Download, FlaskConical, BarChart3, WifiOff, X, Settings, Layers } from 'lucide-react';
 
 import SalesView from './views/SalesView';
@@ -57,12 +57,7 @@ function GlobalTableAlertsTrigger() {
 }
 
 export default function App() {
-  const [activeTab, _setActiveTab] = useState('inicio');
-  const setActiveTab = useCallback((val) => {
-    console.log(`%c[SNIPER: setActiveTab called to: ${val}]`, "color: #ff007f; font-weight: bold;");
-    console.log(new Error().stack);
-    _setActiveTab(val);
-  }, []);
+  const [activeTab, setActiveTab] = useState('inicio');
 
   // Inicializar Sincronización Realtime con Supabase
   useCloudSync();
@@ -92,38 +87,6 @@ export default function App() {
   useEffect(() => {
     initServerClock();
     purgeOldEntries();
-  }, []);
-
-  // ── [SNIPER v3: Global Listeners] ──
-  useEffect(() => {
-    const handleGlobalClick = (e) => {
-      console.log("%c[SNIPER GLOBAL CLICK]", "color: #3b82f6; font-weight: bold;", {
-        tagName: e.target.tagName,
-        className: e.target.className,
-        id: e.target.id,
-        isTrusted: e.isTrusted,
-        pointerType: e.pointerType,
-        type: e.type,
-        timeStamp: e.timeStamp,
-        clientX: e.clientX,
-        clientY: e.clientY
-      });
-    };
-    const handleGlobalKey = (e) => {
-      console.log("%c[SNIPER GLOBAL KEYDOWN]", "color: #8b5cf6; font-weight: bold;", {
-        key: e.key,
-        code: e.code,
-        target: e.target.tagName,
-        isTrusted: e.isTrusted,
-        timeStamp: e.timeStamp
-      });
-    };
-    window.addEventListener('click', handleGlobalClick, true);
-    window.addEventListener('keydown', handleGlobalKey, true);
-    return () => {
-      window.removeEventListener('click', handleGlobalClick, true);
-      window.removeEventListener('keydown', handleGlobalKey, true);
-    };
   }, []);
 
   // Re-sync server clock when the device comes back online

@@ -71,23 +71,10 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
     const [isEditingPlan, setIsEditingPlan] = useState(false);
 
     // When a table is selected from the floor plan, we open its TableCard via a mini panel
-    const [selectedTableId, _setSelectedTableId] = useState(null);
-    const setSelectedTableId = useCallback((val) => {
-        console.log(`%c[SNIPER: selectedTableId setter called to: ${val}]`, "color: #ec4899; font-weight: bold;");
-        console.log(new Error().stack);
-        _setSelectedTableId(val);
-    }, []);
+    const [selectedTableId, setSelectedTableId] = useState(null);
     // Cierre agnóstico a mouse/táctil del panel flotante de mesa ocupada
-    // (pointerdown→pointerup sobre el fondo). Reemplaza las guardas de Date.now().
+    // (pointerdown→pointerup sobre el fondo).
     const tableBackdropClose = useBackdropClose(() => setSelectedTableId(null));
-
-    useEffect(() => {
-        console.log("%c[SNIPER: TablesView MONTADO]", "color: #10b981; font-weight: bold;");
-        return () => {
-            console.log("%c[SNIPER: TablesView DESMONTADO]", "color: #ef4444; font-weight: bold;");
-            console.log(new Error().stack);
-        };
-    }, []);
 
     const [transferSourceTableId, setTransferSourceTableId] = useState(null);
     const [transferTargetTable, setTransferTargetTable] = useState(null);
@@ -364,20 +351,9 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                         {selectedTableId && (() => {
                             const table = tables.find(t => t.id === selectedTableId);
                             const session = activeSessions.find(s => s.table_id === selectedTableId);
-                            if (!table) {
-                                console.log("%c[SNIPER: Evaluando render de TableCard - NO SE ENCONTRÓ MESA]", "color: #ef4444; font-weight: bold;", { selectedTableId });
-                                return null;
-                            }
+                            if (!table) return null;
 
                             const isTableAvailable = !session || session.status === 'CLOSED';
-
-                            console.log("%c[SNIPER: Evaluando render de TableCard]", "color: #3b82f6; font-weight: bold;", {
-                                selectedTableId,
-                                tableName: table.name,
-                                hasSession: !!session,
-                                sessionStatus: session?.status,
-                                isTableAvailable
-                            });
 
                             // ⚠️ Render UNIFICADO (un solo return) para evitar que la TableCard
                             // se desmonte y vuelva a montar al pasar de libre→ocupada (causaba el
