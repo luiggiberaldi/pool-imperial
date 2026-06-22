@@ -713,6 +713,7 @@ export async function printReceiptEscPos(sale, bcvRate) {
 export async function printDailyCloseEscPos({
     sales = [],
     allSales = [],
+    adjustments = [],
     paymentBreakdown = {},
     topProducts = [],
     todayTotalCOP = 0,
@@ -765,6 +766,44 @@ export async function printDailyCloseEscPos({
             }
         });
     });
+
+    const prodMovements = (() => {
+        const movements = {};
+        
+        // Process adjustments
+        (adjustments || []).forEach(adj => {
+            if (adj.status === 'ANULADA') return;
+            (adj.items || []).forEach(item => {
+                const prodId = item.id;
+                if (!movements[prodId]) {
+                    movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
+                }
+                if (adj.tipo === 'AJUSTE_ENTRADA') {
+                    movements[prodId].entrada += item.qty;
+                } else if (adj.tipo === 'AJUSTE_SALIDA') {
+                    movements[prodId].salida += item.qty;
+                }
+            });
+        });
+
+        // Process sales (which are outgoing/salidas)
+        allSales.forEach(sale => {
+            if (sale.status === 'ANULADA') return;
+            (sale.items || []).forEach(item => {
+                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) return;
+                const prodId = item.id;
+                if (!movements[prodId]) {
+                    movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
+                }
+                movements[prodId].salida += item.qty;
+            });
+        });
+
+        return Object.entries(movements)
+            .map(([id, data]) => ({ id, ...data }))
+            .filter(m => m.entrada > 0 || m.salida > 0)
+            .sort((a, b) => (b.salida + b.entrada) - (a.salida + a.entrada));
+    })();
 
     const p = escposEncoder().init();
 
@@ -868,6 +907,20 @@ export async function printDailyCloseEscPos({
         p.row('USD Esperado:', `$ ${expectedUSD.toFixed(2)}`, W);
         p.row('USD Declarado:', `$ ${declaredUSD.toFixed(2)}`, W);
         p.row('USD Diferencia:', (diffUSD >= 0 ? '+' : '') + `$ ${diffUSD.toFixed(2)}`, W);
+        p.line('-', W);
+    }
+
+    // ── Movimientos de Productos ──
+    if (prodMovements && prodMovements.length > 0) {
+        p.align(1).bold(true).text('MOVIMIENTOS DE PRODUCTOS').newline().bold(false).align(0);
+        prodMovements.forEach((m) => {
+            const cleanLabel = m.name.length > WS - 15 ? m.name.substring(0, WS - 17) + '…' : m.name;
+            const entStr = m.entrada > 0 ? `+${m.entrada}` : '-';
+            const salStr = m.salida > 0 ? `-${m.salida}` : '-';
+            const movStr = `E:${entStr} S:${salStr}`;
+            p.smallFont(true).row(cleanLabel, movStr, WS);
+            p.smallFont(false);
+        });
         p.line('-', W);
     }
 

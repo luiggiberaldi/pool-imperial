@@ -22,7 +22,8 @@ export default function CierreCajaWizard({
     apertura = null,
     totalTax = 0,
     taxBreakdown = {},
-    allSales = []
+    allSales = [],
+    todayAdjustments = []
 }) {
     const [step, setStep] = useState(1);
     const [actualCop, setActualCop] = useState('');
@@ -59,6 +60,46 @@ export default function CierreCajaWizard({
             total: totalTips
         };
     }, [todaySales]);
+
+    const prodMovements = React.useMemo(() => {
+        const movements = {};
+        
+        // Process adjustments
+        const currentAdjustments = reportSnapshot?.adjustments || todayAdjustments || [];
+        currentAdjustments.forEach(adj => {
+            if (adj.status === 'ANULADA') return;
+            (adj.items || []).forEach(item => {
+                const prodId = item.id;
+                if (!movements[prodId]) {
+                    movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
+                }
+                if (adj.tipo === 'AJUSTE_ENTRADA') {
+                    movements[prodId].entrada += item.qty;
+                } else if (adj.tipo === 'AJUSTE_SALIDA') {
+                    movements[prodId].salida += item.qty;
+                }
+            });
+        });
+
+        // Process sales (which are outgoing/salidas)
+        const currentSales = reportSnapshot?.allSales || allSales || todaySales || [];
+        currentSales.forEach(sale => {
+            if (sale.status === 'ANULADA') return;
+            (sale.items || []).forEach(item => {
+                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) return;
+                const prodId = item.id;
+                if (!movements[prodId]) {
+                    movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
+                }
+                movements[prodId].salida += item.qty;
+            });
+        });
+
+        return Object.entries(movements)
+            .map(([id, data]) => ({ id, ...data }))
+            .filter(m => m.entrada > 0 || m.salida > 0)
+            .sort((a, b) => (b.salida + b.entrada) - (a.salida + a.entrada));
+    }, [todayAdjustments, allSales, todaySales, reportSnapshot]);
 
     if (!isOpen) return null;
 
@@ -105,6 +146,7 @@ export default function CierreCajaWizard({
             setReportSnapshot({
                 sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
                 allSales: allSales.length > 0 ? allSales : todaySales,
+                adjustments: todayAdjustments,
                 paymentBreakdown,
                 topProducts: todayTopProducts,
                 todayTotalCOP: todayTotalUsd,
@@ -266,6 +308,32 @@ export default function CierreCajaWizard({
                                                     <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[180px]">{p.name}</span>
                                                 </div>
                                                 <span className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-md">{p.qty} uds</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Movimientos de Inventario (Entradas/Salidas) */}
+                            {prodMovements.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 pl-1">Movimiento de Productos</h4>
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700/50 max-h-56 overflow-y-auto">
+                                        {prodMovements.map((m, i) => (
+                                            <div key={i} className="flex items-center justify-between px-4 py-2.5">
+                                                <span className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[180px]">{m.name}</span>
+                                                <div className="flex items-center gap-3">
+                                                    {m.entrada > 0 && (
+                                                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-450 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-md">
+                                                            +{m.entrada} ent.
+                                                        </span>
+                                                    )}
+                                                    {m.salida > 0 && (
+                                                        <span className="text-xs font-bold text-rose-600 dark:text-rose-450 bg-rose-50 dark:bg-rose-955/50 px-2 py-0.5 rounded-md">
+                                                            -{m.salida} sal.
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -481,6 +549,7 @@ export default function CierreCajaWizard({
                                         const snap = reportSnapshot || {
                                             sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
                                             allSales: allSales.length > 0 ? allSales : todaySales,
+                                            adjustments: todayAdjustments,
                                             paymentBreakdown,
                                             topProducts: todayTopProducts,
                                             todayTotalCOP: todayTotalUsd,
@@ -511,6 +580,7 @@ export default function CierreCajaWizard({
                                         const snap = reportSnapshot || {
                                             sales: todayCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
                                             allSales: allSales.length > 0 ? allSales : todaySales,
+                                            adjustments: todayAdjustments,
                                             paymentBreakdown,
                                             topProducts: todayTopProducts,
                                             todayTotalCOP: todayTotalUsd,

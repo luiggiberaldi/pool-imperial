@@ -82,7 +82,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
     // ── Métricas extraídas al hook ──
     const {
-        today, todaySales, todayAllSales, todayCashFlow, todayApertura,
+        today, todaySales, todayAllSales, todayCashFlow, todayApertura, todayAdjustments,
         todayTotalBs, todayTotalUsd, todayItemsSold,
         todayExpenses, todayExpensesUsd, todayProfit,
         todayTotalTax, todayTaxBreakdown,
@@ -230,7 +230,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         };
 
         const currentCierreId = Date.now();
-        const validTipos = ['VENTA','VENTA_FIADA','COBRO_DEUDA','PAGO_PROVEEDOR','APERTURA_CAJA'];
+        const validTipos = ['VENTA','VENTA_FIADA','COBRO_DEUDA','PAGO_PROVEEDOR','APERTURA_CAJA','AJUSTE_ENTRADA','AJUSTE_SALIDA'];
         const updatedSales = sales.map(s =>
             !s.cajaCerrada && validTipos.includes(s.tipo || 'VENTA') && isInSession(s)
                 ? { ...s, cajaCerrada: true, cierreId: currentCierreId }
@@ -780,7 +780,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 todayItemsSold={todayItemsSold} todayExpensesUsd={todayExpensesUsd} paymentBreakdown={paymentBreakdown}
                 todayTopProducts={todayTopProducts} bcvRate={bcvRate} copEnabled={copEnabled} tasaCop={tasaCop} isAdmin={isAdmin}
                 apertura={todayApertura} totalTax={dashTab === 'hoy' ? dayTotalTax : todayTotalTax} taxBreakdown={dashTab === 'hoy' ? dayTaxBreakdown : todayTaxBreakdown}
-                allSales={todayAllSales} />
+                allSales={todayAllSales} todayAdjustments={todayAdjustments} />
 
             <AperturaCajaModal isOpen={isAperturaOpen} onClose={() => setIsAperturaOpen(false)} onConfirm={handleSaveApertura} />
 

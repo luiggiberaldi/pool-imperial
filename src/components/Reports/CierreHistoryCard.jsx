@@ -37,6 +37,7 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
         generateDailyClosePDF({
             sales: cierre.salesForCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
             allSales: cierre.salesForStats,
+            adjustments: cierre.adjustments || [],
             bcvRate: 0,
             paymentBreakdown: cierre.paymentBreakdown,
             topProducts: todayTopProducts,
@@ -76,6 +77,7 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
         printThermalDailyClose({
             sales: cierre.salesForCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
             allSales: cierre.salesForStats,
+            adjustments: cierre.adjustments || [],
             paymentBreakdown: cierre.paymentBreakdown,
             topProducts: todayTopProducts,
             todayTotalCOP: cierre.totalUsd,

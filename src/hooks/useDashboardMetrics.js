@@ -63,6 +63,15 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
         [sales, today, sessionOpenedAt]
     );
 
+    const todayAdjustments = useMemo(() =>
+        sales.filter(s => {
+            if (s.status === 'ANULADA') return false;
+            if (s.tipo !== 'AJUSTE_ENTRADA' && s.tipo !== 'AJUSTE_SALIDA') return false;
+            return isInSessionPeriod(s);
+        }),
+        [sales, today, sessionOpenedAt]
+    );
+
     const todayTotalBs = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalBs || 0), 0), [todaySales]);
     const todayTotalUsd = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), [todaySales]);
     const todayItemsSold = useMemo(() =>
@@ -234,7 +243,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     }, [todaySales, products]);
 
     return {
-        today, todaySales, todayAllSales, todayCashFlow, todayApertura,
+        today, todaySales, todayAllSales, todayCashFlow, todayApertura, todayAdjustments,
         todayTotalBs, todayTotalUsd, todayItemsSold,
         todayExpenses, todayExpensesUsd, todayProfit,
         todayTotalTax, todayTaxBreakdown,

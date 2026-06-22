@@ -19,6 +19,7 @@ const formatUsd = (val) => new Intl.NumberFormat('en-US', {
 export async function generateDailyClosePDF({
     sales,
     allSales,
+    adjustments = [],
     paymentBreakdown,
     topProducts,
     todayTotalCOP,     // Total en pesos colombianos
@@ -56,6 +57,45 @@ export async function generateDailyClosePDF({
     });
     const tipsUserRows = Object.keys(tipsByUser).length;
 
+    const prodMovements = (() => {
+        const movements = {};
+        
+        // Process adjustments
+        (adjustments || []).forEach(adj => {
+            if (adj.status === 'ANULADA') return;
+            (adj.items || []).forEach(item => {
+                const prodId = item.id;
+                if (!movements[prodId]) {
+                    movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
+                }
+                if (adj.tipo === 'AJUSTE_ENTRADA') {
+                    movements[prodId].entrada += item.qty;
+                } else if (adj.tipo === 'AJUSTE_SALIDA') {
+                    movements[prodId].salida += item.qty;
+                }
+            });
+        });
+
+        // Process sales (which are outgoing/salidas)
+        allSales.forEach(sale => {
+            if (sale.status === 'ANULADA') return;
+            (sale.items || []).forEach(item => {
+                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) return;
+                const prodId = item.id;
+                if (!movements[prodId]) {
+                    movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
+                }
+                movements[prodId].salida += item.qty;
+            });
+        });
+
+        return Object.entries(movements)
+            .map(([id, data]) => ({ id, ...data }))
+            .filter(m => m.entrada > 0 || m.salida > 0)
+            .sort((a, b) => (b.salida + b.entrada) - (a.salida + a.entrada));
+    })();
+    const prodMovementRows = prodMovements.length;
+
     // Calcular altura dinámica
     const paymentRows = Object.keys(paymentBreakdown).length;
     const topProdRows = topProducts.length;
@@ -67,7 +107,8 @@ export async function generateDailyClosePDF({
         + (topProdRows * 10)
         + (saleRows * 45)
         + (totalTax > 0 ? 12 + (taxRows * 5) : 0)
-        + (tipsUserRows > 0 ? 12 + (tipsUserRows * 5) : 0);
+        + (tipsUserRows > 0 ? 12 + (tipsUserRows * 5) : 0)
+        + (prodMovementRows > 0 ? 12 + (prodMovementRows * 7) : 0);
 
     const doc = new jsPDF({ unit: 'mm', format: [WIDTH, H] });
 
@@ -351,6 +392,51 @@ export async function generateDailyClosePDF({
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(...INK);
             doc.text(value, RIGHT, y, { align: 'right' });
+            y += 5;
+        });
+
+        y += 2;
+        dash(y); y += 6;
+    }
+
+    // ════════════════════════════════════
+    //  MOVIMIENTOS DE PRODUCTOS
+    // ════════════════════════════════════
+    if (prodMovementRows > 0) {
+        y = sectionTitle('MOVIMIENTOS DE PRODUCTOS', y);
+
+        // Header for movements table
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6);
+        doc.setTextColor(...MUTED);
+        doc.text('Producto', M, y);
+        doc.text('Entrada', RIGHT - 15, y, { align: 'right' });
+        doc.text('Salida', RIGHT, y, { align: 'right' });
+        y += 3.5;
+
+        prodMovements.forEach((m) => {
+            const name = m.name.length > 20 ? m.name.substring(0, 20) + '…' : m.name;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...BODY);
+            doc.text(name, M, y);
+
+            doc.setFont('helvetica', 'bold');
+            if (m.entrada > 0) {
+                doc.setTextColor(...GREEN);
+                doc.text(`+${m.entrada}`, RIGHT - 15, y, { align: 'right' });
+            } else {
+                doc.setTextColor(...MUTED);
+                doc.text('-', RIGHT - 15, y, { align: 'right' });
+            }
+
+            if (m.salida > 0) {
+                doc.setTextColor(...RED);
+                doc.text(`-${m.salida}`, RIGHT, y, { align: 'right' });
+            } else {
+                doc.setTextColor(...MUTED);
+                doc.text('-', RIGHT, y, { align: 'right' });
+            }
             y += 5;
         });
 

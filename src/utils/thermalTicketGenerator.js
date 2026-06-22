@@ -370,6 +370,7 @@ function _printThermalHTML(sale, _bcvRate) {
 export async function printThermalDailyClose({
     sales = [],
     allSales = [],
+    adjustments = [],
     paymentBreakdown = {},
     topProducts = [],
     todayTotalCOP = 0,
@@ -389,6 +390,7 @@ export async function printThermalDailyClose({
             const printed = await printDailyCloseEscPos({
                 sales,
                 allSales,
+                adjustments,
                 paymentBreakdown,
                 topProducts,
                 todayTotalCOP,
@@ -551,6 +553,64 @@ export async function printThermalDailyClose({
         `;
     }
 
+    const prodMovements = (() => {
+        const movements = {};
+        
+        // Process adjustments
+        (adjustments || []).forEach(adj => {
+            if (adj.status === 'ANULADA') return;
+            (adj.items || []).forEach(item => {
+                const prodId = item.id;
+                if (!movements[prodId]) {
+                    movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
+                }
+                if (adj.tipo === 'AJUSTE_ENTRADA') {
+                    movements[prodId].entrada += item.qty;
+                } else if (adj.tipo === 'AJUSTE_SALIDA') {
+                    movements[prodId].salida += item.qty;
+                }
+            });
+        });
+
+        // Process sales (which are outgoing/salidas)
+        allSales.forEach(sale => {
+            if (sale.status === 'ANULADA') return;
+            (sale.items || []).forEach(item => {
+                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) return;
+                const prodId = item.id;
+                if (!movements[prodId]) {
+                    movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
+                }
+                movements[prodId].salida += item.qty;
+            });
+        });
+
+        return Object.entries(movements)
+            .map(([id, data]) => ({ id, ...data }))
+            .filter(m => m.entrada > 0 || m.salida > 0)
+            .sort((a, b) => (b.salida + b.entrada) - (a.salida + a.entrada));
+    })();
+
+    // Movimientos de Productos HTML
+    let prodMovementsHtml = '';
+    if (prodMovements.length > 0) {
+        prodMovementsHtml = `
+            <div class="section-title">Movimientos de Productos</div>
+            <table style="font-size: 10px;">
+                <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
+                    <td>Producto</td><td style="text-align:right;">Ent</td><td style="text-align:right;">Sal</td>
+                </tr>
+                ${prodMovements.map(m => `
+                    <tr>
+                         <td>${m.name.length > 18 ? m.name.substring(0, 18) + '…' : m.name}</td>
+                         <td style="text-align:right;color:${m.entrada > 0 ? '#107c41' : '#555'};font-weight:bold;">${m.entrada > 0 ? '+' + m.entrada : '-'}</td>
+                         <td style="text-align:right;color:${m.salida > 0 ? '#dc3545' : '#555'};font-weight:bold;">${m.salida > 0 ? '-' + m.salida : '-'}</td>
+                    </tr>
+                `).join('')}
+            </table>
+        `;
+    }
+
     // Articles Sold HTML
     let topProductsHtml = '';
     if (topProducts && topProducts.length > 0) {
@@ -675,6 +735,9 @@ export async function printThermalDailyClose({
 
     ${cuadreHtml}
     ${cuadreHtml ? '<hr class="dash">' : ''}
+
+    ${prodMovementsHtml}
+    ${prodMovementsHtml ? '<hr class="dash">' : ''}
 
     ${topProductsHtml}
     ${topProductsHtml ? '<hr class="dash">' : ''}

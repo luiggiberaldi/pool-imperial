@@ -139,6 +139,7 @@ export function groupSalesByCierreId(allSales, from, to, products) {
 
             const salesForStats = c.sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA');
             const salesForCashFlow = c.sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR');
+            const adjustments = c.sales.filter(s => s.tipo === 'AJUSTE_ENTRADA' || s.tipo === 'AJUSTE_SALIDA');
 
             const totalCOP = salesForStats.reduce((acc, s) => acc + (s.totalCop || s.totalUsd || 0), 0);
             const totalTax = salesForStats.reduce((acc, s) => acc + (s.ivaAmount || 0), 0);
@@ -159,6 +160,7 @@ export function groupSalesByCierreId(allSales, from, to, products) {
                 dateObj,
                 salesForStats,
                 salesForCashFlow,
+                adjustments,
                 totalCOP,
                 totalUsd: totalCOP,  // alias de compatibilidad
                 totalBs: 0,          // siempre 0 en Pool Imperial

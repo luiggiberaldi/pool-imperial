@@ -161,15 +161,6 @@ export class FinancialEngine {
                 return; // Do NOT count opening as revenue
             }
 
-            // Fiado sales go to their own bucket — tracked in USD directly since debts hold value in $
-            if (sale.tipo === 'VENTA_FIADA') {
-                if (!breakdown['fiado']) {
-                    breakdown['fiado'] = { total: 0, currency: 'FIADO', label: 'Fiado (Por Cobrar)' };
-                }
-                breakdown['fiado'].total = round2(breakdown['fiado'].total + round2(sale.totalUsd || 0));
-                return; // Skip normal payment processing and change deduction
-            }
-
             // Debt collection reduces the outstanding fiado balance for the period (using USD to prevent exchange rate drift)
             if (sale.tipo === 'COBRO_DEUDA') {
                 if (!breakdown['fiado']) {
@@ -180,6 +171,15 @@ export class FinancialEngine {
             }
 
             if (!sale.payments || sale.payments.length === 0) {
+                // V1 Legacy Sales & Cobro Deudas
+                if (sale.tipo === 'VENTA_FIADA') {
+                    if (!breakdown['fiado']) {
+                        breakdown['fiado'] = { total: 0, currency: 'FIADO', label: 'Fiado (Por Cobrar)' };
+                    }
+                    breakdown['fiado'].total = round2(breakdown['fiado'].total + round2(sale.totalUsd || 0));
+                    return; // Skip normal payment processing and change deduction
+                }
+
                 // V1 Legacy Sales & Cobro Deudas
                 const method = sale.paymentMethod || 'efectivo';
                 let currency = 'COP';
@@ -199,6 +199,14 @@ export class FinancialEngine {
                 }
                 breakdown[method].total = round2(breakdown[method].total + valueToSum);
             } else {
+                // V2 VENTA_FIADA (credit sale with optional partial payments)
+                if (sale.fiadoUsd && sale.fiadoUsd > 0) {
+                    if (!breakdown['fiado']) {
+                        breakdown['fiado'] = { total: 0, currency: 'FIADO', label: 'Fiado (Por Cobrar)' };
+                    }
+                    breakdown['fiado'].total = round2(breakdown['fiado'].total + round2(sale.fiadoUsd));
+                }
+
                 // Aggregate incoming payments (V2 sales)
                 sale.payments.forEach(p => {
                     // Skip prior-abono payments — already counted in their own abono receipt
