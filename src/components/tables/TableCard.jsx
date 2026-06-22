@@ -119,6 +119,13 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const [showEditCustomerSheet, setShowEditCustomerSheet] = useState(false);
     const [searchingEditSeatIndex, setSearchingEditSeatIndex] = useState(null);
 
+    useEffect(() => {
+        console.log(`%c[SNIPER: TableCard MONTADO para la mesa ${table.name}]`, "color: #10b981; font-weight: bold;");
+        return () => {
+            console.log(`%c[SNIPER: TableCard DESMONTADO para la mesa ${table.name}]`, "color: #ef4444; font-weight: bold;");
+            console.log(new Error().stack);
+        };
+    }, [table.id]);
 
     // Fetch customers from Supabase once on mount
     useEffect(() => { fetchCustomers(); }, []);

@@ -78,6 +78,15 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
     }, []);
     const cardMountTimeRef = useRef(0);
     const lastCardTouchTimeRef = useRef(0);
+    const lastCardClickTimeRef = useRef(0);
+
+    useEffect(() => {
+        console.log("%c[SNIPER: TablesView MONTADO]", "color: #10b981; font-weight: bold;");
+        return () => {
+            console.log("%c[SNIPER: TablesView DESMONTADO]", "color: #ef4444; font-weight: bold;");
+            console.log(new Error().stack);
+        };
+    }, []);
 
     useEffect(() => {
         if (selectedTableId) {
@@ -360,9 +369,20 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                         {selectedTableId && (() => {
                             const table = tables.find(t => t.id === selectedTableId);
                             const session = activeSessions.find(s => s.table_id === selectedTableId);
-                            if (!table) return null;
+                            if (!table) {
+                                console.log("%c[SNIPER: Evaluando render de TableCard - NO SE ENCONTRÓ MESA]", "color: #ef4444; font-weight: bold;", { selectedTableId });
+                                return null;
+                            }
 
                             const isTableAvailable = !session || session.status === 'CLOSED';
+
+                            console.log("%c[SNIPER: Evaluando render de TableCard]", "color: #3b82f6; font-weight: bold;", {
+                                selectedTableId,
+                                tableName: table.name,
+                                hasSession: !!session,
+                                sessionStatus: session?.status,
+                                isTableAvailable
+                            });
 
                             if (isTableAvailable) {
                                 // Si está libre, ocultamos el contenedor flotante y su fondo
@@ -397,6 +417,10 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                                  console.log("%c[SNIPER: Clic en backdrop ignorado/bloqueado por touch reciente en la tarjeta]", "color: #ef4444; font-weight: bold;");
                                                  return;
                                              }
+                                             if (Date.now() - lastCardClickTimeRef.current < 450) {
+                                                 console.log("%c[SNIPER: Clic en backdrop ignorado/bloqueado por click reciente en la tarjeta]", "color: #f59e0b; font-weight: bold;");
+                                                 return;
+                                             }
                                              setSelectedTableId(null);
                                          }} 
                                      />
@@ -404,6 +428,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                      {/* Contenedor de la Tarjeta */}
                                      <div 
                                          onClickCapture={(e) => {
+                                             lastCardClickTimeRef.current = Date.now();
                                              if (Date.now() - cardMountTimeRef.current < 350) {
                                                  e.preventDefault();
                                                  e.stopPropagation();
