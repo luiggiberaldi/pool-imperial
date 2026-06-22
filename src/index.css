@@ -217,3 +217,24 @@ body {
   -ms-interpolation-mode: nearest-neighbor;    /* IE/Legacy Edge */
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   FIX: parpadeo de modales en escritorio remoto / GPU sin aceleración
+   ─────────────────────────────────────────────────────────────────────────
+   `backdrop-filter: blur()` provoca que los overlays/modales aparezcan y
+   desaparezcan (flicker de repintado) en equipos sin aceleración de GPU real
+   — típico en sesiones de control remoto (UltraViewer/RDP) y GPUs emuladas.
+   Como el desenfoque es puramente cosmético, lo DESACTIVAMOS por defecto en
+   toda la app. El fondo oscuro semitransparente (bg-*/60 etc.) se mantiene,
+   así que los modales siguen viéndose bien y dejan de parpadear.
+
+   El selector [class*="backdrop-blur"] cubre todas las variantes
+   (backdrop-blur-sm/md/lg/xl…) de una sola vez.
+
+   Para REACTIVAR el desenfoque en un equipo con GPU buena (efecto cosmético):
+   ejecutar en consola  ->  document.documentElement.classList.add('gpu-blur')
+   o añadir la clase `gpu-blur` al <html>. */
+html:not(.gpu-blur) [class*="backdrop-blur"] {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
