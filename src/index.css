@@ -227,13 +227,14 @@ body {
    toda la app. El fondo oscuro semitransparente (bg-*/60 etc.) se mantiene,
    así que los modales siguen viéndose bien y dejan de parpadear.
 
-   El selector [class*="backdrop-blur"] cubre todas las variantes
-   (backdrop-blur-sm/md/lg/xl…) de una sola vez.
+   Usamos el selector universal `*` (igual que el comando probado en consola
+   que detiene el flicker) para cubrir TODOS los casos, sin depender de que el
+   elemento tenga una clase backdrop-blur-* concreta.
 
    Para REACTIVAR el desenfoque en un equipo con GPU buena (efecto cosmético):
    ejecutar en consola  ->  document.documentElement.classList.add('gpu-blur')
    o añadir la clase `gpu-blur` al <html>. */
-html:not(.gpu-blur) [class*="backdrop-blur"] {
+html:not(.gpu-blur) * {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }

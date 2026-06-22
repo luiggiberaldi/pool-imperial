@@ -30,8 +30,8 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
-        // Force SW update — v9 2026-04-28
-        additionalManifestEntries: [{ url: 'cache-bust-v10.txt', revision: '20260428-003' }],
+        // Force SW update — v11 2026-06-22 (fix flicker backdrop-filter)
+        additionalManifestEntries: [{ url: 'cache-bust-v11.txt', revision: '20260622-001' }],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
