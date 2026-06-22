@@ -412,6 +412,15 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                      <div 
                                          className="absolute inset-0" 
                                          onClick={(e) => {
+                                             // Evitar clics en elementos desmontados del DOM (ej. botones de portales o botones que se ocultaron al hacer clic)
+                                             if (e.target && !document.body.contains(e.target)) {
+                                                 console.log("%c[SNIPER: Clic en backdrop de mesas ignorado porque el elemento original se desmontó del DOM]", "color: #ef4444; font-weight: bold;");
+                                                 return;
+                                             }
+                                             // Solo cerrar si el clic fue directamente en el fondo oscuro y no burbujeó desde la tarjeta
+                                             if (e.target !== e.currentTarget) {
+                                                 return;
+                                             }
                                              if (Date.now() - cardMountTimeRef.current < 350) return;
                                              if (Date.now() - lastCardTouchTimeRef.current < 450) {
                                                  console.log("%c[SNIPER: Clic en backdrop ignorado/bloqueado por touch reciente en la tarjeta]", "color: #ef4444; font-weight: bold;");

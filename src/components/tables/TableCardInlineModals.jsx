@@ -248,7 +248,14 @@ export default function TableCardInlineModals({
         {/* Portals: rendered in document.body to escape card's CSS transform context */}
         {showOrderPanel && createPortal(
             <div className="fixed inset-0 z-[100] overflow-hidden flex">
-                <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowOrderPanel(false)} />
+                <div 
+                    className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" 
+                    onClick={(e) => {
+                        if (e.target && !document.body.contains(e.target)) return;
+                        if (e.target !== e.currentTarget) return;
+                        setShowOrderPanel(false);
+                    }} 
+                />
                 <div className="relative ml-auto h-full">
                     <OrderPanel session={session} table={table} onClose={() => setShowOrderPanel(false)} />
                 </div>

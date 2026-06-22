@@ -29,6 +29,12 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', maxWid
       <div 
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
         onClick={(e) => {
+          // Evitar que elementos desmontados del DOM (ej. botones internos que cambian estado) gatillen el cierre al caer el clic en el backdrop
+          if (e.target && !document.body.contains(e.target)) {
+            console.log("%c[SNIPER: Clic en backdrop de Modal ignorado porque el elemento original se desmontó del DOM]", "color: #ef4444; font-weight: bold;");
+            return;
+          }
+          if (e.target !== e.currentTarget) return;
           if (Date.now() - mountTimeRef.current < 350) return;
           onClose();
         }}
