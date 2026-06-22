@@ -10,19 +10,24 @@ import './index.css'
 window.supabaseCloud = supabaseCloud;
 window.storageService = storageService;
 
-// ── FIX flicker de modales en equipos sin aceleración GPU (escritorio remoto) ──
-// `backdrop-filter: blur()` parpadea (aparece/desaparece) en equipos sin GPU
-// real — típico en control remoto (UltraViewer/RDP) y GPUs emuladas. Lo
-// desactivamos GLOBALMENTE inyectando el estilo en runtime: así queda de último
-// en la cascada y siempre gana (una regla equivalente en index.css NO siempre
-// prevalece sobre las utilidades backdrop-blur-* de Tailwind, por eso no bastaba).
-// El fondo oscuro semitransparente se mantiene → los modales se ven bien.
-// Reversible: document.documentElement.classList.add('gpu-blur') y recargar.
+// ── Efectos pesados de GPU desactivados en equipos sin aceleración (remoto/gama baja) ──
+// `backdrop-filter: blur()` PARPADEA (modales aparecen/desaparecen) en equipos sin
+// GPU real — típico en control remoto (UltraViewer/RDP) y GPUs emuladas. Además, las
+// animaciones de entrada/salida y los bucles (pulse/ping/bounce) provocan repintados
+// caros en compositing por software. Desactivamos ambos GLOBALMENTE inyectando el
+// estilo en runtime: así queda de último en la cascada y siempre gana (una regla
+// equivalente en index.css NO siempre prevalece sobre las utilidades de Tailwind).
+//   - Se mantiene el fondo semitransparente → los modales se ven bien.
+//   - Se mantienen los spinners (animate-spin) → los indicadores de carga siguen vivos.
+// Reversible (equipos con GPU buena): document.documentElement.classList.add('gpu-blur')
+// y recargar — reactiva blur y animaciones.
 if (typeof document !== 'undefined' && !document.documentElement.classList.contains('gpu-blur')) {
-  const blurFix = document.createElement('style');
-  blurFix.id = 'gpu-blur-fix';
-  blurFix.textContent = '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}';
-  document.head.appendChild(blurFix);
+  const gpuFix = document.createElement('style');
+  gpuFix.id = 'gpu-fx-fix';
+  gpuFix.textContent =
+    '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}' +
+    '.animate-in,.animate-out,.animate-pulse,.animate-ping,.animate-bounce{animation:none!important}';
+  document.head.appendChild(gpuFix);
 }
 
 
