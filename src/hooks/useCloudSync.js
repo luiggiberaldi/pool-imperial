@@ -466,6 +466,12 @@ if (typeof document !== 'undefined' && !isVisibilityBound) {
             visibilityDebounceTimer = setTimeout(async () => {
                 console.log('[CloudSync] App volvió al primer plano – re-sincronizando...');
                 pullLatestFromCloud();
+                // Refrescar estado de mesas: postgres_changes no reenvía lo perdido
+                // mientras la app estuvo en segundo plano / el WebSocket dormido.
+                try {
+                    const { useTablesStore } = await import('./store/useTablesStore');
+                    useTablesStore.getState().syncTablesAndSessions();
+                } catch (_) { /* no-fatal */ }
                 // También pull incremental de ventas
                 const { pullNewSales } = await import('../utils/salesSyncService');
                 const { data: { session } } = await supabaseCloud.auth.getSession().catch(() => ({ data: {} }));

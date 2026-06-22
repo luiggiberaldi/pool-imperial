@@ -281,6 +281,13 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
             .subscribe((status) => {
                 console.log("[REALTIME] status pool_tables_sync_v2:", status);
                 if (status === 'SUBSCRIBED') {
+                    // Re-pull AUTORITATIVO desde la DB en CADA (re)conexión.
+                    // postgres_changes NO reenvía los eventos perdidos durante un corte
+                    // de red (típico en escritorio remoto), así que tras reconectar hay
+                    // que volver a traer las sesiones para no quedar desfasado ni mostrar
+                    // mesas que ya se cerraron/cobraron en otro equipo.
+                    get().syncTablesAndSessions();
+
                     const now = Date.now();
                     if (now - lastRequestTime > 30000) { // 30 seconds rate-limit
                         lastRequestTime = now;

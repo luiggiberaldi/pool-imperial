@@ -25,8 +25,15 @@ export function useAppInit() {
     const unsubscribeFromOrdersRealtime = useOrdersStore(s => s.unsubscribeFromRealtime);
     const syncTablesAndSessionsGlobal = useTablesStore(s => s.syncTablesAndSessions);
 
+    // Identidad ESTABLE de la sesión: solo cambia al cambiar de usuario (login/logout),
+    // NO en cada refresh de token / evento SIGNED_IN repetido. Antes el efecto dependía
+    // del objeto `cloudSession` completo, cuya identidad cambiaba seguido → desuscribía y
+    // re-suscribía el canal realtime en bucle (ventanas de desconexión = eventos de mesas
+    // perdidos, y el flapping SUBSCRIBED/CLOSED que se veía en los logs).
+    const cloudUserId = cloudSession?.user?.id || (cloudSession?.offline ? 'offline' : null);
+
     useEffect(() => {
-        if (!cloudSession) return;
+        if (!cloudUserId) return;
         syncTablesAndSessionsGlobal();
         subscribeToTablesRealtime();
         subscribeToOrdersRealtime();
@@ -35,7 +42,7 @@ export function useAppInit() {
             unsubscribeFromOrdersRealtime();
             useCashStore.getState().destroy();
         };
-    }, [cloudSession, syncTablesAndSessionsGlobal, subscribeToTablesRealtime, subscribeToOrdersRealtime, unsubscribeFromTablesRealtime, unsubscribeFromOrdersRealtime]);
+    }, [cloudUserId, syncTablesAndSessionsGlobal, subscribeToTablesRealtime, subscribeToOrdersRealtime, unsubscribeFromTablesRealtime, unsubscribeFromOrdersRealtime]);
 
     // ── Sesión Supabase + límite de dispositivos vía RPC ──
     useEffect(() => {
