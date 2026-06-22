@@ -70,7 +70,12 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
     const [isEditingPlan, setIsEditingPlan] = useState(false);
 
     // When a table is selected from the floor plan, we open its TableCard via a mini panel
-    const [selectedTableId, setSelectedTableId] = useState(null);
+    const [selectedTableId, _setSelectedTableId] = useState(null);
+    const setSelectedTableId = useCallback((val) => {
+        console.log(`%c[SNIPER: selectedTableId setter called to: ${val}]`, "color: #ec4899; font-weight: bold;");
+        console.log(new Error().stack);
+        _setSelectedTableId(val);
+    }, []);
     const cardMountTimeRef = useRef(0);
 
     useEffect(() => {
