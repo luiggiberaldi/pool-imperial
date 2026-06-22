@@ -77,6 +77,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
         _setSelectedTableId(val);
     }, []);
     const cardMountTimeRef = useRef(0);
+    const lastCardTouchTimeRef = useRef(0);
 
     useEffect(() => {
         if (selectedTableId) {
@@ -392,6 +393,10 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                          className="absolute inset-0" 
                                          onClick={(e) => {
                                              if (Date.now() - cardMountTimeRef.current < 350) return;
+                                             if (Date.now() - lastCardTouchTimeRef.current < 450) {
+                                                 console.log("%c[SNIPER: Clic en backdrop ignorado/bloqueado por touch reciente en la tarjeta]", "color: #ef4444; font-weight: bold;");
+                                                 return;
+                                             }
                                              setSelectedTableId(null);
                                          }} 
                                      />
@@ -403,6 +408,12 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                                  e.preventDefault();
                                                  e.stopPropagation();
                                              }
+                                         }}
+                                         onTouchStart={() => {
+                                             lastCardTouchTimeRef.current = Date.now();
+                                         }}
+                                         onTouchEnd={() => {
+                                             lastCardTouchTimeRef.current = Date.now();
                                          }}
                                          className="relative w-full max-w-sm z-10 animate-in zoom-in-95 duration-200"
                                      >
