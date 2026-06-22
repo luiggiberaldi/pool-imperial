@@ -10,6 +10,21 @@ import './index.css'
 window.supabaseCloud = supabaseCloud;
 window.storageService = storageService;
 
+// ── FIX flicker de modales en equipos sin aceleración GPU (escritorio remoto) ──
+// `backdrop-filter: blur()` parpadea (aparece/desaparece) en equipos sin GPU
+// real — típico en control remoto (UltraViewer/RDP) y GPUs emuladas. Lo
+// desactivamos GLOBALMENTE inyectando el estilo en runtime: así queda de último
+// en la cascada y siempre gana (una regla equivalente en index.css NO siempre
+// prevalece sobre las utilidades backdrop-blur-* de Tailwind, por eso no bastaba).
+// El fondo oscuro semitransparente se mantiene → los modales se ven bien.
+// Reversible: document.documentElement.classList.add('gpu-blur') y recargar.
+if (typeof document !== 'undefined' && !document.documentElement.classList.contains('gpu-blur')) {
+  const blurFix = document.createElement('style');
+  blurFix.id = 'gpu-blur-fix';
+  blurFix.textContent = '*{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}';
+  document.head.appendChild(blurFix);
+}
+
 
 // ── Auto-actualización del Service Worker ──
 if ('serviceWorker' in navigator) {
