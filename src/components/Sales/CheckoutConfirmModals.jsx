@@ -9,10 +9,36 @@ export function FiarConfirmModal({
     selectedCustomer, totalPaidUsd,
     handleConfirm,
 }) {
+    const mountTimeRef = React.useRef(0);
+
+    React.useEffect(() => {
+        if (confirmFiar) {
+            mountTimeRef.current = Date.now();
+        }
+    }, [confirmFiar]);
+
     if (!confirmFiar) return null;
+
+    const handleContentClickCapture = (e) => {
+        if (Date.now() - mountTimeRef.current < 350) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setConfirmFiar(false)}>
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+        <div 
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" 
+            onClick={(e) => {
+                if (Date.now() - mountTimeRef.current < 350) return;
+                setConfirmFiar(false);
+            }}
+        >
+            <div 
+                onClickCapture={handleContentClickCapture}
+                className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800" 
+                onClick={e => e.stopPropagation()}
+            >
                 <div className="flex items-center gap-4 mb-5">
                     <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center shrink-0">
                         <AlertTriangle size={24} className="text-amber-600 sm:w-7 sm:h-7" />
@@ -69,15 +95,40 @@ export function OverpayAlertModal({
     overpayAlertData, setOverpayAlertData,
     confirmOverpay, cartTotalUsd, totalPaidUsd,
 }) {
+    const mountTimeRef = React.useRef(0);
+
+    React.useEffect(() => {
+        if (overpayAlertData) {
+            mountTimeRef.current = Date.now();
+        }
+    }, [overpayAlertData]);
+
     if (!overpayAlertData) return null;
     const d = overpayAlertData;
 
     const title    = '¿Monto correcto?';
     const subtitle = `El pago es ${d.ratio}× el total de la compra`;
 
+    const handleContentClickCapture = (e) => {
+        if (Date.now() - mountTimeRef.current < 350) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setOverpayAlertData(null)}>
-            <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+        <div 
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" 
+            onClick={(e) => {
+                if (Date.now() - mountTimeRef.current < 350) return;
+                setOverpayAlertData(null);
+            }}
+        >
+            <div 
+                onClickCapture={handleContentClickCapture}
+                className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-sm md:max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800" 
+                onClick={e => e.stopPropagation()}
+            >
                 <div className="flex items-center gap-4 mb-5">
                     <div className="w-12 h-12 sm:w-14 sm:h-14 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center shrink-0">
                         <AlertTriangle size={24} className="text-red-600 sm:w-7 sm:h-7" />

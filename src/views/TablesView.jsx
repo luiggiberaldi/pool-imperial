@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useAuthStore } from '../hooks/store/authStore';
 import TableCard from '../components/tables/TableCard';
@@ -70,12 +70,14 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
     const [isEditingPlan, setIsEditingPlan] = useState(false);
 
     // When a table is selected from the floor plan, we open its TableCard via a mini panel
-    const [selectedTableId, _setSelectedTableId] = useState(null);
-    const setSelectedTableId = useCallback((val) => {
-        console.log(`%c[SNIPER: selectedTableId setter called to: ${val}]`, "color: #ec4899; font-weight: bold;");
-        console.log(new Error().stack);
-        _setSelectedTableId(val);
-    }, []);
+    const [selectedTableId, setSelectedTableId] = useState(null);
+    const cardMountTimeRef = useRef(0);
+
+    useEffect(() => {
+        if (selectedTableId) {
+            cardMountTimeRef.current = Date.now();
+        }
+    }, [selectedTableId]);
 
     const [transferSourceTableId, setTransferSourceTableId] = useState(null);
     const [transferTargetTable, setTransferTargetTable] = useState(null);
@@ -161,19 +163,6 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
         }
     }, [isActive, syncTablesAndSessions]);
 
-    // ── [SNIPER LOGS] ──
-    useEffect(() => {
-        console.log("%c[SNIPER: TablesView Mounted]", "color: #10b981; font-weight: bold;");
-        return () => {
-            console.log("%c[SNIPER: TablesView Unmounted]", "color: #ef4444; font-weight: bold;");
-        };
-    }, []);
-
-    useEffect(() => {
-        console.log("%c[SNIPER: selectedTableId changed]", "color: #f59e0b; font-weight: bold;", {
-            to: selectedTableId
-        });
-    }, [selectedTableId]);
 
     // Handle floor plan table selection
     const handleFloorTableSelect = useCallback((table, session) => {
@@ -390,46 +379,47 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                 );
                             }
 
-                            // Si está ocupada, se muestra de forma estándar el Centro Operativo Flotante con su fondo
-                            return (
-                                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-                                    {/* Click fuera para cerrar */}
-                                    <div 
-                                        className="absolute inset-0" 
-                                        onClick={(e) => {
-                                            console.log("%c[SNIPER: TablesView Backdrop Clicked]", "color: #ef4444; font-weight: bold;", {
-                                                target: e.target,
-                                                currentTarget: e.currentTarget,
-                                                isTrusted: e.isTrusted,
-                                                timeStamp: e.timeStamp,
-                                                clientX: e.clientX,
-                                                clientY: e.clientY
-                                            });
-                                            setSelectedTableId(null);
-                                        }} 
-                                    />
-                                    
-                                    {/* Contenedor de la Tarjeta */}
-                                    <div className="relative w-full max-w-sm z-10 animate-in zoom-in-95 duration-200">
-                                        <button 
-                                            onClick={() => setSelectedTableId(null)}
-                                            className="absolute -top-3 -right-3 z-30 w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-lg border border-slate-700/50 active:scale-95 transition-all text-sm font-bold animate-in zoom-in duration-300"
-                                        >
-                                            ✕
-                                        </button>
-                                        <TableCard 
-                                            table={table} 
-                                            session={session} 
-                                            initialOpenMode={table.type === 'NORMAL' ? 'CONSUMPTION' : 'SHOW_MODE'}
-                                            onClose={() => setSelectedTableId(null)}
-                                            onStartTransfer={() => {
-                                                setTransferSourceTableId(selectedTableId);
-                                                setSelectedTableId(null); // Cerrar panel para ver plano con claridad
-                                                showToast("Selecciona la mesa de destino en el plano", "info");
-                                            }}
-                                        />
-                                    </div>
-                                </div>
+                             // Si está ocupada, se muestra de forma estándar el Centro Operativo Flotante con su fondo
+                             return (
+                                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+                                     {/* Click fuera para cerrar */}
+                                     <div 
+                                         className="absolute inset-0" 
+                                         onClick={(e) => {
+                                             if (Date.now() - cardMountTimeRef.current < 350) return;
+                                             setSelectedTableId(null);
+                                         }} 
+                                     />
+                                     
+                                     {/* Contenedor de la Tarjeta */}
+                                     <div 
+                                         onClickCapture={(e) => {
+                                             if (Date.now() - cardMountTimeRef.current < 350) {
+                                                 e.preventDefault();
+                                                 e.stopPropagation();
+                                             }
+                                         }}
+                                         className="relative w-full max-w-sm z-10 animate-in zoom-in-95 duration-200"
+                                     >
+                                         <button 
+                                             onClick={() => setSelectedTableId(null)}
+                                             className="absolute -top-3 -right-3 z-30 w-8 h-8 rounded-full bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center shadow-lg border border-slate-700/50 active:scale-95 transition-all text-sm font-bold animate-in zoom-in duration-300"
+                                         >
+                                             ✕
+                                         </button>
+                                         <TableCard 
+                                             table={table} 
+                                             session={session} 
+                                             initialOpenMode={table.type === 'NORMAL' ? 'CONSUMPTION' : 'SHOW_MODE'}
+                                             onClose={() => setSelectedTableId(null)}
+                                             onStartTransfer={() => {
+                                                 setTransferSourceTableId(selectedTableId);
+                                                 setSelectedTableId(null); // Cerrar panel para ver plano con claridad
+                                                 showToast("Selecciona la mesa de destino en el plano", "info");
+                                             }}
+                                         />
+                                     </div>
+                                 </div>
                             );
                         })()}
                     </div>

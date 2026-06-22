@@ -241,13 +241,7 @@ export function ProductProvider({ children, rates }) {
         return () => { isMounted = false; };
     }, []);
 
-    // ── [SNIPER LOGS] ──
-    useEffect(() => {
-        console.log("%c[SNIPER: ProductProvider Mounted]", "color: #10b981; font-weight: bold;");
-        return () => {
-            console.log("%c[SNIPER: ProductProvider Unmounted]", "color: #ef4444; font-weight: bold;");
-        };
-    }, []);
+
 
     // Set Initial Street Rate (from BCV)
     // eslint-disable-next-line react-hooks/set-state-in-effect

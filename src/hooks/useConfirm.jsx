@@ -13,16 +13,35 @@ const VARIANTS = {
 };
 
 function ConfirmDialog({ isOpen, title, message, confirmText, cancelText, variant, onConfirm, onCancel }) {
+    const mountTimeRef = React.useRef(0);
+
+    React.useEffect(() => {
+        if (isOpen) {
+            mountTimeRef.current = Date.now();
+        }
+    }, [isOpen]);
+
     if (!isOpen) return null;
     const v = VARIANTS[variant] || VARIANTS.danger;
     const Icon = v.icon;
 
+    const handleContentClickCapture = (e) => {
+        if (Date.now() - mountTimeRef.current < 350) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+
     return (
         <div
             className="fixed inset-0 z-[9999] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-            onClick={onCancel}
+            onClick={(e) => {
+                if (Date.now() - mountTimeRef.current < 350) return;
+                onCancel();
+            }}
         >
             <div
+                onClickCapture={handleContentClickCapture}
                 className="bg-white dark:bg-slate-900 rounded-[1.5rem] p-6 max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
             >

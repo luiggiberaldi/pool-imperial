@@ -3,7 +3,23 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export const Modal = ({ isOpen, onClose, title, children, className = '', maxWidthClass = 'max-w-sm md:max-w-md' }) => {
+  const mountTimeRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      mountTimeRef.current = Date.now();
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const handleContentClickCapture = (e) => {
+    // Ignore clicks inside the modal content in the first 350ms to prevent ghost clicks
+    if (Date.now() - mountTimeRef.current < 350) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   return createPortal(
     // ✅ z-[100] asegura que esté por encima de la barra de navegación (z-30)
@@ -13,20 +29,16 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', maxWid
       <div 
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" 
         onClick={(e) => {
-          console.log("%c[SNIPER: Modal Backdrop Clicked]", "color: #ef4444; font-weight: bold;", {
-            target: e.target,
-            currentTarget: e.currentTarget,
-            isTrusted: e.isTrusted,
-            timeStamp: e.timeStamp,
-            clientX: e.clientX,
-            clientY: e.clientY
-          });
+          if (Date.now() - mountTimeRef.current < 350) return;
           onClose();
         }}
       />
       
       {/* Contenido del Modal */}
-      <div className={`relative bg-white dark:bg-slate-900 w-full ${maxWidthClass} rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200 transition-all ${className}`}>
+      <div 
+        onClickCapture={handleContentClickCapture}
+        className={`relative bg-white dark:bg-slate-900 w-full ${maxWidthClass} rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200 transition-all ${className}`}
+      >
         
         {/* Cabecera */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">

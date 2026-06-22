@@ -197,23 +197,7 @@ export default function App() {
     return () => window.removeEventListener('storage', handler);
   }, []);
 
-  // ── [SNIPER LOGS] ──
-  useEffect(() => {
-    console.log("%c[SNIPER: App Gating States]", "color: #3b82f6; font-weight: bold;", {
-      cloudSession: !!cloudSession,
-      checkingSession,
-      isAuthenticated,
-      cajeroVeMesas,
-      role
-    });
-  }, [cloudSession, checkingSession, isAuthenticated, cajeroVeMesas, role]);
 
-  useEffect(() => {
-    console.log("%c[SNIPER: App Mounted]", "color: #10b981; font-weight: bold;");
-    return () => {
-      console.log("%c[SNIPER: App Unmounted]", "color: #ef4444; font-weight: bold;");
-    };
-  }, []);
 
   const ALL_TABS = [
     { id: 'inicio', label: 'Inicio', icon: Home },

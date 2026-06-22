@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Move } from 'lucide-react';
+import { Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Move, Trash2 } from 'lucide-react';
 import { calculateElapsedTime, calculateSessionCost, calculateSessionCostBreakdown, calculateConsumptionBs, buildTableSyntheticCart } from '../../utils/tableBillingEngine';
 import { getServerNow } from '../../utils/serverClock';
 import { FinancialEngine } from '../../core/FinancialEngine';
@@ -607,7 +607,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                                         className="w-6 h-6 rounded-full flex items-center justify-center bg-rose-500/80 hover:bg-rose-500 text-white transition-all active:scale-95 shrink-0 shadow-sm"
                                         title="Anular Mesa"
                                     >
-                                        <X size={14} strokeWidth={2.5} />
+                                        <Trash2 size={13} />
                                     </button>
                                 )}
                             </>
