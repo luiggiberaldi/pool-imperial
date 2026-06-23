@@ -109,13 +109,9 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
 }
 
 export function groupSalesByCierreId(allSales, from, to, products) {
-    const entitiesInDateRange = allSales.filter(s => {
-        const dateStr = getLocalISODate(new Date(s.timestamp));
-        return dateStr >= from && dateStr <= to && s.cierreId;
-    });
-
     const cMap = {};
-    entitiesInDateRange.forEach(entity => {
+    allSales.forEach(entity => {
+        if (!entity.cierreId) return;
         const cId = entity.cierreId;
         if (!cMap[cId]) {
             cMap[cId] = {
@@ -133,7 +129,10 @@ export function groupSalesByCierreId(allSales, from, to, products) {
     });
 
     const result = Object.values(cMap)
-        .filter(c => c.sales.length > 0)
+        .filter(c => {
+            const closureDateStr = getLocalISODate(new Date(c.cierreId));
+            return closureDateStr >= from && closureDateStr <= to && c.sales.length > 0;
+        })
         .map(c => {
             const dateObj = new Date(c.cierreId);
 
