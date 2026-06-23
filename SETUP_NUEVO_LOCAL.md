@@ -38,7 +38,7 @@ Esta guía te lleva paso a paso para replicar Pool Imperial en un nuevo salón d
 ## Paso 2: Ejecutar el Esquema SQL
 
 1. En Supabase, ve a **SQL Editor**
-2. Copia y pega todo el contenido de [`pool_imperial_full_schema.sql`](./pool_imperial_full_schema.sql)
+2. Copia y pega todo el contenido de [`pool_imperial_full_schema.sql`](./database/pool_imperial_full_schema.sql)
 3. Ejecuta el script
 4. Verifica que se crearon las tablas: `tables`, `table_sessions`, `orders`, `sales`, `staff_users`, etc.
 
@@ -289,7 +289,7 @@ VALUES ('admin@billardorado.com', 'permanent', 5, true);
 | Problema | Solución |
 |----------|----------|
 | "No autorizado" al hacer checkout | Verifica que el `user_id` del staff coincida con el `auth.uid()` de Supabase |
-| Las mesas no aparecen | Ejecuta `pool_imperial_full_schema.sql` y verifica que la tabla `tables` tenga registros |
+| Las mesas no aparecen | Ejecuta `database/pool_imperial_full_schema.sql` y verifica que la tabla `tables` tenga registros |
 | La app no se instala como PWA | Necesitas HTTPS. Deploy a Vercel/Cloudflare o usa `localhost` |
 | Tickets no imprimen | Verifica que el navegador soporte Web Serial API (Chrome 89+) |
 | Sincronización no funciona | Verifica Supabase Realtime: Authentication → Policies → Todas las tablas con RLS |

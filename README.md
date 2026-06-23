@@ -164,7 +164,7 @@ pool-imperial/
 │   └── main.jsx               # Punto de entrada
 ├── ROADMAP.md                 # Hoja de ruta del producto
 ├── SETUP_NUEVO_LOCAL.md       # Guía para replicar en otro local
-├── pool_imperial_full_schema.sql  # Esquema completo de Supabase
+├── database/                  # Carpeta de base de datos (esquemas y scripts SQL)
 ├── .env.example               # Variables de entorno requeridas
 ├── vite.config.js             # Configuración de Vite + PWA
 └── tailwind.config.js         # Configuración de Tailwind CSS

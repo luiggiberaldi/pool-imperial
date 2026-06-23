@@ -71,8 +71,8 @@ Se reemplazaron los selectores nativos por `<CustomSelect>` en los siguientes m�
 ## 📈 Cambios de Configuración de Porcentajes de Impuestos Dinámicos
 
 ### 1. Migración de Base de Datos
-- **Script SQL (`add_tax_rate_columns.sql`)**:
-  - Se creó el archivo en la raíz del proyecto para agregar las columnas `tax_rate_iva` y `tax_rate_impoconsumo` con valores por defecto de `19` y `8` respectivamente.
+- **Script SQL (`database/add_tax_rate_columns.sql`)**:
+  - Se creó el archivo para agregar las columnas `tax_rate_iva` y `tax_rate_impoconsumo` con valores por defecto de `19` y `8` respectivamente.
 
 ### 2. Actualización de Store de Zustand y Sincronización
 - **`useTablesStore.js`**:
@@ -109,7 +109,7 @@ Se reemplazaron los selectores nativos por `<CustomSelect>` en los siguientes m�
 Se ha implementado una solución robusta para solucionar el desfase de los timers entre diferentes dispositivos que utilizan la aplicación debido a discrepancias en sus relojes locales y la falta de persistencia de la sesión en el store global.
 
 ### 1. Migración y RPC en Base de Datos
-- **[get_server_time.sql](file:///c:/Users/luigg/Desktop/URO/LOS%20DIAZ/pool%20imperial/get_server_time.sql)**:
+- **[get_server_time.sql](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/database/get_server_time.sql)**:
   - Script SQL para crear la función RPC `get_server_time()` en Supabase que retorna el timestamp exacto del servidor Postgres.
 
 ### 2. Corrección del Estado `cloudSession`
