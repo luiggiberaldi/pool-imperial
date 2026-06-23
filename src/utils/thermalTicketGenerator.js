@@ -219,7 +219,7 @@ function _printThermalHTML(sale, _bcvRate) {
         padding: 4mm 2mm;
         color: #000;
         background: #fff;
-        font-weight: 600;
+        font-weight: 900;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
     }
@@ -677,7 +677,7 @@ export async function printThermalDailyClose({
         padding: 4mm 2mm;
         color: #000;
         background: #fff;
-        font-weight: 600;
+        font-weight: 900;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
         line-height: 1.3;

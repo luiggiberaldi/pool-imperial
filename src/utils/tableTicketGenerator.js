@@ -294,9 +294,9 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     push(`<div class="center disclaimer">*** NO ES RECIBO DE PAGO ***</div>`);
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@page { size: 58mm auto; margin: 2mm; }
+@page { size: 58mm auto; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { width: 54mm; max-width: 54mm; min-width: 54mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #212529; padding: 2mm 1mm; font-weight: 700; }
+body { width: 48mm; max-width: 48mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #212529; padding: 4mm 2mm; font-weight: 900; }
 .title { text-align: center; font-weight: bold; font-size: 11pt; }
 .subtitle { text-align: center; font-weight: bold; font-size: 9pt; margin-bottom: 2mm; }
 hr { border: none; border-top: 1px dashed #999; margin: 1.5mm 0; }
@@ -319,12 +319,11 @@ hr { border: none; border-top: 1px dashed #999; margin: 1.5mm 0; }
 .total-table td:first-child { width: 55%; }
 .total-table td:last-child { text-align: right; width: 45%; }
 .disclaimer { margin-top: 3mm; font-size: 7pt; text-align: center; }
-@media screen { html, body { width: 54mm; max-width: 54mm; } }
-@media print { @page { size: 58mm auto; margin: 2mm; } html, body { width: 54mm; max-width: 54mm; } }
+@media screen { html, body { width: 48mm; max-width: 48mm; } }
+@media print { @page { size: 58mm auto; margin: 0; } html, body { width: 48mm; max-width: 48mm; } }
 </style></head><body>${lines.join('')}</body></html>`;
 
-    // 58mm a 96dpi ≈ 219px de contenido + ~20px de chrome del navegador = 240px
-    const printWindow = window.open('', '_blank', 'width=240,height=650,resizable=no,scrollbars=yes');
+    const printWindow = window.open('', '_blank', 'width=350,height=600');
     if (!printWindow) {
         const iframe = document.createElement('iframe');
         Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
