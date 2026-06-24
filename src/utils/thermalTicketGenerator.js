@@ -39,7 +39,7 @@ export async function printThermalTicket(sale, bcvRate) {
 function _printThermalHTML(sale, _bcvRate) {
     // ── CONFIGURACIÓN DE TAMAÑOS (58mm) ──
     const cssPageSize = '58mm auto';
-    const cssBodyWidth = '44mm';
+    const cssBodyWidth = '48mm';
     const cssLogoW = '42mm';
     const fDisclaimer = '7.5px';
     const fTiny = '9px';     // Secundaria (detalles, NIT, c/u)
@@ -222,7 +222,7 @@ function _printThermalHTML(sale, _bcvRate) {
         width: ${cssBodyWidth};
         max-width: ${cssBodyWidth};
         margin: 0 auto;
-        padding: 4mm 1mm;
+        padding: 4mm 2.5mm;
         color: #000;
         background: #fff;
         font-weight: 900;
@@ -290,12 +290,12 @@ function _printThermalHTML(sale, _bcvRate) {
     <hr class="dash">
 
     <!-- Productos -->
-    <table style="width:100%; border-collapse:collapse; margin-bottom:4px; table-layout:fixed;">
+    <table style="width:100%; border-collapse:collapse; margin-bottom:4px;">
         <thead>
-            <tr style="font-size:${fTiny};color:#000;font-weight:bold;border-bottom:1px dashed #555;">
-                <th style="text-align:left;width:18%;padding:2px 0;font-weight:bold;">CANT</th>
-                <th style="text-align:left;width:54%;padding:2px 0 2px 6px;font-weight:bold;">DESCRIPCION</th>
-                <th style="text-align:right;width:28%;padding:2px 0;font-weight:bold;">IMPORTE</th>
+            <tr style="font-size:${fTiny};color:#000;font-weight:bold;border-bottom:1px solid #000;">
+                <th style="text-align:left;padding:2px 0;font-weight:bold;">CANT</th>
+                <th style="text-align:left;padding:2px 0 2px 6px;font-weight:bold;">DESCRIPCION</th>
+                <th style="text-align:right;padding:2px 0;font-weight:bold;">IMPORTE</th>
             </tr>
         </thead>
         <tbody>
@@ -683,10 +683,10 @@ export async function printThermalDailyClose({
     }
     body {
         font-family: Arial, Helvetica, sans-serif;
-        width: 44mm;
-        max-width: 44mm;
+        width: 48mm;
+        max-width: 48mm;
         margin: 0 auto;
-        padding: 4mm 1mm;
+        padding: 4mm 2.5mm;
         color: #000;
         background: #fff;
         font-weight: 900;

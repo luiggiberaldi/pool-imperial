@@ -296,7 +296,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @page { size: 58mm auto; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; font-weight: 900 !important; color: #000 !important; }
-body { width: 44mm; max-width: 44mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #000; padding: 4mm 1mm; font-weight: 900; }
+body { width: 48mm; max-width: 48mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #000; padding: 4mm 2.5mm; font-weight: 900; }
 .title { text-align: center; font-weight: bold; font-size: 11pt; }
 .subtitle { text-align: center; font-weight: bold; font-size: 9pt; margin-bottom: 2mm; }
 hr { border: none; border-top: 1.5px solid #000; margin: 1.5mm 0; }
@@ -319,8 +319,8 @@ hr { border: none; border-top: 1.5px solid #000; margin: 1.5mm 0; }
 .total-table td:first-child { width: 55%; }
 .total-table td:last-child { text-align: right; width: 45%; }
 .disclaimer { margin-top: 3mm; font-size: 7pt; text-align: center; }
-@media screen { html, body { width: 44mm; max-width: 44mm; } }
-@media print { @page { size: 58mm auto; margin: 0; } html, body { width: 44mm; max-width: 44mm; } }
+@media screen { html, body { width: 48mm; max-width: 48mm; } }
+@media print { @page { size: 58mm auto; margin: 0; } html, body { width: 48mm; max-width: 48mm; } }
 </style></head><body>${lines.join('')}</body></html>`;
 
     const printWindow = window.open('', '_blank', 'width=350,height=600');
