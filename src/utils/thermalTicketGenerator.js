@@ -717,7 +717,7 @@ export async function printThermalDailyClose({
 <body>
     <!-- Logo -->
     <div class="center" style="margin-bottom:6px;">
-        <img src="/logo-ticket.png" alt="Logo" style="max-width:44mm;max-height:16mm;" onerror="this.style.display='none'">
+        <img src="/logo-ticket.png" alt="Logo" style="max-width:40mm;max-height:16mm;" onerror="this.style.display='none'">
     </div>
 
     <!-- Info del Negocio -->
