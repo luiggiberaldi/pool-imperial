@@ -294,9 +294,9 @@ function _printThermalHTML(sale, _bcvRate) {
     <table style="width:100%; border-collapse:collapse; margin-bottom:4px;">
         <thead>
             <tr style="font-size:${fTiny};color:#000;font-weight:bold;border-bottom:1px solid #000;">
-                <th style="text-align:left;padding:2px 0;font-weight:bold;">CANT</th>
-                <th style="text-align:left;padding:2px 0 2px 6px;font-weight:bold;">DESCRIPCION</th>
-                <th style="text-align:right;padding:2px 0;font-weight:bold;">IMPORTE</th>
+                <th style="text-align:left;width:12%;padding:2px 0;font-weight:bold;">CANT</th>
+                <th style="text-align:left;width:53%;padding:2px 0 2px 6px;font-weight:bold;">DESCRIPCION</th>
+                <th style="text-align:right;width:35%;padding:2px 0;font-weight:bold;">IMPORTE</th>
             </tr>
         </thead>
         <tbody>
