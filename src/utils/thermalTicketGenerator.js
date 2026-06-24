@@ -713,6 +713,7 @@ export async function printThermalDailyClose({
     }
     table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
     td { font-size: 10px; padding: 1.5px 0; vertical-align: top; }
+    td:last-child, th:last-child { white-space: nowrap !important; }
 </style>
 </head>
 <body>
