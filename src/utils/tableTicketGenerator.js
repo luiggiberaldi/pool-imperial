@@ -312,7 +312,7 @@ hr { border: none; border-top: 1.5px solid #000; margin: 1.5mm 0; }
 .item-row td.item-label { width: 65%; white-space: normal; word-break: break-word; }
 .item-row td.item-price { width: 35%; text-align: right; white-space: nowrap; font-weight: bold; }
 .item-row.bold td { font-weight: bold; }
-.item-row.muted td { color: #555; }
+.item-row.muted td { color: #000; }
 .item-row.small td { font-size: 7pt; }
 .total-table { width: 100%; border-collapse: collapse; margin-top: 1.5mm; }
 .total-table td { font-size: 9pt; font-weight: bold; vertical-align: middle; white-space: nowrap; }
