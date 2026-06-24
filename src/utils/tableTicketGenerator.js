@@ -84,6 +84,9 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     const lines = [];
     const push = (html) => lines.push(html);
 
+    push(`<div class="center" style="margin-bottom:6px;">`);
+    push(`    <img src="/logo-ticket.png" alt="Logo" style="max-width:35mm;max-height:20mm;" onerror="this.style.display='none'">`);
+    push(`</div>`);
     push(`<div class="title">${isAnyAbono ? 'PRE-CUENTA DE ABONO' : 'PRE-CUENTA MESA'}</div>`);
     push(`<div class="subtitle">${table.name.toUpperCase()}</div>`);
     push(`<hr>`);
@@ -267,7 +270,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     push(`<hr>`);
 
     const totalLabel = isAbono ? 'TOTAL ABONO:' : (hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:');
-    push(`<div class="total-row"><span>${totalLabel}</span><span>${formatCOP(isAbono ? finalGrandTotal : (untippedTotal + tipAmt))}</span></div>`);
+    push(`<table class="total-table"><tr><td class="total-label">${totalLabel}</td><td class="total-price">${formatCOP(isAbono ? finalGrandTotal : (untippedTotal + tipAmt))}</td></tr></table>`);
 
     if (historialAbonos.length > 0) {
         push(`<hr>`);
@@ -314,8 +317,10 @@ hr { border: none; border-top: 1.5px solid #000; margin: 1.5mm 0; }
 .item-row.bold td { font-weight: bold; }
 .item-row.muted td { color: #000; }
 .item-row.small td { font-size: 7pt; }
-.total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5mm; font-size: 9pt; font-weight: bold; width: 100%; }
-.total-row span { white-space: nowrap; }
+.total-table { width: 100%; border-collapse: collapse; margin-top: 1.5mm; }
+.total-table td { font-size: 9pt; font-weight: bold; vertical-align: middle; }
+.total-table td.total-label { text-align: left; }
+.total-table td.total-price { text-align: right; white-space: nowrap; width: 1%; }
 .disclaimer { margin-top: 3mm; font-size: 7pt; text-align: center; }
 @media screen { html, body { width: 46mm; max-width: 46mm; } }
 @media print { @page { size: 58mm auto; margin: 0; } html, body { width: 46mm; max-width: 46mm; } }
