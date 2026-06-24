@@ -296,7 +296,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @page { size: 58mm auto; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; font-weight: 900 !important; color: #000 !important; }
-body { width: 44mm; max-width: 44mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #000; padding: 4mm 1mm; font-weight: 900; }
+body { width: 46mm; max-width: 46mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #000; padding: 4mm 1mm; font-weight: 900; }
 .title { text-align: center; font-weight: bold; font-size: 11pt; }
 .subtitle { text-align: center; font-weight: bold; font-size: 9pt; margin-bottom: 2mm; }
 hr { border: none; border-top: 1.5px solid #000; margin: 1.5mm 0; }
