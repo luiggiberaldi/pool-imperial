@@ -39,8 +39,8 @@ export async function printThermalTicket(sale, bcvRate) {
 function _printThermalHTML(sale, _bcvRate) {
     // ── CONFIGURACIÓN DE TAMAÑOS (58mm) ──
     const cssPageSize = '58mm auto';
-    const cssBodyWidth = '46mm';
-    const cssLogoW = '46mm';
+    const cssBodyWidth = '44mm';
+    const cssLogoW = '42mm';
     const fDisclaimer = '7.5px';
     const fTiny = '9px';     // Secundaria (detalles, NIT, c/u)
     const fSmall = '10px';   // Info general (fechas, nro)
@@ -683,8 +683,8 @@ export async function printThermalDailyClose({
     }
     body {
         font-family: Arial, Helvetica, sans-serif;
-        width: 46mm;
-        max-width: 46mm;
+        width: 44mm;
+        max-width: 44mm;
         margin: 0 auto;
         padding: 4mm 1mm;
         color: #000;
@@ -717,7 +717,7 @@ export async function printThermalDailyClose({
 <body>
     <!-- Logo -->
     <div class="center" style="margin-bottom:6px;">
-        <img src="/logo-ticket.png" alt="Logo" style="max-width:46mm;max-height:22mm;" onerror="this.style.display='none'">
+        <img src="/logo-ticket.png" alt="Logo" style="max-width:42mm;max-height:22mm;" onerror="this.style.display='none'">
     </div>
 
     <!-- Info del Negocio -->
