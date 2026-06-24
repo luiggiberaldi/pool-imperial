@@ -267,7 +267,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     push(`<hr>`);
 
     const totalLabel = isAbono ? 'TOTAL ABONO:' : (hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:');
-    push(`<table class="total-table"><tr><td>${totalLabel}</td><td>${formatCOP(isAbono ? finalGrandTotal : (untippedTotal + tipAmt))}</td></tr></table>`);
+    push(`<div class="total-row"><span>${totalLabel}</span><span>${formatCOP(isAbono ? finalGrandTotal : (untippedTotal + tipAmt))}</span></div>`);
 
     if (historialAbonos.length > 0) {
         push(`<hr>`);
@@ -314,10 +314,8 @@ hr { border: none; border-top: 1.5px solid #000; margin: 1.5mm 0; }
 .item-row.bold td { font-weight: bold; }
 .item-row.muted td { color: #000; }
 .item-row.small td { font-size: 7pt; }
-.total-table { width: 100%; border-collapse: collapse; margin-top: 1.5mm; }
-.total-table td { font-size: 9pt; font-weight: bold; vertical-align: middle; white-space: nowrap; }
-.total-table td:first-child { width: 55%; }
-.total-table td:last-child { text-align: right; width: 45%; }
+.total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5mm; font-size: 9pt; font-weight: bold; width: 100%; }
+.total-row span { white-space: nowrap; }
 .disclaimer { margin-top: 3mm; font-size: 7pt; text-align: center; }
 @media screen { html, body { width: 48mm; max-width: 48mm; } }
 @media print { @page { size: 58mm auto; margin: 0; } html, body { width: 48mm; max-width: 48mm; } }
