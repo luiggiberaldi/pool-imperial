@@ -7,7 +7,7 @@ import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 const formatCOP = (val) => {
     const rawVal = Math.round(val || 0);
     const absVal = Math.abs(rawVal).toLocaleString('es-CO');
-    return rawVal < 0 ? `-$ ${absVal}` : `$ ${absVal}`;
+    return rawVal < 0 ? `-$${absVal}` : `$${absVal}`;
 };
 
 /**
@@ -80,7 +80,7 @@ function _printThermalHTML(sale, _bcvRate) {
             <tr>
                 <td style="text-align:left;font-size:${fBase};padding:2px 0;vertical-align:top;word-wrap:break-word;">${qty}${unit}</td>
                 <td style="text-align:left;font-size:${fBase};padding:2px 0 2px 6px;line-height:1.2;vertical-align:top;word-wrap:break-word;">${displayName}</td>
-                <td style="text-align:right;font-size:${fBase};font-weight:bold;padding:2px 0;vertical-align:top;word-wrap:break-word;">${formatCOP(sub)}</td>
+                <td style="text-align:right;font-size:${fBase};font-weight:bold;padding:2px 0;vertical-align:top;white-space:nowrap;">${formatCOP(sub)}</td>
             </tr>
             <tr>
                 <td></td>
@@ -244,6 +244,7 @@ function _printThermalHTML(sale, _bcvRate) {
         margin: 4px 0;
     }
     table { width: 100%; border-collapse: collapse; }
+    td:last-child, th:last-child { white-space: nowrap !important; }
     @media print {
         body { width: ${cssBodyWidth}; max-width: ${cssBodyWidth}; }
     }

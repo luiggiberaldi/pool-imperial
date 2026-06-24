@@ -19,7 +19,7 @@ import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 const formatCOP = (val) => {
     const rawVal = Math.round(val || 0);
     const absVal = Math.abs(rawVal).toLocaleString('es-CO');
-    return rawVal < 0 ? `-$ ${absVal}` : `$ ${absVal}`;
+    return rawVal < 0 ? `-$${absVal}` : `$${absVal}`;
 };
 
 let activePort = null;

@@ -7,7 +7,7 @@ import { FinancialEngine } from '../core/FinancialEngine';
 const formatCOP = (val) => {
     const rawVal = Math.round(val || 0);
     const absVal = Math.abs(rawVal).toLocaleString('es-CO');
-    return rawVal < 0 ? `-$ ${absVal}` : `$ ${absVal}`;
+    return rawVal < 0 ? `-$${absVal}` : `$${absVal}`;
 };
 
 /** Helper: genera una fila de 2 columnas como tabla para evitar wrapping a 58mm */
