@@ -39,8 +39,8 @@ export async function printThermalTicket(sale, bcvRate) {
 function _printThermalHTML(sale, _bcvRate) {
     // ── CONFIGURACIÓN DE TAMAÑOS (58mm) ──
     const cssPageSize = '58mm auto';
-    const cssBodyWidth = '48mm';
-    const cssLogoW = '44mm';
+    const cssBodyWidth = '44mm';
+    const cssLogoW = '40mm';
     const fDisclaimer = '7.5px';
     const fTiny = '9px';     // Secundaria (detalles, NIT, c/u)
     const fSmall = '10px';   // Info general (fechas, nro)
@@ -210,13 +210,19 @@ function _printThermalHTML(sale, _bcvRate) {
         size: ${cssPageSize};
         margin: 0;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-weight: 900 !important;
+        color: #000 !important;
+    }
     body {
         font-family: Arial, Helvetica, sans-serif;
         width: ${cssBodyWidth};
         max-width: ${cssBodyWidth};
         margin: 0 auto;
-        padding: 4mm 2mm;
+        padding: 4mm 1mm;
         color: #000;
         background: #fff;
         font-weight: 900;
@@ -227,7 +233,7 @@ function _printThermalHTML(sale, _bcvRate) {
     .bold { font-weight: bold; }
     .dash {
         border: none;
-        border-top: 1px dashed #555;
+        border-top: 1.5px solid #000;
         margin: 3px 0;
     }
     .total-usd {
@@ -668,13 +674,19 @@ export async function printThermalDailyClose({
         size: 58mm auto;
         margin: 0;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-weight: 900 !important;
+        color: #000 !important;
+    }
     body {
         font-family: Arial, Helvetica, sans-serif;
-        width: 48mm;
-        max-width: 48mm;
+        width: 44mm;
+        max-width: 44mm;
         margin: 0 auto;
-        padding: 4mm 2mm;
+        padding: 4mm 1mm;
         color: #000;
         background: #fff;
         font-weight: 900;
@@ -686,16 +698,16 @@ export async function printThermalDailyClose({
     .bold { font-weight: bold; }
     .dash {
         border: none;
-        border-top: 1px dashed #555;
+        border-top: 1.5px solid #000;
         margin: 4px 0;
     }
     .section-title {
         font-size: 9.5px;
         font-weight: bold;
-        color: #2563eb;
+        color: #000;
         margin: 8px 0 3px;
         text-transform: uppercase;
-        border-bottom: 1px solid #2563eb;
+        border-bottom: 1.5px solid #000;
         padding-bottom: 1px;
     }
     table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }

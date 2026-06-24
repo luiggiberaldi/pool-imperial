@@ -295,17 +295,17 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 @page { size: 58mm auto; margin: 0; }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { width: 48mm; max-width: 48mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #212529; padding: 4mm 2mm; font-weight: 900; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-weight: 900 !important; color: #000 !important; }
+body { width: 44mm; max-width: 44mm; margin: 0 auto; font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #000; padding: 4mm 1mm; font-weight: 900; }
 .title { text-align: center; font-weight: bold; font-size: 11pt; }
 .subtitle { text-align: center; font-weight: bold; font-size: 9pt; margin-bottom: 2mm; }
-hr { border: none; border-top: 1px dashed #999; margin: 1.5mm 0; }
+hr { border: none; border-top: 1.5px solid #000; margin: 1.5mm 0; }
 .section-title { font-weight: bold; margin-top: 1mm; }
 .bold { font-weight: bold; }
 .small { font-size: 7pt; }
 .note { font-size: 7pt; }
-.muted { color: #555; }
-.accent { color: #1d4e89; }
+.muted { color: #000; }
+.accent { color: #000; }
 .center { text-align: center; }
 .item-row { width: 100%; border-collapse: collapse; margin: 0; }
 .item-row td { font-size: 8pt; vertical-align: top; padding: 1px 0; }
