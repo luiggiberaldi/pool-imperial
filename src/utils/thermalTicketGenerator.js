@@ -461,12 +461,15 @@ export async function printThermalDailyClose({
     });
     const tipsUserRows = Object.keys(tipsByUser).length;
 
+    const openingCOP = apertura?.openingCOP || apertura?.openingUsd || apertura?.totalUsd || 0;
+
     // Resumen General HTML
     const resumenGeneralHtml = `
         <div class="section-title">Resumen General</div>
         <table>
             <tr><td>Ventas realizadas:</td><td style="text-align:right;font-weight:bold;">${sales.length}</td></tr>
             <tr><td>Articulos vendidos:</td><td style="text-align:right;font-weight:bold;">${todayItemsSold}</td></tr>
+            ${openingCOP > 0 ? `<tr><td>Fondo de Apertura:</td><td style="text-align:right;font-weight:bold;">${formatCOP(openingCOP)}</td></tr>` : ''}
             <tr><td>Ingresos Brutos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalCOP)}</td></tr>
             <tr><td>Ingresos Netos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(netCOP)}</td></tr>
             ${totalServicioVoluntario > 0 ? `<tr><td>Servicio Voluntario:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalServicioVoluntario)}</td></tr>` : ''}

@@ -201,13 +201,19 @@ export async function generateDailyClosePDF({
         });
     });
 
+    const openingCOP = apertura?.openingCOP || apertura?.openingUsd || apertura?.totalUsd || 0;
     const statsRows = [
         ['Ventas realizadas', `${sales.length}`],
         ['Artículos vendidos', `${todayItemsSold}`],
+    ];
+    if (openingCOP > 0) {
+        statsRows.push(['Fondo de Apertura', formatCOP(openingCOP)]);
+    }
+    statsRows.push(
         ['Ingresos Brutos COP', formatCOP(totalCOP)],
         ['Ingresos Netos COP', formatCOP(netCOP)],
-        ['Ganancia estimada', formatCOP(todayProfit || 0)],
-    ];
+        ['Ganancia estimada', formatCOP(todayProfit || 0)]
+    );
     if (totalServicioVoluntario > 0) {
         statsRows.push(['Servicio Voluntario', formatCOP(totalServicioVoluntario)]);
     }

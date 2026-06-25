@@ -831,9 +831,13 @@ export async function printDailyCloseEscPos({
     p.line('-', W);
 
     // ── Resumen General ──
+    const openingCOP = apertura?.openingCOP || apertura?.openingUsd || apertura?.totalUsd || 0;
     p.align(1).bold(true).text('RESUMEN GENERAL').newline().bold(false).align(0);
     p.row('Ventas realizadas:', String(sales.length), W);
     p.row('Articulos vendidos:', String(todayItemsSold), W);
+    if (openingCOP > 0) {
+        p.row('Fondo de Apertura:', formatCOP(openingCOP), W);
+    }
     p.row('Ingresos Brutos COP:', formatCOP(totalCOP), W);
     p.row('Ingresos Netos COP:', formatCOP(netCOP), W);
     if (totalServicioVoluntario > 0) {
