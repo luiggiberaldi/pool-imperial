@@ -379,7 +379,6 @@ export default function CierreCajaWizard({
                             </button>
                         </div>
                     )}
-
                     {/* ═══ STEP 2: Conteo Fisico ═══ */}
                     {step === 2 && (
                         <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
@@ -391,6 +390,11 @@ export default function CierreCajaWizard({
                                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed max-w-[280px] mx-auto">
                                     Cuenta el efectivo fisico que tienes en la gaveta en este momento
                                 </p>
+                                {(openingCop > 0 || openingUsd > 0) && (
+                                    <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100/50 dark:border-indigo-900/30 rounded-xl px-3 py-2 mt-2 inline-block max-w-[320px]">
+                                        Recuerda incluir el fondo inicial de apertura ({fmtCop(openingCop)}{openingUsd > 0 ? ` + ${fmtUsd(openingUsd)}` : ''}) en tu conteo físico.
+                                    </p>
+                                )}
                             </div>
 
                             {/* COP Input */}
@@ -410,13 +414,18 @@ export default function CierreCajaWizard({
                                     />
                                 </div>
                                 <p className="text-[11px] text-slate-400 mt-1.5 pl-1">
-                                    {isAdmin ? <>Sistema espera: <span className="font-bold text-indigo-500">{fmtCop(expectedCop)}</span></> : 'Asegúrate de contar bien todo el efectivo'}
+                                    {isAdmin ? (
+                                        <>
+                                            Sistema espera: <span className="font-bold text-indigo-500">{fmtCop(expectedCop)}</span>
+                                            {openingCop > 0 && <span className="text-[10px] text-slate-400 ml-1">(Base: {fmtCop(openingCop)} + Ventas: {fmtCop(expectedCop - openingCop)})</span>}
+                                        </>
+                                    ) : 'Asegúrate de contar bien todo el efectivo de la gaveta'}
                                 </p>
                             </div>
 
                             {/* USD Input */}
                             <div className="mt-4">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest pl-1 mb-1.5 block">Efectivo en dólares (USD)</label>
+                                <label className="text-xs font-bold text-slate-550 uppercase tracking-widest pl-1 mb-1.5 block">Efectivo en dólares (USD)</label>
                                 <div className="relative flex items-center">
                                     <Coins size={18} className="absolute left-4 text-emerald-500" />
                                     <input
@@ -430,10 +439,14 @@ export default function CierreCajaWizard({
                                     />
                                 </div>
                                 <p className="text-[11px] text-slate-400 mt-1.5 pl-1">
-                                    {isAdmin ? <>Sistema espera: <span className="font-bold text-emerald-500">{fmtUsd(expectedUsd)}</span></> : 'Asegúrate de contar bien todo el efectivo'}
+                                    {isAdmin ? (
+                                        <>
+                                            Sistema espera: <span className="font-bold text-emerald-500">{fmtUsd(expectedUsd)}</span>
+                                            {openingUsd > 0 && <span className="text-[10px] text-slate-400 ml-1">(Base: {fmtUsd(openingUsd)} + Ventas: {fmtUsd(expectedUsd - openingUsd)})</span>}
+                                        </>
+                                    ) : 'Asegúrate de contar bien todo el efectivo de la gaveta'}
                                 </p>
                             </div>
-
                             {/* Actions */}
                             <div className="flex gap-3 pt-2">
                                 <button onClick={() => setStep(1)} className="flex-1 py-3.5 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">

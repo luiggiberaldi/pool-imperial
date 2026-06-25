@@ -24,6 +24,8 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
 
     const finalAllSales = allSales.length > 0 ? allSales : todaySales;
     const isAdmin = role === 'ADMIN';
+    const openingCop = activeCashSession?.base_usd || 0;
+    const openingUsd = activeCashSession?.base_bs || 0;
 
     const totalSalesCop = useMemo(() => {
         return todaySales.reduce((sum, s) => sum + (s.totalCop || s.totalUsd || 0), 0);
@@ -99,8 +101,11 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
         const sep = ';';
 
         // Encabezado del reporte
+        const baseStr = (openingCop > 0 || openingUsd > 0)
+            ? `Base: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(openingCop)}${openingUsd > 0 ? ` + $${openingUsd.toFixed(2)}` : ''}`
+            : 'Base: $0';
         rows.push(['REPORTE DE TURNO - POOL IMPERIAL']);
-        rows.push([`Fecha: ${fecha}`, `Cajero: ${cajeroName || '—'}`, `Apertura: ${horaApertura}`]);
+        rows.push([`Fecha: ${fecha}`, `Cajero: ${cajeroName || '—'}`, `Apertura: ${horaApertura}`, baseStr]);
         rows.push([]);
 
         // Resumen
@@ -235,7 +240,10 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                         </div>
                         <div>
                             <h2 className="text-base font-black text-slate-800 dark:text-white">Reporte de Turno</h2>
-                            <p className="text-[10px] text-slate-400">{fecha} · Apertura {horaApertura}</p>
+                            <p className="text-[10px] text-slate-400">
+                                {fecha} · Apertura {horaApertura}
+                                {(openingCop > 0 || openingUsd > 0) && ` · Base: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(openingCop)}${openingUsd > 0 ? ` + $${openingUsd.toFixed(2)}` : ''}`}
+                            </p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">

@@ -97,7 +97,9 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
     };
 
     const hasApertura = !!cierre.apertura;
-    const fondoInicial = hasApertura ? (cierre.apertura.openingCOP || cierre.apertura.openingUsd || cierre.apertura.totalUsd || 0) : 0;
+    const openingCop = hasApertura ? (cierre.apertura.openingCOP || cierre.apertura.openingUsd || cierre.apertura.totalUsd || 0) : 0;
+    const openingUsd = hasApertura ? (cierre.apertura.openingBs || 0) : 0;
+    const formatUsd = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(v || 0);
 
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden mb-3 transition-all active:scale-[0.99] cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
@@ -108,7 +110,7 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
                     </div>
                     <div>
                         <p className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                            Cierre de Caja
+                             Cierre de Caja
                             <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded uppercase font-black">{cierre.sales.length} ops</span>
                         </p>
                         <p className="text-[11px] text-slate-400 capitalize">{dateLabel}</p>
@@ -125,10 +127,12 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
             {isExpanded && (
                 <div className="px-4 pb-4 border-t border-slate-100 dark:border-slate-800/50 cursor-auto animate-in fade-in slide-in-from-top-1" onClick={e => e.stopPropagation()}>
                     
-                    {hasApertura && (
+                    {hasApertura && (openingCop > 0 || openingUsd > 0) && (
                         <div className="flex justify-between items-center py-3 border-b border-slate-100 dark:border-slate-800/50">
                             <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><DollarSign size={14}/> Fondo de Apertura</span>
-                            <span className="text-sm font-black text-slate-700 dark:text-slate-300">{formatCop(fondoInicial)}</span>
+                            <span className="text-sm font-black text-slate-700 dark:text-slate-300">
+                                {formatCop(openingCop)}{openingUsd > 0 ? ` + ${formatUsd(openingUsd)}` : ''}
+                            </span>
                         </div>
                     )}
 
