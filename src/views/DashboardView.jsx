@@ -160,7 +160,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             const updatedSales = [...existingSales, aperturaRecord];
             await storageService.setItem(SALES_KEY, updatedSales);
             setSales(updatedSales);
-            await openCashSession(data.openingUsd, data.openingBs, data.cashierName || usuarioActivo?.name, role);
+            await openCashSession(data.openingUsd, data.openingBs, data.cashierName || usuarioActivo?.name, role, aperturaRecord.timestamp);
             auditLog('VENTA', 'APERTURA_CAJA', `Caja abierta por ${role === 'ADMIN' ? 'Administrador' : 'Cajero'}: ${usuarioActivo?.name || '—'} — Base: ${formatCop(data.openingUsd)}`, { role, openedBy: usuarioActivo?.name });
             setIsAperturaOpen(false);
             showToast('Turno de Caja Abierto', 'success');
@@ -224,7 +224,14 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const handleConfirmCashRecon = async (reconData) => {
         const sessionOpenedAt = activeCashSession?.opened_at || null;
         const isInSession = (s) => {
-            if (sessionOpenedAt) return s.timestamp >= sessionOpenedAt;
+            if (sessionOpenedAt) {
+                if (s.tipo === 'APERTURA_CAJA') {
+                    const sTime = new Date(s.timestamp).getTime();
+                    const sessTime = new Date(sessionOpenedAt).getTime();
+                    return sTime >= sessTime - 10000;
+                }
+                return s.timestamp >= sessionOpenedAt;
+            }
             const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
             return saleLocalDay === today;
         };

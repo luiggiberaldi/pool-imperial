@@ -17,6 +17,13 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     const isInSessionPeriod = (s) => {
         if (s.cajaCerrada === true) return false;
         if (!sessionOpenedAt) return false; // sin caja abierta = sin datos de sesión
+        
+        if (s.tipo === 'APERTURA_CAJA') {
+            const sTime = new Date(s.timestamp).getTime();
+            const sessTime = new Date(sessionOpenedAt).getTime();
+            return sTime >= sessTime - 10000;
+        }
+        
         return s.timestamp >= sessionOpenedAt;
     };
 
@@ -56,7 +63,11 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     const todayApertura = useMemo(() =>
         sales.find(s => {
             if (s.tipo !== 'APERTURA_CAJA' || s.cajaCerrada) return false;
-            if (sessionOpenedAt) return s.timestamp >= sessionOpenedAt;
+            if (sessionOpenedAt) {
+                const sTime = new Date(s.timestamp).getTime();
+                const sessTime = new Date(sessionOpenedAt).getTime();
+                return sTime >= sessTime - 10000;
+            }
             const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : today;
             return saleLocalDay === today;
         }),

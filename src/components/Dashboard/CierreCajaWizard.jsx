@@ -181,6 +181,9 @@ export default function CierreCajaWizard({
         onClose();
     };
 
+    const openingCop = apertura?.openingCOP || apertura?.openingUsd || 0;
+    const openingUsd = apertura?.openingBs || 0;
+
     const paymentEntries = Object.entries(paymentBreakdown).filter(([, data]) => data.total > 0 && !data.currency?.startsWith('VUELTO'));
 
     // Helper: format COP display  
@@ -235,6 +238,14 @@ export default function CierreCajaWizard({
                                         <span className="text-sm font-bold">{todayItemsSold} items</span>
                                     </div>
                                 </div>
+                                {(openingCop > 0 || openingUsd > 0) && (
+                                    <div className="mt-2 pt-2 border-t border-white/20 flex items-center justify-between text-[11px] text-indigo-200 font-medium">
+                                        <span>Fondo inicial de apertura:</span>
+                                        <span className="font-bold text-white">
+                                            {fmtCop(openingCop)}{openingUsd > 0 ? ` + ${fmtUsd(openingUsd)}` : ''}
+                                        </span>
+                                    </div>
+                                )}
                                 {todaySales.length > 0 && (() => {
                                     const timestamps = todaySales.map(s => new Date(s.timestamp)).sort((a, b) => a - b);
                                     const fmt = (d) => d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });

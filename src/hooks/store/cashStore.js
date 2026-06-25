@@ -247,11 +247,11 @@ export const useCashStore = create((set, get) => ({
         window.addEventListener('online', onlineHandler);
     },
 
-    openCashSession: async (baseUsd, baseBs, openedBy, openedByRole) => {
+    openCashSession: async (baseUsd, baseBs, openedBy, openedByRole, openedAt) => {
         const userId = await getAuthUserId();
         const sessionPayload = {
             id: crypto.randomUUID(),
-            opened_at: new Date().toISOString(),
+            opened_at: openedAt || new Date().toISOString(),
             opened_by: openedBy,
             base_usd: baseUsd || 0, // En Pool Imperial esto es COP
             base_bs: baseBs || 0,   // En Pool Imperial esto es USD
