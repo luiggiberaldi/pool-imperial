@@ -257,7 +257,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
                 >
                     <Users size={16} /> Clientes
                 </button>
-                {isAdmin && (
+                {(isAdmin || role === 'CAJERO') && (
                     <button
                         onClick={() => { setActiveTab('proveedores'); triggerHaptic && triggerHaptic(); }}
                         className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs sm:text-sm font-bold rounded-xl transition-all duration-300 ${activeTab === 'proveedores' ? 'bg-white dark:bg-slate-900 shadow-sm text-purple-600 dark:text-purple-400 scale-100 ring-1 ring-slate-900/5 dark:ring-white/10' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 scale-95 hover:scale-100'}`}
@@ -297,7 +297,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
                     <SuppliersList
                         suppliers={suppliers} bcvRate={bcvRate} tasaCop={tasaCop} copEnabled={copEnabled}
-                        triggerHaptic={triggerHaptic} isAdmin={isAdmin}
+                        triggerHaptic={triggerHaptic} isAdmin={isAdmin || role === 'CAJERO'}
                         onAddSupplier={() => setIsAddSupplierModalOpen(true)}
                         onSelectSupplier={handleSelectSupplier}
                         onDeleteSupplier={(s) => setDeleteSupplierTarget(s)}
@@ -318,7 +318,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
                         onClose={() => setIsPayInvoiceModalOpen(false)} onSave={handlePayInvoice} />
                 )}
                 <SupplierDetailsSheet
-                    supplier={selectedSupplier} isOpen={!!selectedSupplier} isAdmin={isAdmin}
+                    supplier={selectedSupplier} isOpen={!!selectedSupplier} isAdmin={isAdmin || role === 'CAJERO'}
                     bcvRate={bcvRate} tasaCop={tasaCop} copEnabled={copEnabled}
                     historyData={supplierHistoryData} onClose={() => setSelectedSupplier(null)}
                     onAddInvoice={() => setIsAddInvoiceModalOpen(true)}

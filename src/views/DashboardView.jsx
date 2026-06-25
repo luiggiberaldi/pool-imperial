@@ -528,8 +528,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             )}
 
             {/* ── CERRAR / ABRIR CAJA ── */}
-            {(isAdmin || cajeroAbreCaja) ? (
-                !activeCashSession ? (
+            {!activeCashSession ? (
+                (isAdmin || cajeroAbreCaja) ? (
                     <button data-tour="apertura-caja" onClick={() => setIsAperturaOpen(true)}
                         className="w-full rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all group mt-2"
                         style={{ background: 'linear-gradient(135deg, #10B981, #059669)', boxShadow: '0 6px 20px rgba(5,150,105,0.25)' }}>
@@ -542,7 +542,16 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                         </div>
                     </button>
                 ) : (
-                    (isAdmin || cajeroCierraCaja) ? (
+                    <div className="w-full bg-amber-50 rounded-2xl p-4 border border-amber-200 shadow-sm flex items-center gap-3 mt-4">
+                        <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center border-2 border-white shadow-sm"><LockIcon size={22} className="text-amber-500" /></div>
+                        <div>
+                            <p className="text-sm font-black text-slate-800">Caja Cerrada</p>
+                            <p className="text-[11px] font-semibold text-slate-500">Espera que un Administrador abra el turno para operar</p>
+                        </div>
+                    </div>
+                )
+            ) : (
+                (isAdmin || cajeroCierraCaja) && (
                     <button data-tour="cierre-turno" onClick={handleDailyClose}
                         className="w-full rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all group mt-2"
                         style={{ background: 'linear-gradient(135deg, #F97316, #EF4444)', boxShadow: '0 6px 20px rgba(239,68,68,0.25)' }}>
@@ -557,16 +566,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                         </div>
                         <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center group-hover:translate-x-0.5 transition-transform"><ArrowUpRight size={18} className="text-white" /></div>
                     </button>
-                    ) : null
                 )
-            ) : (!activeCashSession) && (
-                <div className="w-full bg-amber-50 rounded-2xl p-4 border border-amber-200 shadow-sm flex items-center gap-3 mt-4">
-                    <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center border-2 border-white shadow-sm"><LockIcon size={22} className="text-amber-500" /></div>
-                    <div>
-                        <p className="text-sm font-black text-slate-800">Caja Cerrada</p>
-                        <p className="text-[11px] font-semibold text-slate-500">Espera que un Administrador abra el turno para operar</p>
-                    </div>
-                </div>
             )}
 
             {/* ── REPORTE DE TURNO (cajero) ── */}
