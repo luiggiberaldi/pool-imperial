@@ -33,6 +33,7 @@ export async function generateDailyClosePDF({
     todayTotalBs,
     totalTax = 0,
     taxBreakdown = {},
+    cierreNum,
 }) {
     const WIDTH = 58;
     const M = 3;
@@ -165,7 +166,7 @@ export async function generateDailyClosePDF({
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(...INK);
-    doc.text('CIERRE DEL DÍA', CX, y, { align: 'center' });
+    doc.text(`CIERRE DE CAJA #${cierreNum || ''}`, CX, y, { align: 'center' });
     y += 5;
 
     const now = new Date();

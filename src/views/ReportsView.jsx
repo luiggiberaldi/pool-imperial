@@ -22,6 +22,7 @@ import { storageService } from '../utils/storageService';
 
 const RANGE_OPTIONS = [
     { id: 'today', label: 'Hoy' },
+    { id: 'yesterday', label: 'Ayer' },
     { id: 'week', label: 'Esta Semana' },
     { id: 'month', label: 'Este Mes' },
     { id: 'lastMonth', label: 'Mes Anterior' },
@@ -58,6 +59,15 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         avgRate, totalUsdReal, profitUsdReal,
         totalTax, taxBreakdown, netRevenue,
     } = useReportsData({ isActive, products, bcvRate, selectedRange, customFrom, customTo, activeTab, tasaCop });
+
+    const cierreNumbers = useMemo(() => {
+        const allCierreIds = Array.from(new Set(allSales.map(s => s.cierreId).filter(Boolean))).sort((a, b) => a - b);
+        const numbers = {};
+        allCierreIds.forEach((cId, index) => {
+            numbers[cId] = index + 1;
+        });
+        return numbers;
+    }, [allSales]);
 
     const tipsBreakdown = useMemo(() => {
         const tipsByUser = {};
@@ -770,6 +780,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                 cierre={cierre} 
                                 bcvRate={bcvRate} 
                                 products={products} 
+                                cierreNum={cierreNumbers[cierre.cierreId] || ''}
                                 isAdmin={isAdmin}
                                 onDeleteCierre={(cId) => setCierreToDelete(cId)}
                             />

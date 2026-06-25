@@ -723,7 +723,8 @@ export async function printDailyCloseEscPos({
     apertura = null,
     totalTax = 0,
     taxBreakdown = {},
-    cierreId = null
+    cierreId = null,
+    cierreNum = null
 }) {
     const port = await getConnectedPrinter();
     if (!port) return false;
@@ -745,6 +746,8 @@ export async function printDailyCloseEscPos({
 
     const totalCOP = todayTotalCOP || 0;
     const netCOP = totalCOP - totalTax;
+
+    const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
 
     let totalServicioVoluntario = 0;
     allSales.forEach(s => {
@@ -823,7 +826,7 @@ export async function printDailyCloseEscPos({
     if (settings.phone) p.text('Tel: ' + settings.phone).newline();
     p.newline();
 
-    p.bold(true).text('CIERRE DE CAJA').newline();
+    p.bold(true).text(`CIERRE DE CAJA #${cierreNum || ''}`).newline();
     p.bold(false).text(`${fecha} ${hora}`).newline();
     p.line('-', W);
 

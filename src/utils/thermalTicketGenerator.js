@@ -387,7 +387,8 @@ export async function printThermalDailyClose({
     apertura = null,
     totalTax = 0,
     taxBreakdown = {},
-    cierreId = null
+    cierreId = null,
+    cierreNum = null
 }) {
     const cfg = getWebSerialConfig();
 
@@ -428,6 +429,8 @@ export async function printThermalDailyClose({
 
     const totalCOP = todayTotalCOP || 0;
     const netCOP = totalCOP - totalTax;
+
+    const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
 
     let totalServicioVoluntario = 0;
     allSales.forEach(s => {
@@ -736,7 +739,7 @@ export async function printThermalDailyClose({
         ${settings.phone ? `<div style="font-size:9px;">Tel: ${settings.phone}</div>` : ''}
     </div>
 
-    <div class="center bold" style="font-size:12px;margin:8px 0 4px;">CIERRE DE CAJA</div>
+    <div class="center bold" style="font-size:12px;margin:8px 0 4px;">CIERRE DE CAJA #${cierreNum || ''}</div>
     <div class="center" style="font-size:9.5px;color:#555;">${fecha} ${hora}</div>
 
     <hr class="dash">

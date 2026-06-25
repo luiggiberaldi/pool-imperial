@@ -5,7 +5,7 @@ import { getPaymentLabel, getPaymentIcon, toTitleCase, PAYMENT_ICONS } from '../
 import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
 import { printThermalDailyClose } from '../../utils/ticketGenerator';
 
-export default function CierreHistoryCard({ cierre, products: _products, isAdmin, onDeleteCierre }) {
+export default function CierreHistoryCard({ cierre, products: _products, cierreNum, isAdmin, onDeleteCierre }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     const totalServicioVoluntario = React.useMemo(() => {
@@ -65,6 +65,7 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
             isReprint: true,
             totalTax: cierre.totalTax || 0,
             taxBreakdown: cierre.taxBreakdown || {},
+            cierreNum: cierreNum,
         });
     };
 
@@ -108,7 +109,8 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
             apertura: cierre.apertura,
             totalTax: cierre.totalTax || 0,
             taxBreakdown: cierre.taxBreakdown || {},
-            cierreId: cierre.cierreId
+            cierreId: cierre.cierreId,
+            cierreNum: cierreNum,
         });
     };
 
@@ -126,7 +128,7 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
                     </div>
                     <div>
                         <p className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                             Cierre de Caja
+                             Cierre de Caja #{cierreNum}
                             <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded uppercase font-black">{cierre.sales.length} ops</span>
                         </p>
                         <p className="text-[11px] text-slate-400 capitalize">{dateLabel}</p>

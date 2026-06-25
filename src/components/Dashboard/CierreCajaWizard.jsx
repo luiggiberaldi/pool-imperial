@@ -76,6 +76,13 @@ export default function CierreCajaWizard({
         return total;
     }, [allSales, todaySales, reportSnapshot]);
 
+    const currentCierreNum = React.useMemo(() => {
+        const allCierreIds = Array.from(new Set(allSales.map(s => s.cierreId).filter(Boolean))).sort((a, b) => a - b);
+        const matchIndex = allCierreIds.indexOf(cierreId);
+        if (matchIndex !== -1) return matchIndex + 1;
+        return allCierreIds.length + 1;
+    }, [allSales, cierreId]);
+
     const prodMovements = React.useMemo(() => {
         const movements = {};
         
@@ -584,7 +591,7 @@ export default function CierreCajaWizard({
                             </div>
                             
                             <div>
-                                <h3 className="text-xl font-black text-slate-800 dark:text-white">¡Cierre de Caja Registrado!</h3>
+                                <h3 className="text-xl font-black text-slate-800 dark:text-white">¡Cierre de Caja #{currentCierreNum} Registrado!</h3>
                                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed max-w-[280px] mx-auto">
                                     Los datos se guardaron y el turno se cerró correctamente. Puedes imprimir el ticket físico para control.
                                 </p>
@@ -617,7 +624,8 @@ export default function CierreCajaWizard({
                                                 diffCop,
                                                 diffUsd
                                             },
-                                            cierreId: cierreId
+                                            cierreId: cierreId,
+                                            cierreNum: currentCierreNum
                                         });
                                     }}
                                     className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-sm"
@@ -651,6 +659,7 @@ export default function CierreCajaWizard({
                                                 diffUsd
                                             },
                                             isReprint: false,
+                                            cierreNum: currentCierreNum,
                                         });
                                     }}
                                     className="w-full py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors active:scale-95"
