@@ -56,6 +56,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
     const [isAddInvoiceModalOpen, setIsAddInvoiceModalOpen] = useState(false);
     const [isPayInvoiceModalOpen, setIsPayInvoiceModalOpen] = useState(false);
     const [deleteSupplierTarget, setDeleteSupplierTarget] = useState(null);
+    const [revertRecordTarget, setRevertRecordTarget] = useState(null);
     const [supplierHistoryData, setSupplierHistoryData] = useState([]);
 
     const loadData = async () => {
@@ -207,11 +208,11 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
         refreshSupplierHistory(invoiceData.supplierId);
     };
 
-    const handlePayInvoice = async (amountUsd, amountBs, methodId, currency) => {
+    const handlePayInvoice = async (amountUsd, amountBs, methodId, currency, afectaCaja = true) => {
         triggerHaptic && triggerHaptic();
         const supplier = selectedSupplier;
         if (!supplier) return;
-        const updatedSupplier = { ...supplier, deuda: Math.max(0, round2((supplier.deuda || 0) - amountUsd)) };
+        const updatedSupplier = { ...supplier, deuda: Math.max(0, round2((supplier.deuda || 0) - amountBs)) };
         await saveSuppliers(suppliers.map(s => s.id === supplier.id ? updatedSupplier : s));
         setSelectedSupplier(updatedSupplier);
 
@@ -230,6 +231,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
             totalUsd: -totalEnUsd,
             ...(copEnabled && { totalCop: -totalEnCop }),
             paymentMethod: methodId,
+            afectaCaja: afectaCaja,
             payments: [{ 
                 methodId, 
                 amountUsd: currency === 'COP' ? -totalEnCop : (currency === 'USD' ? -totalEnUsd : 0), 
@@ -243,8 +245,71 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
         await storageService.setItem('bodega_sales_v1', sales);
         setIsPayInvoiceModalOpen(false);
         showToast('Pago registrado correctamente', 'success');
-        auditLog('PROVEEDOR', 'PAGO_PROVEEDOR', `Pago $${amountUsd.toFixed(2)} a ${supplier.name}`);
+        auditLog('PROVEEDOR', 'PAGO_PROVEEDOR', `Pago COP ${amountBs.toLocaleString('es-CO')} a ${supplier.name}`);
         refreshSupplierHistory(supplier.id);
+    };
+
+    const handleRevertSupplierRecord = async () => {
+        const record = revertRecordTarget;
+        if (!record) return;
+        triggerHaptic && triggerHaptic();
+
+        const isInvoice = record.type === 'INVOICE';
+        const supplier = suppliers.find(s => s.id === record.supplierId);
+
+        if (!supplier) {
+            showToast('Proveedor no encontrado', 'error');
+            setRevertRecordTarget(null);
+            return;
+        }
+
+        if (isInvoice) {
+            // Revertir factura: restar el monto de la factura (amountUsd en base COP) a la deuda
+            const updatedSupplier = { ...supplier, deuda: Math.max(0, round2((supplier.deuda || 0) - (record.amountUsd || 0))) };
+            const newSuppliers = suppliers.map(s => s.id === supplier.id ? updatedSupplier : s);
+            await saveSuppliers(newSuppliers);
+            setSelectedSupplier(updatedSupplier);
+
+            const updatedInvoices = invoices.filter(inv => inv.id !== record.id);
+            await saveInvoices(updatedInvoices);
+
+            auditLog('PROVEEDOR', 'FACTURA_REVERTIDA', `Factura revertida: COP ${record.amountUsd?.toLocaleString('es-CO')} - ${supplier.name}`);
+            showToast('Factura revertida correctamente', 'success');
+        } else {
+            // Revertir pago (PAGO_PROVEEDOR): sumar el monto del pago a la deuda (record.totalUsd es negativo en la transaccion)
+            const paymentAmtCop = Math.abs(record.totalUsd || record.payments?.[0]?.amountUsd || 0);
+            
+            const updatedSupplier = { ...supplier, deuda: round2((supplier.deuda || 0) + paymentAmtCop) };
+            const newSuppliers = suppliers.map(s => s.id === supplier.id ? updatedSupplier : s);
+            await saveSuppliers(newSuppliers);
+            setSelectedSupplier(updatedSupplier);
+
+            // Anular el pago en bodega_sales_v1
+            const sales = await storageService.getItem('bodega_sales_v1', []);
+            const updatedSales = sales.map(s => s.id === record.id ? { ...s, status: 'ANULADA' } : s);
+            await storageService.setItem('bodega_sales_v1', updatedSales);
+
+            auditLog('PROVEEDOR', 'PAGO_REVERTIDO', `Pago revertido: COP ${paymentAmtCop.toLocaleString('es-CO')} - ${supplier.name}`);
+            showToast('Pago revertido y deuda restaurada', 'success');
+        }
+
+        // Cargar datos frescos en estado local para asegurar sincronía de listas
+        const freshInvoices = isInvoice ? invoices.filter(inv => inv.id !== record.id) : invoices;
+        const freshSales = await storageService.getItem('bodega_sales_v1', []);
+        
+        // Actualizar estados locales de forma sincrona
+        setInvoices(freshInvoices);
+        setSuppliers(suppliers.map(s => s.id === supplier.id ? { ...s, deuda: isInvoice ? Math.max(0, round2((s.deuda || 0) - (record.amountUsd || 0))) : round2((s.deuda || 0) + Math.abs(record.totalUsd || 0)) } : s));
+
+        setRevertRecordTarget(null);
+
+        // Refrescar el historial inmediatamente
+        const supplierInvoices = freshInvoices.filter(i => i.supplierId === supplier.id);
+        const supplierPayments = freshSales.filter(s => s.tipo === 'PAGO_PROVEEDOR' && s.supplierId === supplier.id);
+        setSupplierHistoryData(
+            [...supplierInvoices, ...supplierPayments]
+                .sort((a, b) => new Date(b.date || b.timestamp) - new Date(a.date || a.timestamp))
+        );
     };
 
     const filteredCustomers = customers.filter(c => {
@@ -333,6 +398,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
                     onPayInvoice={() => setIsPayInvoiceModalOpen(true)}
                     onEdit={() => { setEditingSupplier(selectedSupplier); setIsAddSupplierModalOpen(true); }}
                     onDelete={() => setDeleteSupplierTarget(selectedSupplier)}
+                    onRevertRecord={(record) => setRevertRecordTarget(record)}
                 />
                 <ConfirmModal
                     isOpen={!!deleteSupplierTarget} onClose={() => setDeleteSupplierTarget(null)}
@@ -346,6 +412,20 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
                     title="Eliminar Proveedor"
                     message={deleteSupplierTarget ? `¿Eliminar a ${deleteSupplierTarget.name}? Esta acción no se puede deshacer.` : ''}
                     confirmText="Sí, eliminar" variant="danger"
+                />
+                <ConfirmModal
+                    isOpen={!!revertRecordTarget} onClose={() => setRevertRecordTarget(null)}
+                    onConfirm={handleRevertSupplierRecord}
+                    title="Revertir Movimiento"
+                    message={
+                        revertRecordTarget
+                            ? `¿Estás seguro de revertir este movimiento?\n\n` +
+                              (revertRecordTarget.type === 'INVOICE'
+                                  ? `Factura #${revertRecordTarget.invoiceNumber}: Se eliminará el registro y se restará $${(revertRecordTarget.amountUsd || 0).toLocaleString('es-CO')} COP de la deuda.`
+                                  : `Pago: Se anulará la transacción de pago y se restaurará $${Math.abs(revertRecordTarget.totalUsd || revertRecordTarget.payments?.[0]?.amountUsd || 0).toLocaleString('es-CO')} COP a la deuda.`)
+                            : ''
+                    }
+                    confirmText="Sí, revertir" variant="warning"
                 />
             </div>
         );

@@ -77,6 +77,7 @@ export function useSalesData({ isActive, setProductsSilent, cart, cartRef, setCa
         const todayStr = getLocalISODate(new Date());
         const todayOpen = todaySalesData.filter(s => {
             if (s.cajaCerrada) return false;
+            if (s.tipo === 'PAGO_PROVEEDOR' && s.afectaCaja === false) return false;
             const saleDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : todayStr;
             return saleDay === todayStr;
         });

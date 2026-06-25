@@ -834,7 +834,7 @@ export async function printDailyCloseEscPos({
     const activeSalesCount = sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA').length;
     let totalEgresosProveedores = 0;
     sales.forEach(s => {
-        if (s.tipo === 'PAGO_PROVEEDOR') {
+        if (s.tipo === 'PAGO_PROVEEDOR' && s.afectaCaja !== false) {
             totalEgresosProveedores += Math.abs(s.totalCop || s.totalUsd || 0);
         }
     });

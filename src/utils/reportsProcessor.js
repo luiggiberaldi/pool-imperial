@@ -19,6 +19,7 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
     const salesForCashFlow = allSales.filter(s => {
         if (s.status === 'ANULADA') return false;
         if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'COBRO_DEUDA' && s.tipo !== 'PAGO_PROVEEDOR') return false;
+        if (s.tipo === 'PAGO_PROVEEDOR' && s.afectaCaja === false) return false;
         const dateStr = getLocalISODate(new Date(s.timestamp));
         return dateStr >= from && dateStr <= to;
     });
@@ -142,7 +143,7 @@ export function groupSalesByCierreId(allSales, from, to, products) {
             const dateObj = new Date(c.cierreId);
 
             const salesForStats = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA') && s.status !== 'ANULADA');
-            const salesForCashFlow = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR') && s.status !== 'ANULADA');
+            const salesForCashFlow = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR') && s.status !== 'ANULADA' && !(s.tipo === 'PAGO_PROVEEDOR' && s.afectaCaja === false));
             const adjustments = c.sales.filter(s => s.tipo === 'AJUSTE_ENTRADA' || s.tipo === 'AJUSTE_SALIDA');
 
             const totalCOP = salesForStats.reduce((acc, s) => acc + (s.totalCop || s.totalUsd || 0), 0);

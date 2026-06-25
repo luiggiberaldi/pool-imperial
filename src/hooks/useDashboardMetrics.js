@@ -55,6 +55,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
         sales.filter(s => {
             if (s.status === 'ANULADA') return false;
             if (!['VENTA','VENTA_FIADA','COBRO_DEUDA','PAGO_PROVEEDOR','APERTURA_CAJA'].includes(s.tipo)) return false;
+            if (s.tipo === 'PAGO_PROVEEDOR' && s.afectaCaja === false) return false;
             return isInSessionPeriod(s);
         }),
         [sales, today, sessionOpenedAt]
@@ -97,6 +98,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     const todayExpenses = useMemo(() =>
         sales.filter(s => {
             if (s.tipo !== 'PAGO_PROVEEDOR') return false;
+            if (s.afectaCaja === false) return false;
             return isInSessionPeriod(s);
         }),
         [sales, today, sessionOpenedAt]

@@ -129,6 +129,7 @@ export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, 
     const [amount, setAmount] = useState('');
     const filteredMethods = activePaymentMethods.filter(m => m.currency === 'COP');
     const [paymentMethod, setPaymentMethod] = useState('efectivo_cop');
+    const [afectaCaja, setAfectaCaja] = useState(true);
 
     useEffect(() => {
         if (filteredMethods.length > 0 && !filteredMethods.some(m => m.id === paymentMethod)) {
@@ -144,7 +145,7 @@ export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, 
         const activeTasa = tasaCop || 4150;
         const amountUsd = round2(rawAmt / activeTasa);
         
-        onSave(amountUsd, rawAmt, paymentMethod, 'COP');
+        onSave(amountUsd, rawAmt, paymentMethod, 'COP', afectaCaja);
     };
 
     return (
@@ -183,6 +184,21 @@ export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, 
                         </CustomSelect>
                     </div>
 
+                    {/* Toggle Afecta Caja */}
+                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 rounded-2xl transition-all">
+                        <div className="flex-1 pr-3">
+                            <span className="block text-xs font-bold text-slate-700 dark:text-slate-200">Pagar con dinero de la caja</span>
+                            <span className="block text-[10px] text-slate-450 font-medium">Descuenta este egreso del efectivo de hoy</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setAfectaCaja(!afectaCaja)}
+                            className={`w-11 h-6 rounded-full transition-colors relative flex items-center shrink-0 ${afectaCaja ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-800'}`}
+                        >
+                            <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform duration-205 absolute ${afectaCaja ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        </button>
+                    </div>
+
                     <button type="submit" disabled={!amount || parseFloat(amount) <= 0} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 text-white font-bold rounded-xl active:scale-95 transition-all text-sm flex justify-center items-center gap-2 mt-4">
                         Procesar Pago
                     </button>
@@ -192,7 +208,7 @@ export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, 
     );
 }
 
-export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAddInvoice, onPayInvoice, onEdit, onDelete, historyData }) {
+export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAddInvoice, onPayInvoice, onEdit, onDelete, historyData, onRevertRecord }) {
     if (!isOpen || !supplier) return null;
 
     return (
@@ -249,22 +265,41 @@ export function SupplierDetailsSheet({ supplier, isOpen, isAdmin, onClose, onAdd
                             <div className="space-y-2">
                                 {historyData.map(record => {
                                     const isInvoice = record.type === 'INVOICE';
+                                    const isAnulada = record.status === 'ANULADA';
                                     const dateStr = new Date(record.date || record.timestamp).toLocaleDateString('es-CO');
                                     return (
-                                        <div key={record.id} className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl">
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isInvoice ? 'bg-red-100/50 text-red-500' : 'bg-emerald-100/50 text-emerald-500'}`}>
+                                        <div key={record.id} className={`flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-950 rounded-xl ${isAnulada ? 'opacity-50 grayscale' : ''}`}>
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isAnulada ? 'bg-slate-250 dark:bg-slate-800' : isInvoice ? 'bg-red-100/50 text-red-500' : 'bg-emerald-100/50 text-emerald-500'}`}>
                                                 {isInvoice ? <FileText size={14} /> : <ArrowUpRight size={14} />}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                                <p className={`text-xs font-bold ${isAnulada ? 'text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
                                                     {isInvoice ? `Factura #${record.invoiceNumber}` : `Abono/Pago`}
                                                 </p>
-                                                <p className="text-[10px] text-slate-400">{dateStr} {isInvoice && record.dueDate && `• Venc: ${new Date(record.dueDate).toLocaleDateString('es-CO')}`}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className={`text-sm font-black ${isInvoice ? 'text-red-500' : 'text-emerald-500'}`}>
-                                                    {isInvoice ? '+' : '-'}{formatCop(isInvoice ? record.amountUsd : Math.abs(record.totalUsd || 0))}
+                                                <p className="text-[10px] text-slate-400">
+                                                    {dateStr} {isInvoice && record.dueDate && `• Venc: ${new Date(record.dueDate).toLocaleDateString('es-CO')}`}
+                                                    {isAnulada && <span className="ml-1 text-[9px] font-black text-red-500 dark:text-red-400 tracking-wider">ANULADA</span>}
                                                 </p>
+                                            </div>
+                                            <div className="text-right flex items-center gap-2">
+                                                <div>
+                                                    <p className={`text-sm font-black ${isAnulada ? 'text-slate-400 line-through' : isInvoice ? 'text-red-500' : 'text-emerald-500'}`}>
+                                                        {isInvoice ? '+' : '-'}{formatCop(isInvoice ? record.amountUsd : Math.abs(record.totalUsd || 0))}
+                                                    </p>
+                                                </div>
+                                                {!isAnulada && isAdmin && onRevertRecord && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onRevertRecord(record);
+                                                        }}
+                                                        className="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                                        title={isInvoice ? "Revertir Factura" : "Revertir Pago"}
+                                                    >
+                                                        <Trash2 size={13} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     )
