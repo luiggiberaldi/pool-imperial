@@ -187,20 +187,29 @@ export async function generateDailyClosePDF({
     y = sectionTitle('RESUMEN GENERAL', y);
 
     const totalCOP = todayTotalCOP ?? todayTotalUsd ?? 0;
-    const totalUSD = visibleSales
-        .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
-        .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
-
     const netCOP = totalCOP - totalTax;
+
+    let totalServicioVoluntario = 0;
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            if (nameLower.includes('servicio voluntario')) {
+                totalServicioVoluntario += (item.priceUsd || item.price || 0) * (item.qty || 1);
+            }
+        });
+    });
 
     const statsRows = [
         ['Ventas realizadas', `${sales.length}`],
         ['Artículos vendidos', `${todayItemsSold}`],
         ['Ingresos Brutos COP', formatCOP(totalCOP)],
         ['Ingresos Netos COP', formatCOP(netCOP)],
-        ['Ingresos USD equiv.', `${formatUsd(totalUSD)} USD`],
         ['Ganancia estimada', formatCOP(todayProfit || 0)],
     ];
+    if (totalServicioVoluntario > 0) {
+        statsRows.push(['Servicio Voluntario', formatCOP(totalServicioVoluntario)]);
+    }
 
     statsRows.forEach(([label, value]) => {
         doc.setFont('helvetica', 'bold');

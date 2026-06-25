@@ -429,12 +429,16 @@ export async function printThermalDailyClose({
     const totalCOP = todayTotalCOP || 0;
     const netCOP = totalCOP - totalTax;
 
-    // Las ventas anuladas no se muestran ni se contabilizan en el cierre
-    const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
-
-    const totalUSD = visibleSales
-        .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
-        .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
+    let totalServicioVoluntario = 0;
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            if (nameLower.includes('servicio voluntario')) {
+                totalServicioVoluntario += (item.priceUsd || item.price || 0) * (item.qty || 1);
+            }
+        });
+    });
 
     // Propinas por personal
     const tipsByUser = {};
@@ -462,7 +466,7 @@ export async function printThermalDailyClose({
             <tr><td>Articulos vendidos:</td><td style="text-align:right;font-weight:bold;">${todayItemsSold}</td></tr>
             <tr><td>Ingresos Brutos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalCOP)}</td></tr>
             <tr><td>Ingresos Netos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(netCOP)}</td></tr>
-            <tr><td>Ingresos USD equiv.:</td><td style="text-align:right;font-weight:bold;">$ ${totalUSD.toFixed(2)} USD</td></tr>
+            ${totalServicioVoluntario > 0 ? `<tr><td>Servicio Voluntario:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalServicioVoluntario)}</td></tr>` : ''}
             <tr><td>Ganancia estimada:</td><td style="text-align:right;font-weight:bold;">${formatCOP(todayProfit)}</td></tr>
         </table>
     `;

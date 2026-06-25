@@ -8,6 +8,21 @@ import { printThermalDailyClose } from '../../utils/ticketGenerator';
 export default function CierreHistoryCard({ cierre, products: _products, isAdmin, onDeleteCierre }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
+    const totalServicioVoluntario = React.useMemo(() => {
+        let total = 0;
+        const currentSales = cierre.sales || [];
+        currentSales.forEach(s => {
+            if (s.status === 'ANULADA') return;
+            (s.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                if (nameLower.includes('servicio voluntario')) {
+                    total += (item.priceUsd || item.price || 0) * (item.qty || 1);
+                }
+            });
+        });
+        return total;
+    }, [cierre]);
+
     const dateLabel = new Date(cierre.cierreId).toLocaleString('es-CO', { 
         weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit' 
@@ -133,6 +148,15 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
                             <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><DollarSign size={14}/> Fondo de Apertura</span>
                             <span className="text-sm font-black text-slate-700 dark:text-slate-300">
                                 {formatCop(openingCop)}{openingUsd > 0 ? ` + ${formatUsd(openingUsd)}` : ''}
+                            </span>
+                        </div>
+                    )}
+
+                    {totalServicioVoluntario > 0 && (
+                        <div className="flex justify-between items-center py-3 border-b border-slate-100 dark:border-slate-800/50">
+                            <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"><DollarSign size={14}/> Servicio Voluntario</span>
+                            <span className="text-sm font-black text-slate-700 dark:text-slate-300">
+                                {formatCop(totalServicioVoluntario)}
                             </span>
                         </div>
                     )}

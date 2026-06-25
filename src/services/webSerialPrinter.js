@@ -746,12 +746,16 @@ export async function printDailyCloseEscPos({
     const totalCOP = todayTotalCOP || 0;
     const netCOP = totalCOP - totalTax;
 
-    // Las ventas anuladas no se muestran ni se contabilizan en el cierre
-    const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
-
-    const totalUSD = visibleSales
-        .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
-        .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
+    let totalServicioVoluntario = 0;
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            if (nameLower.includes('servicio voluntario')) {
+                totalServicioVoluntario += (item.priceUsd || item.price || 0) * (item.qty || 1);
+            }
+        });
+    });
 
     // Propinas por personal
     const tipsByUser = {};
@@ -829,7 +833,9 @@ export async function printDailyCloseEscPos({
     p.row('Articulos vendidos:', String(todayItemsSold), W);
     p.row('Ingresos Brutos COP:', formatCOP(totalCOP), W);
     p.row('Ingresos Netos COP:', formatCOP(netCOP), W);
-    p.row('Ingresos USD equiv.:', `$ ${totalUSD.toFixed(2)} USD`, W);
+    if (totalServicioVoluntario > 0) {
+        p.row('Servicio Voluntario:', formatCOP(totalServicioVoluntario), W);
+    }
     p.row('Ganancia estimada:', formatCOP(todayProfit), W);
     p.line('-', W);
 

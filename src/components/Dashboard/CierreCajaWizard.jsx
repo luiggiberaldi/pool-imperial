@@ -61,6 +61,21 @@ export default function CierreCajaWizard({
         };
     }, [todaySales]);
 
+    const totalServicioVoluntario = React.useMemo(() => {
+        let total = 0;
+        const currentSales = reportSnapshot?.allSales || allSales || todaySales || [];
+        currentSales.forEach(s => {
+            if (s.status === 'ANULADA') return;
+            (s.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                if (nameLower.includes('servicio voluntario')) {
+                    total += (item.priceUsd || item.price || 0) * (item.qty || 1);
+                }
+            });
+        });
+        return total;
+    }, [allSales, todaySales, reportSnapshot]);
+
     const prodMovements = React.useMemo(() => {
         const movements = {};
         
@@ -246,6 +261,14 @@ export default function CierreCajaWizard({
                                         <span>Fondo inicial de apertura:</span>
                                         <span className="font-bold text-white">
                                             {fmtCop(openingCop)}{openingUsd > 0 ? ` + ${fmtUsd(openingUsd)}` : ''}
+                                        </span>
+                                    </div>
+                                )}
+                                {totalServicioVoluntario > 0 && (
+                                    <div className="mt-2 pt-2 border-t border-white/20 flex items-center justify-between text-[11px] text-indigo-200 font-medium">
+                                        <span>Servicio Voluntario:</span>
+                                        <span className="font-bold text-white">
+                                            {fmtCop(totalServicioVoluntario)}
                                         </span>
                                     </div>
                                 )}
