@@ -35,9 +35,12 @@ export async function generateDailyClosePDF({
     taxBreakdown = {},
 }) {
     const WIDTH = 58;
-    const M = 4;
+    const M = 3;
     const CX = WIDTH / 2;
     const RIGHT = WIDTH - M;
+
+    // Las ventas anuladas no se muestran ni se contabilizan en el reporte de cierre
+    const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
 
     // Calcular propinas agrupadas por usuario (meseroNombre || vendedorNombre || 'Sistema')
     const tipsByUser = {};
@@ -99,7 +102,7 @@ export async function generateDailyClosePDF({
     // Calcular altura dinámica
     const paymentRows = Object.keys(paymentBreakdown).length;
     const topProdRows = topProducts.length;
-    const saleRows = allSales.length;
+    const saleRows = visibleSales.length;
     const taxRows = Object.keys(taxBreakdown || {}).filter(k => taxBreakdown[k] > 0).length;
     // Calculate dynamic base height. Increase to 45mm per sale to fit detailed change rows
     const H = 200
@@ -183,7 +186,7 @@ export async function generateDailyClosePDF({
     y = sectionTitle('RESUMEN GENERAL', y);
 
     const totalCOP = todayTotalCOP ?? todayTotalUsd ?? 0;
-    const totalUSD = allSales
+    const totalUSD = visibleSales
         .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
         .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
 
@@ -473,7 +476,7 @@ export async function generateDailyClosePDF({
     // ════════════════════════════════════
     y = sectionTitle('DETALLE DE VENTAS', y);
 
-    allSales.forEach((s) => {
+    visibleSales.forEach((s) => {
         const d = new Date(s.timestamp);
         const hora = d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
         const isCanceled = s.status === 'ANULADA';

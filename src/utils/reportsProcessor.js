@@ -136,8 +136,8 @@ export function groupSalesByCierreId(allSales, from, to, products) {
         .map(c => {
             const dateObj = new Date(c.cierreId);
 
-            const salesForStats = c.sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA');
-            const salesForCashFlow = c.sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR');
+            const salesForStats = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA') && s.status !== 'ANULADA');
+            const salesForCashFlow = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR') && s.status !== 'ANULADA');
             const adjustments = c.sales.filter(s => s.tipo === 'AJUSTE_ENTRADA' || s.tipo === 'AJUSTE_SALIDA');
 
             const totalCOP = salesForStats.reduce((acc, s) => acc + (s.totalCop || s.totalUsd || 0), 0);

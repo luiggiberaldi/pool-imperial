@@ -182,3 +182,34 @@ Se implementó una solución de doble vía (tiempo real auto-recuperable + pull 
   - Ajusta el cálculo de tiempo prepagado transcurrido (`nowElapsed`) al agregar horas extras usando `getServerNow()`.
 - **[tableSessionActions.js](file:///c:/Users/luigg/Desktop/URO/LOS%20DIAZ/pool%20imperial/src/hooks/store/tableSessionActions.js)**:
   - Utiliza `new Date(getServerNow()).toISOString()` al registrar el inicio de las sesiones (`started_at`) y sus cierres (`closed_at`), de manera que las marcas temporales que viajan a la base de datos y a otros dispositivos ya incluyan el offset corregido del cliente.
+
+---
+
+## 🧾 Fix: Exclusión de Ventas Anuladas en Cierre de Caja
+
+### Problema
+En el reporte de Cierre de Caja, la función `groupSalesByCierreId` incluía ventas con
+`status === 'ANULADA'` en los totales por cierre. Esto inflaba montos de ventas,
+ganancias, items vendidos y el desglose de métodos de pago, ya que una venta anulada
+no debe contar para ninguna estadística ni para el flujo de caja.
+
+### Cambio Realizado
+
+#### [MODIFY] [reportsProcessor.js](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/utils/reportsProcessor.js)
+Se añadió el filtro `s.status !== 'ANULADA'` a los dos conjuntos de ventas que alimentan
+los cálculos por cierre en `groupSalesByCierreId`:
+
+```js
+const salesForStats = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA') && s.status !== 'ANULADA');
+const salesForCashFlow = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR') && s.status !== 'ANULADA');
+```
+
+- `salesForStats`: alimenta total COP, IVA, desglose de impuestos, items y ganancia.
+- `salesForCashFlow`: alimenta el desglose de métodos de pago.
+- Los `adjustments` (`AJUSTE_ENTRADA` / `AJUSTE_SALIDA`) no se modificaron, ya que no llevan estado de anulación.
+
+El cambio es consistente con el filtrado de `ANULADA` que ya existía en la función de
+resumen general del mismo archivo (cálculo de `salesForStats` / `salesForCashFlow` globales).
+
+### Verificación
+- `npm run build` → `✓ built in 27.30s`, sin errores de compilación.

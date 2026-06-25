@@ -429,7 +429,10 @@ export async function printThermalDailyClose({
     const totalCOP = todayTotalCOP || 0;
     const netCOP = totalCOP - totalTax;
 
-    const totalUSD = allSales
+    // Las ventas anuladas no se muestran ni se contabilizan en el cierre
+    const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
+
+    const totalUSD = visibleSales
         .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
         .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
 
@@ -640,21 +643,19 @@ export async function printThermalDailyClose({
 
     // Sales History HTML
     let salesHistoryHtml = '';
-    if (allSales && allSales.length > 0) {
+    if (visibleSales.length > 0) {
         salesHistoryHtml = `
             <div class="section-title">Historial de Ventas</div>
             <table style="font-size: 9px; line-height: 1.1;">
                 <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
                     <td>Ref</td><td>Atend.</td><td style="text-align:right;">Total</td>
                 </tr>
-                ${allSales.map(s => {
+                ${visibleSales.map(s => {
                     const ref = String(s.saleNumber || 0).padStart(4, '0');
                     const staff = (s.meseroNombre || s.vendedorNombre || 'Sistema').substring(0, 8);
-                    const isCanceled = s.status === 'ANULADA';
-                    const amountStr = isCanceled ? 'ANUL.' : formatCOP(s.totalCop || s.totalUsd);
-                    const cancelStyle = isCanceled ? 'color:#dc3545;text-decoration:line-through;' : '';
+                    const amountStr = formatCOP(s.totalCop || s.totalUsd);
                     return `
-                        <tr style="${cancelStyle}">
+                        <tr>
                             <td>#${ref}</td>
                             <td>${staff}</td>
                             <td style="text-align:right;font-weight:bold;">${amountStr}</td>

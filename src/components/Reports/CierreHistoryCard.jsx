@@ -97,7 +97,7 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
     };
 
     const hasApertura = !!cierre.apertura;
-    const fondoInicial = hasApertura ? (cierre.apertura.totalUsd || 0) : 0;
+    const fondoInicial = hasApertura ? (cierre.apertura.openingCOP || cierre.apertura.openingUsd || cierre.apertura.totalUsd || 0) : 0;
 
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden mb-3 transition-all active:scale-[0.99] cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>

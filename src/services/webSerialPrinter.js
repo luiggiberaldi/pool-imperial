@@ -746,7 +746,10 @@ export async function printDailyCloseEscPos({
     const totalCOP = todayTotalCOP || 0;
     const netCOP = totalCOP - totalTax;
 
-    const totalUSD = allSales
+    // Las ventas anuladas no se muestran ni se contabilizan en el cierre
+    const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
+
+    const totalUSD = visibleSales
         .filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA')
         .reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
 
@@ -937,13 +940,12 @@ export async function printDailyCloseEscPos({
     }
 
     // ── Historial de Ventas ──
-    if (allSales && allSales.length > 0) {
+    if (visibleSales.length > 0) {
         p.align(1).bold(true).text('HISTORIAL DE VENTAS').newline().bold(false).align(0);
-        allSales.forEach(s => {
+        visibleSales.forEach(s => {
             const ref = String(s.saleNumber || 0).padStart(4, '0');
             const staff = (s.meseroNombre || s.vendedorNombre || 'Sistema').substring(0, 8);
-            const isCanceled = s.status === 'ANULADA';
-            const amountStr = isCanceled ? 'ANULADA' : formatCOP(s.totalCop || s.totalUsd);
+            const amountStr = formatCOP(s.totalCop || s.totalUsd);
             p.smallFont(true).row(`#${ref} ${staff}`, amountStr, WS);
             p.smallFont(false);
         });
