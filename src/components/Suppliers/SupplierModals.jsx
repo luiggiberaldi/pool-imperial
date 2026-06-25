@@ -149,7 +149,7 @@ export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, 
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-xl overflow-visible animate-in zoom-in-95 duration-200">
                 <div className="p-5 border-b border-slate-100 flex justify-between items-center">
                     <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
                         <CreditCard size={18} className="text-emerald-500" /> Pagar a Proveedor
