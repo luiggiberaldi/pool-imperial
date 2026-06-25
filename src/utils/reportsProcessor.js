@@ -41,7 +41,11 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
         }
     });
 
-    const totalItems = salesForStats.reduce((s, sale) => s + (sale.items ? sale.items.reduce((is, i) => is + i.qty, 0) : 0), 0);
+    const totalItems = salesForStats.reduce((s, sale) => s + (sale.items ? sale.items.reduce((is, i) => {
+        const nameLower = (i.name || '').toLowerCase();
+        if (i.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return is;
+        return is + i.qty;
+    }, 0) : 0), 0);
     const profit = FinancialEngine.calculateAggregateProfit(salesForStats, 1, products);
     const paymentBreakdown = FinancialEngine.calculatePaymentBreakdown(salesForCashFlow);
 
@@ -68,7 +72,8 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
 
     salesForStats.forEach(s => {
         s.items?.forEach(item => {
-            const nameLower = item.name?.toLowerCase();
+            const nameLower = (item.name || '').toLowerCase();
+            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
             if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
             if (!productMap[item.name]) productMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
             productMap[item.name].qty += item.qty;
@@ -150,7 +155,11 @@ export function groupSalesByCierreId(allSales, from, to, products) {
                     });
                 }
             });
-            const totalItems = salesForStats.reduce((acc, s) => acc + (s.items ? s.items.reduce((is, it) => is + it.qty, 0) : 0), 0);
+            const totalItems = salesForStats.reduce((acc, s) => acc + (s.items ? s.items.reduce((is, it) => {
+                const nameLower = (it.name || '').toLowerCase();
+                if (it.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return is;
+                return is + it.qty;
+            }, 0) : 0), 0);
             const profit = FinancialEngine.calculateAggregateProfit(salesForStats, 1, products);
             const paymentBreakdown = FinancialEngine.calculatePaymentBreakdown(salesForCashFlow);
 

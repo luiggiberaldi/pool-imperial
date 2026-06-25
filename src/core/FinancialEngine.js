@@ -148,17 +148,9 @@ export class FinancialEngine {
         const breakdown = {};
 
         salesArray.forEach(sale => {
-            // ── APERTURA DE CAJA: add opening float to cash buckets (not revenue) ──
+            // ── APERTURA DE CAJA: Ignore completely in payment breakdown ──
             if (sale.tipo === 'APERTURA_CAJA') {
-                if (sale.openingUsd > 0) {
-                    if (!breakdown['efectivo']) breakdown['efectivo'] = { total: 0, currency: 'COP', label: 'Efectivo' };
-                    breakdown['efectivo'].total = round2(breakdown['efectivo'].total + round2(sale.openingUsd));
-                }
-                if (sale.openingBs > 0) { // openingBs stores USD float
-                    if (!breakdown['efectivo_usd']) breakdown['efectivo_usd'] = { total: 0, currency: 'USD', label: 'Efectivo USD' };
-                    breakdown['efectivo_usd'].total = round2(breakdown['efectivo_usd'].total + round2(sale.openingBs));
-                }
-                return; // Do NOT count opening as revenue
+                return;
             }
 
             // Debt collection reduces the outstanding fiado balance for the period (using USD to prevent exchange rate drift)

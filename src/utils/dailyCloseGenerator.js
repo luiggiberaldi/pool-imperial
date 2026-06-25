@@ -83,7 +83,8 @@ export async function generateDailyClosePDF({
         allSales.forEach(sale => {
             if (sale.status === 'ANULADA') return;
             (sale.items || []).forEach(item => {
-                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) return;
+                const nameLower = (item.name || '').toLowerCase();
+                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -329,11 +330,11 @@ export async function generateDailyClosePDF({
         const openingCOP = apertura?.openingCOP || apertura?.openingUsd || 0;
         const openingUSD = apertura?.openingBs || 0;
 
-        const expectedCOP = (paymentBreakdown['efectivo']?.total || 0) + (paymentBreakdown['efectivo_cop']?.total || 0) + (paymentBreakdown['_vuelto_cop']?.total || 0);
+        const expectedCOP = (paymentBreakdown['efectivo']?.total || 0) + (paymentBreakdown['efectivo_cop']?.total || 0) + (paymentBreakdown['_vuelto_cop']?.total || 0) + openingCOP;
         const declaredCOP = reconData.declaredCop || reconData.declaredCOP || 0;
         const diffCOP = declaredCOP - expectedCOP;
 
-        const expectedUSD = paymentBreakdown['efectivo_usd']?.total || 0;
+        const expectedUSD = (paymentBreakdown['efectivo_usd']?.total || 0) + openingUSD;
         const declaredUSD = reconData.declaredUsd || reconData.declaredUSD || 0;
         const diffUSD = declaredUSD - expectedUSD;
 

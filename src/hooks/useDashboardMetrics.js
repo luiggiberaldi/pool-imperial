@@ -86,7 +86,11 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     const todayTotalBs = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalBs || 0), 0), [todaySales]);
     const todayTotalUsd = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), [todaySales]);
     const todayItemsSold = useMemo(() =>
-        todaySales.reduce((sum, s) => sum + (s.items ? s.items.reduce((is, i) => is + i.qty, 0) : 0), 0),
+        todaySales.reduce((sum, s) => sum + (s.items ? s.items.reduce((is, i) => {
+            const nameLower = (i.name || '').toLowerCase();
+            if (i.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return is;
+            return is + i.qty;
+        }, 0) : 0), 0),
         [todaySales]
     );
 
@@ -132,7 +136,11 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     const dayTotalUsd = useMemo(() => daySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), [daySales]);
     const dayTotalBs = useMemo(() => daySales.reduce((sum, s) => sum + (s.totalBs || 0), 0), [daySales]);
     const dayItemsSold = useMemo(() =>
-        daySales.reduce((sum, s) => sum + (s.items ? s.items.reduce((is, i) => is + i.qty, 0) : 0), 0),
+        daySales.reduce((sum, s) => sum + (s.items ? s.items.reduce((is, i) => {
+            const nameLower = (i.name || '').toLowerCase();
+            if (i.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return is;
+            return is + i.qty;
+        }, 0) : 0), 0),
         [daySales]
     );
     const dayProfit = useMemo(() =>
@@ -243,7 +251,8 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
 
         todaySales.forEach(s => {
             s.items?.forEach(item => {
-                const nameLower = item.name?.toLowerCase();
+                const nameLower = (item.name || '').toLowerCase();
+                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
                 if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
                 if (!map[item.name]) map[item.name] = { name: item.name, qty: 0, revenue: 0 };
                 map[item.name].qty += item.qty;

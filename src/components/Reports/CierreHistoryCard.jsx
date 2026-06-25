@@ -64,7 +64,8 @@ export default function CierreHistoryCard({ cierre, products: _products, isAdmin
         cierre.salesForStats.forEach(s => {
             if (s.items) {
                 s.items.forEach(item => {
-                    const nameLower = item.name?.toLowerCase();
+                    const nameLower = (item.name || '').toLowerCase();
+                    if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
                     if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
                     if (!todayProductMap[item.name]) todayProductMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
                     todayProductMap[item.name].qty += item.qty;

@@ -86,7 +86,8 @@ export default function CierreCajaWizard({
         currentSales.forEach(sale => {
             if (sale.status === 'ANULADA') return;
             (sale.items || []).forEach(item => {
-                if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) return;
+                const nameLower = (item.name || '').toLowerCase();
+                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -103,8 +104,12 @@ export default function CierreCajaWizard({
 
     if (!isOpen) return null;
 
+    const openingCop = apertura?.openingCOP || apertura?.openingUsd || 0;
+    const openingUsd = apertura?.openingBs || 0;
+
     // Expected COP cash = COP starting float + COP cash payments + COP change given (negative)
     const expectedCop = round2(
+        openingCop +
         (paymentBreakdown['efectivo']?.total || 0) +
         (paymentBreakdown['efectivo_cop']?.total || 0) +
         (paymentBreakdown['_vuelto_cop']?.total || 0)
@@ -112,6 +117,7 @@ export default function CierreCajaWizard({
 
     // Expected USD cash = USD starting float + USD cash payments
     const expectedUsd = round2(
+        openingUsd +
         (paymentBreakdown['efectivo_usd']?.total || 0)
     );
 
@@ -180,9 +186,6 @@ export default function CierreCajaWizard({
         setReportSnapshot(null);
         onClose();
     };
-
-    const openingCop = apertura?.openingCOP || apertura?.openingUsd || 0;
-    const openingUsd = apertura?.openingBs || 0;
 
     const paymentEntries = Object.entries(paymentBreakdown).filter(([, data]) => data.total > 0 && !data.currency?.startsWith('VUELTO'));
 
