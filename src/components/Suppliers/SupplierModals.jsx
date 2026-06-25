@@ -125,7 +125,7 @@ export function AddInvoiceModal({ supplier, onClose, onSave }) {
     );
 }
 
-export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, onSave }) {
+export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, onSave, tasaCop }) {
     const [amount, setAmount] = useState('');
     const filteredMethods = activePaymentMethods.filter(m => m.currency === 'COP');
     const [paymentMethod, setPaymentMethod] = useState('efectivo_cop');
@@ -141,9 +141,10 @@ export function PayInvoiceModal({ supplier, activePaymentMethods = [], onClose, 
         const rawAmt = parseFloat(amount);
         if (!rawAmt || rawAmt <= 0) return;
 
-        const amountUsd = round2(rawAmt);
+        const activeTasa = tasaCop || 4150;
+        const amountUsd = round2(rawAmt / activeTasa);
         
-        onSave(amountUsd, 0, amountUsd, paymentMethod, 'COP');
+        onSave(amountUsd, rawAmt, paymentMethod, 'COP');
     };
 
     return (

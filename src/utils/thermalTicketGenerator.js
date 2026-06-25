@@ -461,17 +461,26 @@ export async function printThermalDailyClose({
     });
     const tipsUserRows = Object.keys(tipsByUser).length;
 
+    const activeSalesCount = sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA').length;
+    let totalEgresosProveedores = 0;
+    sales.forEach(s => {
+        if (s.tipo === 'PAGO_PROVEEDOR') {
+            totalEgresosProveedores += Math.abs(s.totalCop || s.totalUsd || 0);
+        }
+    });
+
     const openingCOP = apertura?.openingCOP || apertura?.openingUsd || apertura?.totalUsd || 0;
 
     // Resumen General HTML
     const resumenGeneralHtml = `
         <div class="section-title">Resumen General</div>
         <table>
-            <tr><td>Ventas realizadas:</td><td style="text-align:right;font-weight:bold;">${sales.length}</td></tr>
+            <tr><td>Ventas realizadas:</td><td style="text-align:right;font-weight:bold;">${activeSalesCount}</td></tr>
             <tr><td>Articulos vendidos:</td><td style="text-align:right;font-weight:bold;">${todayItemsSold}</td></tr>
             ${openingCOP > 0 ? `<tr><td>Fondo de Apertura:</td><td style="text-align:right;font-weight:bold;">${formatCOP(openingCOP)}</td></tr>` : ''}
             <tr><td>Ingresos Brutos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalCOP)}</td></tr>
             <tr><td>Ingresos Netos COP:</td><td style="text-align:right;font-weight:bold;">${formatCOP(netCOP)}</td></tr>
+            ${totalEgresosProveedores > 0 ? `<tr><td>Egresos Proveedores:</td><td style="text-align:right;font-weight:bold;color:#dc3545;">-${formatCOP(totalEgresosProveedores)}</td></tr>` : ''}
             ${totalServicioVoluntario > 0 ? `<tr><td>Servicio Voluntario:</td><td style="text-align:right;font-weight:bold;">${formatCOP(totalServicioVoluntario)}</td></tr>` : ''}
             <tr><td>Ganancia estimada:</td><td style="text-align:right;font-weight:bold;">${formatCOP(todayProfit)}</td></tr>
         </table>

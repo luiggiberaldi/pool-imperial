@@ -831,15 +831,26 @@ export async function printDailyCloseEscPos({
     p.line('-', W);
 
     // ── Resumen General ──
+    const activeSalesCount = sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA').length;
+    let totalEgresosProveedores = 0;
+    sales.forEach(s => {
+        if (s.tipo === 'PAGO_PROVEEDOR') {
+            totalEgresosProveedores += Math.abs(s.totalCop || s.totalUsd || 0);
+        }
+    });
+
     const openingCOP = apertura?.openingCOP || apertura?.openingUsd || apertura?.totalUsd || 0;
     p.align(1).bold(true).text('RESUMEN GENERAL').newline().bold(false).align(0);
-    p.row('Ventas realizadas:', String(sales.length), W);
+    p.row('Ventas realizadas:', String(activeSalesCount), W);
     p.row('Articulos vendidos:', String(todayItemsSold), W);
     if (openingCOP > 0) {
         p.row('Fondo de Apertura:', formatCOP(openingCOP), W);
     }
     p.row('Ingresos Brutos COP:', formatCOP(totalCOP), W);
     p.row('Ingresos Netos COP:', formatCOP(netCOP), W);
+    if (totalEgresosProveedores > 0) {
+        p.row('Egresos Proveedores:', '-' + formatCOP(totalEgresosProveedores), W);
+    }
     if (totalServicioVoluntario > 0) {
         p.row('Servicio Voluntario:', formatCOP(totalServicioVoluntario), W);
     }

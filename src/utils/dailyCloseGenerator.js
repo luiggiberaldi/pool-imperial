@@ -201,9 +201,17 @@ export async function generateDailyClosePDF({
         });
     });
 
+    const activeSalesCount = sales.filter(s => s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA').length;
+    let totalEgresosProveedores = 0;
+    sales.forEach(s => {
+        if (s.tipo === 'PAGO_PROVEEDOR') {
+            totalEgresosProveedores += Math.abs(s.totalCop || s.totalUsd || 0);
+        }
+    });
+
     const openingCOP = apertura?.openingCOP || apertura?.openingUsd || apertura?.totalUsd || 0;
     const statsRows = [
-        ['Ventas realizadas', `${sales.length}`],
+        ['Ventas realizadas', `${activeSalesCount}`],
         ['Artículos vendidos', `${todayItemsSold}`],
     ];
     if (openingCOP > 0) {
@@ -211,7 +219,12 @@ export async function generateDailyClosePDF({
     }
     statsRows.push(
         ['Ingresos Brutos COP', formatCOP(totalCOP)],
-        ['Ingresos Netos COP', formatCOP(netCOP)],
+        ['Ingresos Netos COP', formatCOP(netCOP)]
+    );
+    if (totalEgresosProveedores > 0) {
+        statsRows.push(['Egresos Proveedores', `-${formatCOP(totalEgresosProveedores)}`]);
+    }
+    statsRows.push(
         ['Ganancia estimada', formatCOP(todayProfit || 0)]
     );
     if (totalServicioVoluntario > 0) {

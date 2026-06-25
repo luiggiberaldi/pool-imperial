@@ -217,8 +217,9 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
 
         const sales = await storageService.getItem('bodega_sales_v1', []);
         const totalEnBs = currency === 'BS' ? amountBs : mulR(amountUsd, bcvRate);
-        const totalEnUsd = currency === 'USD' ? amountUsd : (bcvRate > 0 ? divR(amountBs, bcvRate) : 0);
         const totalEnCop = currency === 'COP' ? amountBs : mulR(amountUsd, tasaCop);
+        // En Pool Imperial, totalUsd a nivel de venta almacena COP (legacy field)
+        const totalEnUsd = currency === 'COP' ? totalEnCop : (currency === 'USD' ? amountUsd : (bcvRate > 0 ? divR(amountBs, bcvRate) : 0));
         sales.push({
             id: crypto.randomUUID(),
             timestamp: new Date().toISOString(),
@@ -229,8 +230,15 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
             totalUsd: -totalEnUsd,
             ...(copEnabled && { totalCop: -totalEnCop }),
             paymentMethod: methodId,
-            payments: [{ methodId, amountUsd: currency === 'USD' ? -totalEnUsd : 0, amountBs: currency === 'BS' ? -totalEnBs : 0, ...(copEnabled && { amountCop: currency === 'COP' ? -totalEnCop : 0 }), currency, methodLabel: 'Pago a Proveedor' }],
-            items: [{ name: `Pago a proveedor: ${supplier.name}`, qty: 1, priceUsd: -totalEnUsd, costBs: 0 }]
+            payments: [{ 
+                methodId, 
+                amountUsd: currency === 'COP' ? -totalEnCop : (currency === 'USD' ? -totalEnUsd : 0), 
+                amountBs: currency === 'BS' ? -totalEnBs : 0, 
+                ...(copEnabled && { amountCop: currency === 'COP' ? -totalEnCop : 0 }), 
+                currency, 
+                methodLabel: 'Pago a Proveedor' 
+            }],
+            items: [{ name: `Pago a proveedor: ${supplier.name}`, qty: 1, priceUsd: currency === 'COP' ? -totalEnCop : -totalEnUsd, costBs: 0 }]
         });
         await storageService.setItem('bodega_sales_v1', sales);
         setIsPayInvoiceModalOpen(false);
