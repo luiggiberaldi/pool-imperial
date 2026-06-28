@@ -205,8 +205,12 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
         const map = {};
         const productIds = new Set((products || []).map(p => p.id));
         const productNames = new Set((products || []).map(p => p.name.toLowerCase()));
+        // Perf: solo considerar ventas de los últimos 30 días
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const sinceStr = thirtyDaysAgo.toISOString();
 
-        sales.filter(s => !['COBRO_DEUDA','AJUSTE_ENTRADA','AJUSTE_SALIDA','VENTA_FIADA'].includes(s.tipo) && s.status !== 'ANULADA').forEach(s => {
+        sales.filter(s => !['COBRO_DEUDA','AJUSTE_ENTRADA','AJUSTE_SALIDA','VENTA_FIADA'].includes(s.tipo) && s.status !== 'ANULADA' && (s.timestamp || '') >= sinceStr).forEach(s => {
             s.items?.forEach(item => {
                 const nameLower = item.name?.toLowerCase();
                 if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
@@ -219,7 +223,10 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     }, [sales, products]);
 
     const topStaff = useMemo(() => {
-        const sinceDate = localStorage.getItem('ranking_meseros_since') || null;
+        // Fallback: si no hay fecha configurada, usar últimos 30 días
+        const sinceDate = localStorage.getItem('ranking_meseros_since') || (() => {
+            const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString();
+        })();
         const map = {};
         sales.filter(s => {
             if (['COBRO_DEUDA','AJUSTE_ENTRADA','AJUSTE_SALIDA','APERTURA_CAJA'].includes(s.tipo) || s.status === 'ANULADA') return false;

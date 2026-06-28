@@ -179,12 +179,13 @@ export const useCashStore = create((set, get) => ({
             });
     },
 
-    // Capa B: Polling cada 30s — garantiza sync aunque el realtime falle
+    // Capa B: Polling cada 60s — garantiza sync aunque el realtime falle
     _startPolling: () => {
         if (cashPollingInterval) return;
         cashPollingInterval = setInterval(() => {
+            if (document.hidden) return; // No sincronizar si la app no está visible
             get().syncCashSession();
-        }, 30_000);
+        }, 60_000);
     },
 
     // Reintento de insert de apertura de caja que falló por estar offline

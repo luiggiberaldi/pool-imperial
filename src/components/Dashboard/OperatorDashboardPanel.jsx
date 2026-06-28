@@ -46,7 +46,12 @@ export default function OperatorDashboardPanel({ onNavigate }) {
     useEffect(() => {
         if (!currentUser?.id) return;
         const load = async () => {
-            const sales = await storageService.getItem('bodega_sales_v1', []);
+            const allSales = await storageService.getItem('bodega_sales_v1', []);
+            // Perf: solo procesar ventas de los últimos 7 días
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+            const sales = allSales.filter(s => (s.timestamp?.slice(0, 10) || '') >= sevenDaysAgoStr);
             const todayStr = new Date().toISOString().slice(0, 10);
             const mySales = sales.filter(s => {
                 if (s.status === 'ANULADA' || s.tipo === 'COBRO_DEUDA') return false;
@@ -89,9 +94,19 @@ export default function OperatorDashboardPanel({ onNavigate }) {
             }
         };
         load();
-        const onUpdate = (e) => { if (e.detail?.key === 'bodega_sales_v1') load(); };
+        // Debounce: esperar 1s tras el último evento antes de recargar
+        let debounceTimer = null;
+        const onUpdate = (e) => {
+            if (e.detail?.key === 'bodega_sales_v1') {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(load, 1000);
+            }
+        };
         window.addEventListener('app_storage_update', onUpdate);
-        return () => window.removeEventListener('app_storage_update', onUpdate);
+        return () => {
+            window.removeEventListener('app_storage_update', onUpdate);
+            clearTimeout(debounceTimer);
+        };
     }, [currentUser?.id, isMesero, rankingSince]);
 
     const handleResetRanking = async () => {

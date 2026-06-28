@@ -303,3 +303,23 @@ Se rediseñó por completo el generador de PDF en [`dailyCloseGenerator.js`](fil
 
 ### Verificación
 - `npm run build` completado exitosamente sin advertencias.
+
+---
+
+## ⚡ Optimización de Rendimiento para Perfiles de Caja (Cajero, Mesero, Barra)
+
+### Problema
+Los usuarios con perfiles de caja experimentaban congelamientos de pantalla y lentitud (lag) debido a lecturas excesivas a IndexedDB (`bodega_sales_v1`), procesamiento iterativo innecesario de miles de ventas para rankings y métricas, y consultas redundantes y continuas en segundo plano de manera simultánea.
+
+### Solución
+Se implementó un plan de optimización en 4 fases:
+1. **Debounce en Lecturas IndexedDB (1s)**: Tanto en `DashboardView.jsx` como en `OperatorDashboardPanel.jsx`, se agregó un retardo de 1 segundo a las lecturas reactivas ante eventos de actualización (`app_storage_update`). Esto evita múltiples lecturas y deserializaciones consecutivas del historial completo cuando llegan múltiples transacciones seguidas.
+2. **Limitación de Ventas en Panel del Operador**: Se modificó `OperatorDashboardPanel.jsx` para que solo cargue y procese transacciones de los últimos 7 días. Esto redujo el volumen de datos de miles de filas a solo unas decenas de registros.
+3. **Reducción de Intervalos de Polling en Background**:
+   - Se extendió el fallback de sincronización de ventas (`pullNewSales` en `useCloudSync.js`) de 30 a 90 segundos, delegando la velocidad en tiempo real al canal P2P de broadcast de Supabase.
+   - Se extendió el polling de estado de sesión de caja (`cashStore.js`) de 30 a 60 segundos y se incorporó un guard `document.hidden` para pausar la sincronización cuando la aplicación no está activa en la pantalla.
+4. **Métricas y Rankings Acotados**: En `useDashboardMetrics.js`, se limitó el procesamiento de las funciones `topProducts` y `topStaff` para analizar únicamente los últimos 30 días, evitando procesar toda la historia del negocio en cada cambio de vista del administrador.
+
+### Verificación
+- `npm run build` completado exitosamente sin advertencias en 25 segundos.
+

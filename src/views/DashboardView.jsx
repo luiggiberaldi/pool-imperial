@@ -134,15 +134,31 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         if (todaySales.length > 0) notifyCierrePendiente(todaySales.length);
     }, [todaySales.length, notifyCierrePendiente]);
 
-    // ── Escuchar actualizaciones de la nube ──
+    // ── Escuchar actualizaciones de la nube (debounced 1s) ──
     useEffect(() => {
-        const handleCloudUpdate = async (e) => {
+        let salesTimer = null;
+        let customersTimer = null;
+        const handleCloudUpdate = (e) => {
             const key = e.detail?.key;
-            if (key === SALES_KEY) setSales(await storageService.getItem(SALES_KEY, []));
-            if (key === 'bodega_customers_v1') setCustomers(await storageService.getItem('bodega_customers_v1', []));
+            if (key === SALES_KEY) {
+                clearTimeout(salesTimer);
+                salesTimer = setTimeout(async () => {
+                    setSales(await storageService.getItem(SALES_KEY, []));
+                }, 1000);
+            }
+            if (key === 'bodega_customers_v1') {
+                clearTimeout(customersTimer);
+                customersTimer = setTimeout(async () => {
+                    setCustomers(await storageService.getItem('bodega_customers_v1', []));
+                }, 1000);
+            }
         };
         window.addEventListener('app_storage_update', handleCloudUpdate);
-        return () => window.removeEventListener('app_storage_update', handleCloudUpdate);
+        return () => {
+            window.removeEventListener('app_storage_update', handleCloudUpdate);
+            clearTimeout(salesTimer);
+            clearTimeout(customersTimer);
+        };
     }, []);
 
     // ── Apertura de caja ──

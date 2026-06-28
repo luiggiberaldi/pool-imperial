@@ -665,7 +665,7 @@ export function useCloudSync() {
             } catch (e) {
                 // Ignore background errors
             }
-        }, 30000); // 30 seconds
+        }, 90000); // 90s — broadcast P2P es el canal primario, esto es solo fallback
         
         return () => clearInterval(interval);
     }, [isCloudConfigured]);
