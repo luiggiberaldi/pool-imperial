@@ -453,7 +453,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             totalTax,
                             taxBreakdown
                         };
-                        processSaleTransaction(opts).then((result) => {
+                        return processSaleTransaction(opts).then((result) => {
                             if (!result.success) {
                                 showToast(result.error, result.error.includes('No se pueden') ? 'warning' : 'error');
                                 playError();
@@ -656,7 +656,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                         const sessionId = tableCheckoutData.session?.id;
                         const tableName = tableCheckoutData.table?.name || 'Mesa';
                         const isSeatPayment = !!tableCheckoutData.seatId;
-                        handleTableCheckout(payments, change, selectedCustomerId, null, splitMeta, { tdcSurchargePercent, tdcSurcharge, totalTax }).then((res) => {
+                        return handleTableCheckout(payments, change, selectedCustomerId, null, splitMeta, { tdcSurchargePercent, tdcSurcharge, totalTax }).then((res) => {
                             if (res && res.success === false) return; // checkout failed — don't show success dialog
                             setShowTablePayment(false);
                             // Solo mostrar diálogo liberar/mantener cuando es cobro completo o todos los asientos pagados

@@ -213,3 +213,93 @@ resumen general del mismo archivo (cálculo de `salesForStats` / `salesForCashFl
 
 ### Verificación
 - `npm run build` → `✓ built in 27.30s`, sin errores de compilación.
+
+---
+
+## 🔒 Fix: Prevención de Ventas Duplicadas por Doble Click (Debouncing / Loading State)
+
+### Problema
+Cuando el cajero pulsaba repetidamente el botón "CONFIRMAR COBRO" durante momentos de latencia o lag en la conexión de red, se procesaban y registraban múltiples ventas idénticas en paralelo. La guardia interna basada en `submittingRef.current` no funcionaba porque el callback `onConfirmSale` de la vista no retornaba la promesa de la transacción, haciendo que el bloqueo se liberara de forma instantánea e ineficaz.
+
+### Cambios Realizados
+
+#### [MODIFY] [SalesView.jsx](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/views/SalesView.jsx)
+Se agregaron retornos de promesas en ambos manejadores `onConfirmSale` (venta directa y cobro de mesa) para asegurar que el componente padre comunique la finalización asíncrona de la venta:
+- **Venta directa**: Se añadió `return` a `processSaleTransaction(opts).then(...)`.
+- **Cobro de mesa**: Se añadió `return` a `handleTableCheckout(...).then(...)`.
+
+#### [MODIFY] [useCheckoutPayments.js](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/hooks/useCheckoutPayments.js)
+- Se introdujo el estado reactivo `isSubmitting` gestionado dentro de `_doConfirm` mediante un bloque `try...finally` que abarca toda la duración de la promesa de `onConfirmSale`.
+- Se mantiene el bloqueo instantáneo sincrónico de `submittingRef.current` en conjunto con el nuevo estado reactivo `isSubmitting` para máxima seguridad ante pulsaciones rápidas.
+
+#### [MODIFY] [CheckoutModal.jsx](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/components/Sales/CheckoutModal.jsx)
+- Se enlazó el estado `isSubmitting` al botón principal **CONFIRMAR COBRO** para deshabilitarlo e impedir eventos de click concurrentes.
+- Se implementó un estado visual de carga premium que muestra el texto **`PROCESANDO...`** junto con un spinner animado SVG durante la ejecución de la venta.
+
+### Verificación
+- `npm run build` completado exitosamente en `42.15s` sin errores de compilación.
+
+---
+
+## 🎨 Fix: Alineación y Prevención de Solapamiento en Reporte de Ventas del Cierre de Caja
+
+### Problema
+En la sección "DETALLE DE VENTAS" del PDF de cierre de caja, el nombre del cliente (ej. `"Consumidor Final"`) se solapaba con la hora de venta (especialmente con el indicador de AM/PM, resultando en textos encimados como `"08:29 p. mConsumidor Final"`). Esto ocurría porque la coordenada inicial del cliente estaba fijada a un margen demasiado estrecho (`M + 12`), mientras que el formato de hora de 11 caracteres requería más espacio.
+
+### Cambios Realizados
+
+#### [MODIFY] [dailyCloseGenerator.js](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/utils/dailyCloseGenerator.js)
+- Se incrementó el margen horizontal de inicio para el nombre del cliente de `M + 12` a `M + 16` (y a `M + 23` tras incorporar el correlativo), proporcionando un espacio seguro de separación de más de 4 mm.
+- Se ajustó el límite máximo de truncamiento del nombre del cliente de 18 a 12 caracteres para asegurar que no colisione con el monto de la venta, el cual está alineado al extremo derecho.
+- Se agregó el correlativo de venta (ej. `#0238`) junto al campo de la hora.
+
+---
+
+## 🖨️ Restablecimiento del Layout de Impresión de Cierre a HTML (Thermal)
+
+### Cambios Realizados
+
+#### [MODIFY] [CierreHistoryCard.jsx](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/components/Reports/CierreHistoryCard.jsx) y [CierreCajaWizard.jsx](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/components/Dashboard/CierreCajaWizard.jsx)
+- Se restauró la llamada a `printThermalDailyClose` para el botón "Imprimir Ticket / Re-imprimir Ticket". Esto restablece el diseño nativo HTML optimizado para papel térmico de 58mm (con textos bold contrastados, logo en blanco y negro y tablas compactas).
+- Se conservó `generateDailyClosePDF` únicamente para la descarga local a través de "Descargar PDF".
+
+---
+
+## 🧹 Script de Limpieza y Deduplicación Local Avanzada (Filtro por Minuto)
+
+### Problema
+Debido a la latencia y la concurrencia al realizar múltiples clicks, el navegador generó registros duplicados locales con segundos ligeramente distintos (ej. `12:21:03` y `12:21:08`). Esto impedía que filtros de segundo exacto detectaran los duplicados.
+
+### Solución
+Se diseñó un nuevo script para la consola de Chrome que agrupa las ventas locales con precisión de 1 minuto (ignorando segundos) y de forma completamente automatizada calcula los ítems que se van a descartar para devolverlos directamente al inventario de productos.
+
+### Verificación
+- `npm run build` completado exitosamente sin advertencias.
+
+---
+
+## 📄 Rediseño de Reporte de Cierre PDF a Formato Carta (Letter Size)
+
+### Problema
+El reporte en PDF descargado anteriormente utilizaba un formato estilo recibo continuo de 58mm (largo y angosto). Al ser abierto en computadoras o impreso en hojas convencionales de oficina, se desaprovechaba la mayor parte del espacio y las tablas se veían demasiado comprimidas.
+
+### Solución
+Se rediseñó por completo el generador de PDF en [`dailyCloseGenerator.js`](file:///c:/Users/luigg/Desktop/pool/pool%20imperial/src/utils/dailyCloseGenerator.js) para utilizar el tamaño de hoja **Carta (Letter, 215.9 x 279.4 mm)** en orientación vertical.
+
+### Detalles de la Nueva Interfaz del Reporte:
+1. **Encabezado Corporativo**:
+   - Logo a la izquierda de la página y metadatos de emisión (fecha, hora, número de cierre) alineados a la derecha de forma elegante.
+2. **Cuadrícula de Métricas (Grid Cards)**:
+   - Se diseñaron tarjetas rectangulares modernas con fondos e indicadores de color (azul/charcoal) para mostrar *Ingresos Brutos y Netos*, *Operaciones Realizadas* y *Ganancia Estimada*.
+3. **Distribución en Columnas Simétricas**:
+   - **Pagos por método** e **Impuestos** en la columna izquierda.
+   - **Cuadre de caja física** (esperado vs. declarado) en la columna derecha.
+4. **Inventario y Más Vendidos**:
+   - **Movimientos de Productos** (entradas/salidas) y **Top de Artículos** mostrados en dos tablas alineadas lado a lado para optimizar el espacio horizontal.
+5. **Historial Detallado de Ventas (Formato Tabla Completo)**:
+   - Se distribuyeron los datos de cada venta en columnas: `Hora / Ref`, `Cliente`, `Artículos Detalle`, `Transacción / Pago` y `Total Venta` (con colores destacados).
+6. **Salto de Página Inteligente (Multi-página)**:
+   - Se programó un control de desborde dinámico que añade hojas adicionales automáticamente si la cantidad de ventas supera la altura física de la página, agregando un membrete y pie de página en cada hoja.
+
+### Verificación
+- `npm run build` completado exitosamente sin advertencias.

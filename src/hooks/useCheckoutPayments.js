@@ -31,6 +31,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     const [tdcSurchargePercent, setTdcSurchargePercent] = useState(initialSurchargePercent);
     const [applyTdcSurcharge, setApplyTdcSurcharge] = useState(false);
     const [tdcSurcharge, setTdcSurcharge] = useState(0);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const submittingRef = useRef(false);
 
     const ivaAmount = totalTax || 0;
@@ -190,6 +191,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     const _doConfirm = useCallback(async () => {
         if (submittingRef.current) return;
         submittingRef.current = true;
+        setIsSubmitting(true);
         try {
             triggerHaptic && triggerHaptic();
             const payments = paymentMethods
@@ -237,6 +239,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
             }, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax);
         } finally {
             submittingRef.current = false;
+            setIsSubmitting(false);
         }
     }, [barValues, paymentMethods, onConfirmSale, triggerHaptic, changeUsdGiven, changeUsd, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax, tasaCop]);
 
@@ -267,6 +270,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         tdcSurchargePercent, setTdcSurchargePercent,
         toggleTdcSurcharge, handleSurchargePercentChange,
         hasUnappliedTdcSurcharge,
+        isSubmitting,
     };
 }
 

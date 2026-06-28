@@ -617,16 +617,16 @@ export default function CierreCajaWizard({
                                             apertura,
                                         };
                                         printThermalDailyClose({
-                                            ...snap,
-                                            reconData: {
-                                                declaredCop,
-                                                declaredUsd,
-                                                diffCop,
-                                                diffUsd
-                                            },
-                                            cierreId: cierreId,
-                                            cierreNum: currentCierreNum
-                                        });
+                                             ...snap,
+                                             reconData: {
+                                                 declaredCop,
+                                                 declaredUsd,
+                                                 diffCop,
+                                                 diffUsd
+                                             },
+                                             cierreId: cierreId,
+                                             cierreNum: currentCierreNum
+                                         });
                                     }}
                                     className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded-2xl shadow-lg shadow-indigo-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-sm"
                                 >

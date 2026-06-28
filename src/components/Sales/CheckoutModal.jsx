@@ -107,6 +107,7 @@ export default function CheckoutModal({
         tdcSurchargePercent, setTdcSurchargePercent,
         toggleTdcSurcharge, handleSurchargePercentChange,
         hasUnappliedTdcSurcharge,
+        isSubmitting,
     } = useCheckoutPayments({ paymentMethods, effectiveRate: 1, tasaCop: tasaCop || 4150, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta, tdcSurchargePercent: 5, totalTax, tableContext });
 
     const priorAbonoTotal_display = (priorAbonoTotal > 0) ? priorAbonoTotal : 0;
@@ -715,6 +716,7 @@ export default function CheckoutModal({
                 <div className="px-4 pb-3">
                     <button
                         onClick={() => {
+                            if (isSubmitting) return;
                             if (hasUnappliedTdcSurcharge) {
                                 toggleTdcSurcharge();
                                 return;
@@ -726,18 +728,22 @@ export default function CheckoutModal({
                                 handleConfirm();
                             }
                         }}
-                        disabled={!hasUnappliedTdcSurcharge && !selectedCustomerId && remainingUsd >= EPSILON}
+                        disabled={isSubmitting || (!hasUnappliedTdcSurcharge && !selectedCustomerId && remainingUsd >= EPSILON)}
                         className={`w-full py-4 text-white font-black text-base rounded-2xl shadow-lg transition-all tracking-wide flex items-center justify-center gap-2 ${
-                            hasUnappliedTdcSurcharge
-                                ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25 active:scale-[0.98]'
-                                : isPaid
-                                    ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25 active:scale-[0.98]'
-                                    : selectedCustomerId
-                                        ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/25 active:scale-[0.98]'
-                                        : 'bg-slate-300 dark:bg-slate-800 text-slate-500 shadow-none cursor-not-allowed'
+                            isSubmitting
+                                ? 'bg-slate-400 dark:bg-slate-700 cursor-not-allowed opacity-80 shadow-none'
+                                : hasUnappliedTdcSurcharge
+                                    ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/25 active:scale-[0.98]'
+                                    : isPaid
+                                        ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/25 active:scale-[0.98]'
+                                        : selectedCustomerId
+                                            ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/25 active:scale-[0.98]'
+                                            : 'bg-slate-300 dark:bg-slate-800 text-slate-500 shadow-none cursor-not-allowed'
                         }`}
                     >
-                        {hasUnappliedTdcSurcharge ? (
+                        {isSubmitting ? (
+                            <><div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> PROCESANDO...</>
+                        ) : hasUnappliedTdcSurcharge ? (
                             <><CreditCard size={18} /> SUMA EL RECARGO TDC ({tdcSurchargePercent}%)</>
                         ) : isPaid ? (
                             <><Receipt size={18} /> CONFIRMAR COBRO</>
