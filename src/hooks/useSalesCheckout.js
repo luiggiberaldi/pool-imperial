@@ -431,6 +431,10 @@ export function useSalesCheckout({
         const updated = [...customers, newCustomer];
         setCustomers(updated);
         await storageService.setItem('bodega_customers_v1', updated);
+        try {
+            const { useCustomersStore } = await import('./store/useCustomersStore');
+            await useCustomersStore.getState().refresh();
+        } catch (_) {}
         return newCustomer;
     }, [customers, setCustomers]);
 

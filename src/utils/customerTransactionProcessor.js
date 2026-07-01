@@ -34,6 +34,10 @@ export async function processCustomerTransaction({
     const customers = await storageService.getItem('bodega_customers_v1', []);
     const newCustomers = customers.map(c => c.id === customer.id ? updatedCustomer : c);
     await storageService.setItem('bodega_customers_v1', newCustomers);
+    try {
+        const { useCustomersStore } = await import('../hooks/store/useCustomersStore');
+        await useCustomersStore.getState().refresh();
+    } catch (_) {}
 
     // Actualizar ventas
     const sales = await storageService.getItem('bodega_sales_v1', []);
@@ -89,6 +93,20 @@ export async function processCustomerTransaction({
     }
 
     await storageService.setItem('bodega_sales_v1', sales);
+
+    const newRecord = type === 'ABONO' ? cobroRecord : fiadoRecord;
+    if (newRecord) {
+        try {
+            const { useAuthStore } = await import('../hooks/store/authStore');
+            const userId = useAuthStore.getState().cloudSession?.user?.id;
+            if (userId) {
+                const { broadcastNewSale } = await import('./salesSyncService');
+                await broadcastNewSale(newRecord, userId);
+            }
+        } catch (e) {
+            console.error("[processCustomerTransaction] Failed to broadcast sale:", e);
+        }
+    }
 
     return { updatedCustomer, newCustomers };
 }

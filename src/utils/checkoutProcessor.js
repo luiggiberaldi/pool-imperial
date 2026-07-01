@@ -299,6 +299,10 @@ export async function processSaleTransaction({
         updatedCustomers = customers.map(c => c.id === selectedCustomer.id ? updatedCustomer : c);
 
         await storageService.setItem('bodega_customers_v1', updatedCustomers);
+        try {
+            const { useCustomersStore } = await import('../hooks/store/useCustomersStore');
+            await useCustomersStore.getState().refresh();
+        } catch (_) {}
     }
 
     return {

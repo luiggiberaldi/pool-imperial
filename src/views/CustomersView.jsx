@@ -11,6 +11,7 @@ import SwipeableItem from '../components/SwipeableItem';
 import { useProductContext } from '../context/ProductContext';
 import { useAudit } from '../hooks/useAudit';
 import { useAuthStore } from '../hooks/store/authStore';
+import { useCustomersStore } from '../hooks/store/useCustomersStore';
 
 // Componentes de Clientes
 import CustomerCard from '../components/Customers/CustomerCard';
@@ -94,6 +95,11 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
     const saveCustomers = async (updatedCustomers) => {
         setCustomers(updatedCustomers);
         await storageService.setItem('bodega_customers_v1', updatedCustomers);
+        try {
+            await useCustomersStore.getState().refresh();
+        } catch (e) {
+            console.error("Error refreshing customers store:", e);
+        }
     };
 
     const saveSuppliers = async (updatedSuppliers) => {
@@ -109,7 +115,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
     // ── LÓGICA DE CLIENTES ──
     const handleDeleteCustomerRequest = (customer) => {
         const deuda = customer.deuda || 0;
-        const saldo = customer.saldoFavor || 0;
+        const saldo = customer.favor || 0;
         const fmtCop = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(v || 0));
         if (deuda > 0.005) { showToast(`No se puede eliminar: ${customer.name} tiene una deuda de ${fmtCop(deuda)} pendiente.`, 'error'); return; }
         if (saldo > 0.005) { showToast(`No se puede eliminar: ${customer.name} tiene un saldo a favor de ${fmtCop(saldo)}.`, 'error'); return; }
@@ -316,7 +322,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
         const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.phone && c.phone.includes(searchTerm));
         if (!matchesSearch) return false;
         if (filterType === 'deuda') return c.deuda > 0.01;
-        if (filterType === 'favor') return c.deuda < -0.01;
+        if (filterType === 'favor') return c.favor > 0.01;
         return true;
     });
 
@@ -531,7 +537,7 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
                 onEdit={() => { setEditingCustomer(selectedCustomer); setSelectedCustomer(null); }}
                 onDelete={() => {
                     const deuda = selectedCustomer?.deuda || 0;
-                    const saldo = selectedCustomer?.saldoFavor || 0;
+                    const saldo = selectedCustomer?.favor || 0;
                     if (deuda > 0.005) { showToast(`No se puede eliminar: ${selectedCustomer.name} tiene una deuda de $${deuda.toFixed(2)} pendiente.`, 'error'); return; }
                     if (saldo > 0.005) { showToast(`No se puede eliminar: ${selectedCustomer.name} tiene un saldo a favor de $${saldo.toFixed(2)}.`, 'error'); return; }
                     setDeleteCustomerTarget(selectedCustomer);
