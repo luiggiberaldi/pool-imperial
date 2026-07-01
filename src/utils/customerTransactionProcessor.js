@@ -48,6 +48,8 @@ export async function processCustomerTransaction({
         .filter(n => Number.isInteger(n) && n > 0 && n < 90000);
     const nextSaleNumber = (numericNums.length > 0 ? Math.max(...numericNums) : 0) + 1;
 
+    let newRecord = null;
+
     if (type === 'ABONO') {
         // No crear registro si el monto es 0
         if (amountCop <= 0) {
@@ -75,6 +77,7 @@ export async function processCustomerTransaction({
             items: [{ name: `Abono de deuda: ${customer.name}`, qty: 1, priceUsd: amountCop, costBs: 0 }]
         };
         sales.unshift(cobroRecord);
+        newRecord = cobroRecord;
     } else if (type === 'CREDITO') {
         const fiadoRecord = {
             id: crypto.randomUUID(),
@@ -90,11 +93,11 @@ export async function processCustomerTransaction({
             items: [{ name: `Credito manual: ${customer.name}`, qty: 1, priceUsd: amountCop, costBs: 0 }]
         };
         sales.unshift(fiadoRecord);
+        newRecord = fiadoRecord;
     }
 
     await storageService.setItem('bodega_sales_v1', sales);
 
-    const newRecord = type === 'ABONO' ? cobroRecord : fiadoRecord;
     if (newRecord) {
         try {
             const { useAuthStore } = await import('../hooks/store/authStore');
