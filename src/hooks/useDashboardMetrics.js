@@ -85,7 +85,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     );
 
     const todayTotalBs = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalBs || 0), 0), [todaySales]);
-    const todayTotalUsd = useMemo(() => todaySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), [todaySales]);
+    const todayTotalUsd = useMemo(() => todaySales.reduce((sum, s) => sum + FinancialEngine.calculateSaleNetTotal(s), 0), [todaySales]);
     const todayItemsSold = useMemo(() =>
         todaySales.reduce((sum, s) => sum + (s.items ? s.items.reduce((is, i) => {
             const nameLower = (i.name || '').toLowerCase();
@@ -135,7 +135,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
         }),
         [sales, today]
     );
-    const dayTotalUsd = useMemo(() => daySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), [daySales]);
+    const dayTotalUsd = useMemo(() => daySales.reduce((sum, s) => sum + FinancialEngine.calculateSaleNetTotal(s), 0), [daySales]);
     const dayTotalBs = useMemo(() => daySales.reduce((sum, s) => sum + (s.totalBs || 0), 0), [daySales]);
     const dayItemsSold = useMemo(() =>
         daySales.reduce((sum, s) => sum + (s.items ? s.items.reduce((is, i) => {
@@ -186,7 +186,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
             const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : today;
             return saleLocalDay === dateStr;
         });
-        return { date: dateStr, total: daySales.reduce((sum, s) => sum + (s.totalUsd || 0), 0), count: daySales.length };
+        return { date: dateStr, total: daySales.reduce((sum, s) => sum + FinancialEngine.calculateSaleNetTotal(s), 0), count: daySales.length };
     }), [sales, today]);
 
     const lowStockProducts = useMemo(() =>

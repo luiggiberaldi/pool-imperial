@@ -31,7 +31,7 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
     });
 
     // totalUsd ahora almacena COP en Pool Imperial
-    const totalCOP = salesForStats.reduce((s, sale) => s + (sale.totalCop || sale.totalUsd || 0), 0);
+    const totalCOP = salesForStats.reduce((s, sale) => s + FinancialEngine.calculateSaleNetTotal(sale), 0);
     const totalTax = salesForStats.reduce((s, sale) => s + (sale.ivaAmount || 0), 0);
     const taxBreakdown = {};
     salesForStats.forEach(sale => {
@@ -88,7 +88,7 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
     salesForStats.forEach(s => {
         const day = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
         if (!map[day]) map[day] = { date: day, total: 0, count: 0 };
-        map[day].total += s.totalCop || s.totalUsd || 0;
+        map[day].total += FinancialEngine.calculateSaleNetTotal(s);
         map[day].count++;
     });
     const salesByDay = Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
@@ -146,7 +146,7 @@ export function groupSalesByCierreId(allSales, from, to, products) {
             const salesForCashFlow = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR') && s.status !== 'ANULADA' && !(s.tipo === 'PAGO_PROVEEDOR' && s.afectaCaja === false));
             const adjustments = c.sales.filter(s => s.tipo === 'AJUSTE_ENTRADA' || s.tipo === 'AJUSTE_SALIDA');
 
-            const totalCOP = salesForStats.reduce((acc, s) => acc + (s.totalCop || s.totalUsd || 0), 0);
+            const totalCOP = salesForStats.reduce((acc, s) => acc + FinancialEngine.calculateSaleNetTotal(s), 0);
             const totalTax = salesForStats.reduce((acc, s) => acc + (s.ivaAmount || 0), 0);
             const taxBreakdown = {};
             salesForStats.forEach(sale => {

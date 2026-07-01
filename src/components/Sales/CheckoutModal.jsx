@@ -113,6 +113,17 @@ export default function CheckoutModal({
     const priorAbonoTotal_display = (priorAbonoTotal > 0) ? priorAbonoTotal : 0;
     const netDisplay = (priorAbonoTotal_display > 0) ? (netTotalToPay ?? adjustedTotal) : adjustedTotal;
 
+    const priorAbonoServiceTotal = (() => {
+        if (!tableContext?.session?.notes || !tableContext.session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
+        try {
+            const histStr = tableContext.session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+            const list = JSON.parse(histStr);
+            return list.reduce((sum, item) => sum + (Number(item.serviceAmount || 0) || 0), 0);
+        } catch (_) {
+            return 0;
+        }
+    })();
+
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
     const activePaymentMethods = paymentMethods.filter(m => m.isEnabled !== false);
 
@@ -329,8 +340,13 @@ export default function CheckoutModal({
                             {formatCOP(netDisplay)}
                         </span>
                         {priorAbonoTotal_display > 0 ? (
-                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                            <span className="text-[11.5px] font-extrabold text-slate-500 dark:text-slate-400 mt-1">
                                 Consumo: {formatCOP(adjustedTotal)} &nbsp;·&nbsp; Abonos: -{formatCOP(priorAbonoTotal_display)}
+                                {priorAbonoServiceTotal > 0 && (
+                                    <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold ml-1">
+                                        (+ {formatCOP(priorAbonoServiceTotal)} propina pagada)
+                                    </span>
+                                )}
                             </span>
                         ) : (
                             <span className="text-[13px] font-bold text-slate-500 dark:text-slate-400 mt-1">

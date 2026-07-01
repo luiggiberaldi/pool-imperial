@@ -25,17 +25,58 @@ export default function AbonoSelectorModal({
     const { updateSessionMetadata } = useTablesStore();
     const wasOpenRef = useRef(false);
 
-    // Calcular el total de abonos previos ya registrados en la sesión
+    // Helper para inferir netAmount y serviceAmount de sesiones antiguas
+    const getAbonoBreakdown = (item) => {
+        if (item.netAmount !== undefined) {
+            return {
+                net: Number(item.netAmount) || 0,
+                service: Number(item.serviceAmount) || 0
+            };
+        }
+        const amt = Number(item.amount) || 0;
+        const commonFactors = [1.10, 1.08, 1.05];
+        for (const factor of commonFactors) {
+            const net = Math.round(amt / factor);
+            if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
+                return { net, service: amt - net };
+            }
+        }
+        return { net: amt, service: 0 };
+    };
+
+    // Calcular el total de abonos de consumo previos (neto) ya registrados en la sesión
     const abonoTotal = (() => {
         if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
         try {
             const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
             const list = JSON.parse(histStr);
-            return list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+            return list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
         } catch (_) {
             return 0;
         }
     })();
+
+    // Calcular el total de recargos/servicio pagados en abonos previos
+    const abonoServiceTotal = (() => {
+        if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
+        try {
+            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+            const list = JSON.parse(histStr);
+            return list.reduce((sum, item) => sum + getAbonoBreakdown(item).service, 0);
+        } catch (_) {
+            return 0;
+        }
+    })();
+
+    // Asientos ya cobrados individualmente — sus items NO deben aparecer en el abono
+    const paidSeatIds = new Set(
+        (session?.seats || []).filter(s => s.paid === true).map(s => s.id)
+    );
+
+    // Solo mostrar items que pertenecen a asientos NO pagados (o sin asiento asignado)
+    const availableItems = currentItems.filter(item =>
+        !item.seat_id || !paidSeatIds.has(item.seat_id)
+    );
 
     // Límite máximo de abono permitido en esta operación
     const maxAllowedAbono = Math.max(0, grandTotal - abonoTotal);
@@ -45,7 +86,7 @@ export default function AbonoSelectorModal({
         if (isOpen && !wasOpenRef.current) {
             // Modal was just opened: reset all quantities to 0
             const initial = {};
-            currentItems.forEach(item => {
+            availableItems.forEach(item => {
                 initial[item.id] = 0;
             });
             setSelectedQtys(initial);
@@ -56,14 +97,14 @@ export default function AbonoSelectorModal({
             // Preserve selection but sync with any changes in items (e.g. quantity changes or items removed)
             setSelectedQtys(prev => {
                 const updated = {};
-                currentItems.forEach(item => {
+                availableItems.forEach(item => {
                     updated[item.id] = prev[item.id] !== undefined ? Math.min(prev[item.id], Number(item.qty)) : 0;
                 });
                 return updated;
             });
         }
         wasOpenRef.current = isOpen;
-    }, [isOpen, currentItems]);
+    }, [isOpen, availableItems]);
 
     if (!isOpen || !session) return null;
 
@@ -85,7 +126,7 @@ export default function AbonoSelectorModal({
 
     const handleSelectAll = () => {
         const updated = {};
-        currentItems.forEach(item => {
+        availableItems.forEach(item => {
             updated[item.id] = Number(item.qty);
         });
         setSelectedQtys(updated);
@@ -93,7 +134,7 @@ export default function AbonoSelectorModal({
 
     const handleDeselectAll = () => {
         const updated = {};
-        currentItems.forEach(item => {
+        availableItems.forEach(item => {
             updated[item.id] = 0;
         });
         setSelectedQtys(updated);
@@ -110,7 +151,7 @@ export default function AbonoSelectorModal({
     };
 
     // Calculate subtotal for chosen items
-    const selectedItemsList = currentItems.filter(item => (selectedQtys[item.id] || 0) > 0);
+    const selectedItemsList = availableItems.filter(item => (selectedQtys[item.id] || 0) > 0);
     
     const abonoSubtotal = selectedItemsList.reduce((sum, item) => {
         const qty = selectedQtys[item.id] || 0;
@@ -195,11 +236,34 @@ export default function AbonoSelectorModal({
             setIsMutating(false);
         }
     };
-
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={`Abono Inteligente: ${table.name}`}>
-            <div className="flex flex-col gap-4 py-2 text-slate-800 dark:text-white max-h-[75vh]">
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            <div className="flex flex-col gap-4 py-2 text-slate-800 dark:text-white max-h-[82vh]">
+                
+                {/* Resumen del Saldo de la Mesa */}
+                <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/80 rounded-xl p-3 text-center">
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-slate-400">Total Mesa</p>
+                        <p className="text-xs font-black text-slate-700 dark:text-slate-200">{formatCOP(grandTotal)}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-slate-400">Abonado</p>
+                        <p className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                            {formatCOP(abonoTotal)}
+                            {abonoServiceTotal > 0 && (
+                                <span className="block text-[8px] font-bold text-indigo-500/80 -mt-0.5">
+                                    (+ {formatCOP(abonoServiceTotal)} propina)
+                                </span>
+                            )}
+                        </p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-slate-400">Saldo Restante</p>
+                        <p className="text-xs font-black text-emerald-600 dark:text-emerald-450">{formatCOP(maxAllowedAbono)}</p>
+                    </div>
+                </div>
+
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed -mt-1">
                     {activeTab === 'items' 
                         ? "Selecciona los productos consumidos que deseas abonar (pagar parcialmente). La mesa y el juego seguirán activos."
                         : "Ingresa un monto específico en pesos colombianos (COP) para abonar a la cuenta de la mesa. La mesa y el juego seguirán activos."
@@ -241,13 +305,13 @@ export default function AbonoSelectorModal({
                         </div>
 
                         {/* Items list */}
-                        <div className="flex-1 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-800 max-h-[35vh] pr-1">
-                            {currentItems.length === 0 ? (
+                        <div className="flex-1 overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-800 max-h-[30vh] pr-1">
+                            {availableItems.length === 0 ? (
                                 <div className="p-6 text-center text-xs text-slate-400 italic">
-                                    No hay consumos de bar/bebidas registrados en la comanda.
+                                    No hay consumos pendientes de pago en la comanda.
                                 </div>
                             ) : (
-                                currentItems.map(item => {
+                                availableItems.map(item => {
                                     const selectedQty = selectedQtys[item.id] || 0;
                                     const maxQty = Number(item.qty);
 
@@ -290,20 +354,39 @@ export default function AbonoSelectorModal({
                             )}
                         </div>
 
-                        {/* Subtotal preview */}
-                        <div className="flex justify-between items-center p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl mt-2">
-                            <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
-                                Total de Abono
-                            </span>
-                            <span className="text-xl font-black text-emerald-600 dark:text-emerald-450">
-                                {formatCOP(abonoSubtotal)}
-                            </span>
-                        </div>
+                        {/* Subtotal preview with limit validation */}
+                        {abonoSubtotal > maxAllowedAbono + 10 ? (
+                            <div className="flex flex-col gap-1.5 p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-xl mt-2 text-center animate-in fade-in duration-200">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-black text-rose-700 dark:text-rose-450 uppercase tracking-widest">
+                                        Total Seleccionado
+                                    </span>
+                                    <span className="text-lg font-black text-rose-600 dark:text-rose-450">
+                                        {formatCOP(abonoSubtotal)}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 leading-relaxed px-1">
+                                    ⚠️ El valor seleccionado supera el saldo restante de la mesa ({formatCOP(maxAllowedAbono)}).
+                                </p>
+                                <p className="text-[9px] font-medium text-slate-500 dark:text-slate-450 leading-relaxed">
+                                    Para pagar este saldo, usa la pestaña <strong>"Monto Libre"</strong> por {formatCOP(maxAllowedAbono)} o realiza el <strong>"Cobro Final"</strong> de la mesa.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex justify-between items-center p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl mt-2">
+                                <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
+                                    Total de Abono
+                                </span>
+                                <span className="text-xl font-black text-emerald-600 dark:text-emerald-450">
+                                    {formatCOP(abonoSubtotal)}
+                                </span>
+                            </div>
+                        )}
 
                         {/* Main trigger button */}
                         <div className="flex flex-col gap-2 mt-2">
                             <button
-                                disabled={selectedItemsList.length === 0 || isMutating}
+                                disabled={selectedItemsList.length === 0 || abonoSubtotal > maxAllowedAbono + 10 || isMutating}
                                 onClick={handleSendRequestToCashier}
                                 className="w-full py-3.5 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-1.5 text-sm disabled:opacity-50"
                             >
@@ -327,18 +410,31 @@ export default function AbonoSelectorModal({
                                         className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-center text-2xl font-black text-slate-850 dark:text-white outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-300"
                                     />
                                 </div>
-                                {montoLibre && (
-                                    <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
-                                        Abonando: {formatCOP(parseFloat(montoLibre.replace(/\./g, '')))}
-                                    </p>
-                                )}
+                                {montoLibre && (() => {
+                                    const valParsed = parseFloat(montoLibre.replace(/\./g, '')) || 0;
+                                    const exceeds = valParsed > maxAllowedAbono + 10;
+                                    return exceeds ? (
+                                        <p className="text-xs font-bold text-rose-600 dark:text-rose-450 animate-in fade-in duration-200">
+                                            ⚠️ Supera el saldo restante de la mesa ({formatCOP(maxAllowedAbono)})
+                                        </p>
+                                    ) : (
+                                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in duration-200">
+                                            Abonando: {formatCOP(valParsed)}
+                                        </p>
+                                    );
+                                })()}
                             </div>
                         </div>
 
                         {/* Main trigger button for Monto Libre */}
                         <div className="flex flex-col gap-2 mt-2">
                             <button
-                                disabled={!montoLibre || parseFloat(montoLibre.replace(/\./g, '')) <= 0 || isMutating}
+                                disabled={
+                                    !montoLibre || 
+                                    parseFloat(montoLibre.replace(/\./g, '')) <= 0 || 
+                                    parseFloat(montoLibre.replace(/\./g, '')) > maxAllowedAbono + 10 ||
+                                    isMutating
+                                }
                                 onClick={handleSendMontoLibre}
                                 className="w-full py-3.5 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 transition-all active:scale-95 flex items-center justify-center gap-1.5 text-sm disabled:opacity-50"
                             >

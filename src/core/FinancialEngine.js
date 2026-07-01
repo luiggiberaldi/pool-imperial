@@ -82,8 +82,13 @@ export class FinancialEngine {
         // Sum the profit of each individual item (Revenue - Cost) in COP
         const itemProfits = sale.items.map(item => {
             const nameLower = (item.name || '').toLowerCase();
-            // Exclude voluntary tips and card surcharges from store net profit calculations
-            if (nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) {
+            // Exclude voluntary tips, card surcharges, and partial abonos from store net profit calculations
+            if (
+                nameLower.includes('servicio voluntario') || 
+                nameLower.includes('recargo tdc') || 
+                nameLower.includes('abono parcial') || 
+                item.id === 'abono-monto-libre'
+            ) {
                 return 0;
             }
 
@@ -135,6 +140,22 @@ export class FinancialEngine {
     static calculateAggregateProfit(salesArray, bcvRate, products) {
         const profits = salesArray.map(sale => this.calculateSaleProfit(sale, bcvRate, products));
         return sumR(profits);
+    }
+
+    /**
+     * Calculates the true net total of a sale in COP/USD (excluding prior abonos).
+     * 
+     * @param {Object} sale - The sale object
+     * @returns {number} Net sale total
+     */
+    static calculateSaleNetTotal(sale) {
+        if (!sale) return 0;
+        const total = sale.totalCop || sale.totalUsd || 0;
+        if (!sale.payments || sale.payments.length === 0) return total;
+        const prevAbonoSum = sale.payments
+            .filter(p => p.isAbonoPrevio === true)
+            .reduce((sum, p) => sum + (p.amountUsd || 0), 0);
+        return round2(Math.max(0, subR(total, prevAbonoSum)));
     }
 
     /**

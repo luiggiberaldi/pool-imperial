@@ -172,7 +172,9 @@ export const createBillingActions = (set, get, tablesCache, scopedKey) => ({
             ? session.seats.map(s => ({ ...s, timeCharges: [] }))
             : null;
 
-        const updatePayload = { status: 'ACTIVE', paid_at: paidAt };
+        const cleanNotes = session.notes ? (session.notes.split('|||')[0].trim() || null) : null;
+
+        const updatePayload = { status: 'ACTIVE', paid_at: paidAt, notes: cleanNotes };
         if (clearedSeats) updatePayload.seats = clearedSeats;
 
         const newSessions = get().activeSessions.map(s =>
@@ -182,13 +184,13 @@ export const createBillingActions = (set, get, tablesCache, scopedKey) => ({
         await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
 
         try {
-            const dbPayload = { status: 'ACTIVE' };
+            const dbPayload = { status: 'ACTIVE', notes: cleanNotes };
             if (clearedSeats) dbPayload.seats = clearedSeats;
             const { error } = await supabaseCloud.from('table_sessions').update(dbPayload).eq('id', sessionId);
             if (error) throw error;
             get().syncTablesAndSessions();
         } catch (e) {
-            const pendingPayload = { status: 'ACTIVE' };
+            const pendingPayload = { status: 'ACTIVE', notes: cleanNotes };
             if (clearedSeats) pendingPayload.seats = clearedSeats;
             await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload: pendingPayload });
         }
@@ -203,7 +205,8 @@ export const createBillingActions = (set, get, tablesCache, scopedKey) => ({
                 elapsedAtPayment,
                 roundsOffset: hasPinas ? (session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0) : 0,
                 hasPinas,
-                clearedSeats: clearedSeats || null
+                clearedSeats: clearedSeats || null,
+                notes: cleanNotes
             }
         });
     },

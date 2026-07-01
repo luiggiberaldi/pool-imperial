@@ -26,6 +26,37 @@ export default function TableCardActions({
     const updateSessionTipEnabled = useTablesStore(s => s.updateSessionTipEnabled);
     const [tipEnabled, setTipEnabled] = useState(() => getSessionTipEnabled(session, config));
 
+    const getAbonoBreakdown = (item) => {
+        if (item.netAmount !== undefined) {
+            return {
+                net: Number(item.netAmount) || 0,
+                service: Number(item.serviceAmount) || 0
+            };
+        }
+        const amt = Number(item.amount) || 0;
+        const commonFactors = [1.10, 1.08, 1.05];
+        for (const factor of commonFactors) {
+            const net = Math.round(amt / factor);
+            if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
+                return { net, service: amt - net };
+            }
+        }
+        return { net: amt, service: 0 };
+    };
+
+    const priorAbonoNetTotal = (() => {
+        if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
+        try {
+            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+            const list = JSON.parse(histStr);
+            return list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+        } catch (_) {
+            return 0;
+        }
+    })();
+
+    const remainingToPay = Math.max(0, grandTotal - priorAbonoNetTotal);
+
     useEffect(() => {
         setTipEnabled(getSessionTipEnabled(session, config));
     }, [session?.id, session?.notes, config?.defaultTipEnabled]);
@@ -184,15 +215,15 @@ export default function TableCardActions({
                                     <div className="relative w-10 h-5 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:outline-none peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-slate-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5 shrink-0" />
                                 </label>
                             )}
-                            <div className={`grid gap-1.5 ${grandTotal > 0 ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                            <div className={`grid gap-1.5 ${remainingToPay > 0 ? 'grid-cols-3' : 'grid-cols-1'}`}>
                                 <button
                                     onClick={onShowOrderPanel}
-                                    className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[11px] sm:text-xs py-2.5 sm:py-2 px-2 rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1.5"
+                                    className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-bold text-[11px] sm:text-xs py-2.5 sm:py-2 px-2 rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1.5"
                                 >
                                     <ShoppingBag size={13} fill="currentColor" />
                                     <span>Consumo</span>
                                 </button>
-                                {grandTotal > 0 && (
+                                {remainingToPay > 0 && (
                                     <>
                                         <button
                                             onClick={onShowAbonoModal}
@@ -213,17 +244,17 @@ export default function TableCardActions({
                             </div>
 
                             {/* Liberar mesa — solo cuando no hay saldo pendiente */}
-                            {grandTotal === 0 && isPlaying && (
+                            {remainingToPay === 0 && isPlaying && (
                                 !showReleaseConfirm ? (
                                     <button
                                         onClick={() => setShowReleaseConfirm(true)}
-                                        className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-[11px] py-2 rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1.5"
+                                        className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-[11px] py-2.5 rounded-xl shadow-md transition-transform active:scale-95 flex items-center justify-center gap-1.5 animate-in fade-in duration-200"
                                     >
                                         <Check size={13} />
                                         Liberar mesa
                                     </button>
                                 ) : (
-                                    <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-xl px-3 py-2 flex flex-col gap-2">
+                                    <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-xl px-3 py-2 flex flex-col gap-2 animate-in slide-in-from-bottom-2 duration-250">
                                         <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold text-center">¿Confirmar liberación de {table.name}?</p>
                                         <div className="grid grid-cols-2 gap-1.5">
                                             <button

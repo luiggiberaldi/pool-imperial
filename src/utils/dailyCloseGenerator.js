@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 import { useTablesStore } from '../hooks/store/useTablesStore';
+import { FinancialEngine } from '../core/FinancialEngine';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -403,12 +404,14 @@ export async function generateDailyClosePDF({
             });
         });
 
-        // Process sales (salidas)
+        // Process sales (salidas) — exclude synthetic abono items from inventory movements
         allSales.forEach(sale => {
             if (sale.status === 'ANULADA') return;
             (sale.items || []).forEach(item => {
                 const nameLower = (item.name || '').toLowerCase();
                 if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
+                // Exclude synthetic abono parcial items — they don't represent real inventory movement
+                if (nameLower.includes('abono parcial') || item.id === 'abono-monto-libre') return;
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -636,11 +639,12 @@ export async function generateDailyClosePDF({
             payY += 4;
         }
 
-        // Monto Total Venta (Extremo Derecho)
+        // Monto Total Venta (Extremo Derecho) — use net total to avoid double-counting abonos
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         doc.setTextColor(...(isCanceled ? RED : GREEN));
-        const totalStr = isCanceled ? 'ANULADA' : formatCOP(s.totalCop || s.totalUsd || 0);
+        const netSaleTotal = isCanceled ? 0 : FinancialEngine.calculateSaleNetTotal(s);
+        const totalStr = isCanceled ? 'ANULADA' : formatCOP(netSaleTotal);
         doc.text(totalStr, RIGHT - 3, y + 6.5, { align: 'right' });
 
         y += rowHeight;

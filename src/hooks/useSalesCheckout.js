@@ -333,8 +333,19 @@ export function useSalesCheckout({
                 const session = tableCheckoutData.session;
                 const { cleanNotes, historial } = parseSessionNotes(session.notes);
                 const payMethod = payments.map(p => (p.methodId || 'EFECTIVO').toUpperCase()).join('+') || 'EFECTIVO';
+
+                // Calculate netAmount and serviceAmount
+                const totalAbonoNet = syntheticCart
+                    .filter(item => !item.isServiceCharge && !item.isTip && !item.name.includes('Recargo TDC') && !item.name.includes('Servicio Voluntario') && !item.name.includes('Propina del Personal'))
+                    .reduce((sum, item) => sum + (Number(item.priceUsd) * Number(item.qty)), 0);
+
+                const netAmount = Math.round(totalAbonoNet);
+                const serviceAmount = Math.max(0, Number(finalTotalWithIva) - netAmount);
+
                 const newHistorial = [...historial, {
                     amount: Number(finalTotalWithIva),
+                    netAmount: netAmount,
+                    serviceAmount: serviceAmount,
                     method: payMethod,
                     date: new Date().toISOString()
                 }];

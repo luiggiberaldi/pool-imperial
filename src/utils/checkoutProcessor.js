@@ -108,7 +108,8 @@ export async function processSaleTransaction({
         methodId: p.methodId,
         amountUsd: p.amountUsd,
         currency: p.currency || 'COP',
-        methodLabel: p.methodLabel || p.methodId
+        methodLabel: p.methodLabel || p.methodId,
+        isAbonoPrevio: p.isAbonoPrevio || false
     }));
 
     const rpcPayTotal = rpcPayments.reduce((s, p) => s + (p.amountUsd || 0), 0);

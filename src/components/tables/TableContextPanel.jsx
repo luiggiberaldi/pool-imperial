@@ -748,12 +748,41 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                             try {
                                 const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
                                 const list = JSON.parse(histStr);
-                                const total = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                                if (total <= 0) return null;
+                                
+                                const getAbonoBreakdown = (item) => {
+                                    if (item.netAmount !== undefined) {
+                                        return {
+                                            net: Number(item.netAmount) || 0,
+                                            service: Number(item.serviceAmount) || 0
+                                        };
+                                    }
+                                    const amt = Number(item.amount) || 0;
+                                    const commonFactors = [1.10, 1.08, 1.05];
+                                    for (const factor of commonFactors) {
+                                        const net = Math.round(amt / factor);
+                                        if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
+                                            return { net, service: amt - net };
+                                        }
+                                    }
+                                    return { net: amt, service: 0 };
+                                };
+
+                                const netTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+                                const serviceTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).service, 0);
+                                if (netTotal <= 0 && serviceTotal <= 0) return null;
                                 return (
                                     <div className="mt-2 p-2.5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl flex items-center justify-between animate-in fade-in duration-200">
-                                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-black uppercase tracking-wider">Historial Abonado</span>
-                                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-450">{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(total))}</span>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-black uppercase tracking-wider">Historial Abonado</span>
+                                            {serviceTotal > 0 && (
+                                                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500">
+                                                    Incluye {formatCOP(serviceTotal)} de propina
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-450">
+                                            {formatCOP(netTotal)}
+                                        </span>
                                     </div>
                                 );
                             } catch (_) {

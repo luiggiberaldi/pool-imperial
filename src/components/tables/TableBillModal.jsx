@@ -167,6 +167,38 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const tipAmount = includeTip ? Math.round(baseTotal * (tipPercent / 100)) : 0;
     const finalTotalWithService = baseTotal + serviceChargeAmount + tipAmount;
 
+    // Helper to extract net abonos
+    const getAbonoBreakdown = (item) => {
+        if (item.netAmount !== undefined) {
+            return {
+                net: Number(item.netAmount) || 0,
+                service: Number(item.serviceAmount) || 0
+            };
+        }
+        const amt = Number(item.amount) || 0;
+        const commonFactors = [1.10, 1.08, 1.05];
+        for (const factor of commonFactors) {
+            const net = Math.round(amt / factor);
+            if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
+                return { net, service: amt - net };
+            }
+        }
+        return { net: amt, service: 0 };
+    };
+
+    const priorAbonoNetTotal = (() => {
+        if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
+        try {
+            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+            const list = JSON.parse(histStr);
+            return list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+        } catch (_) {
+            return 0;
+        }
+    })();
+
+    const remainingToPay = Math.max(0, finalTotalWithService - priorAbonoNetTotal);
+
 
     // Helper: piña count depends on game mode
     const pinaCount = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
@@ -379,10 +411,16 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                     {/* Total */}
                     <div
                         className="rounded-2xl p-4 flex items-center justify-between"
-                        style={{ background: 'linear-gradient(135deg, #F97316, #EA580C)' }}
+                        style={{
+                            background: remainingToPay === 0
+                                ? 'linear-gradient(135deg, #10B981, #059669)'
+                                : 'linear-gradient(135deg, #F97316, #EA580C)'
+                        }}
                     >
                         <div>
-                            <p className="text-xs font-bold text-white/80 uppercase tracking-wider">Total a Cobrar</p>
+                            <p className="text-xs font-bold text-white/80 uppercase tracking-wider">
+                                {remainingToPay === 0 ? 'Mesa Liquidada (Saldo $0)' : 'Total a Cobrar'}
+                            </p>
                             {hasSeats && seatBreakdown && (
                                 <p className="text-[10px] text-white/60 mt-0.5">
                                     {data.seatId 
@@ -392,6 +430,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     {discAmount > 0 ? ` − Desc ${formatCOP(discAmount)}` : ''}
                                     {includeServiceCharge ? ` + Servicio (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
                                     {includeTip ? ` + Propina (${tipPercent}%) ${formatCOP(tipAmount)}` : ''}
+                                    {priorAbonoNetTotal > 0 ? ` − Abonos ${formatCOP(priorAbonoNetTotal)}` : ''}
                                 </p>
                             )}
                             {!hasSeats && isMixed && (
@@ -401,9 +440,10 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
                                     {includeServiceCharge ? ` + Servicio (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
                                     {includeTip ? ` + Propina (${tipPercent}%) ${formatCOP(tipAmount)}` : ''}
+                                    {priorAbonoNetTotal > 0 ? ` − Abonos ${formatCOP(priorAbonoNetTotal)}` : ''}
                                 </p>
                             )}
-                            {!hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0 || includeServiceCharge || includeTip) && (
+                            {!hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0 || includeServiceCharge || includeTip || priorAbonoNetTotal > 0) && (
                                 <p className="text-[10px] text-white/60 mt-0.5">
                                     {timeCost > 0 ? `Tiempo ${formatCOP(timeCost)}` : ''}
                                     {timeCost > 0 && adjustedConsumption > 0 ? ' + ' : ''}
@@ -411,12 +451,13 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     {discountAmountUsd > 0 ? ` − Desc ${formatCOP(discountAmountUsd)}` : ''}
                                     {includeServiceCharge ? ` + Servicio (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
                                     {includeTip ? ` + Propina (${tipPercent}%) ${formatCOP(tipAmount)}` : ''}
+                                    {priorAbonoNetTotal > 0 ? ` − Abonos ${formatCOP(priorAbonoNetTotal)}` : ''}
                                 </p>
                             )}
                         </div>
                         <div className="text-right">
                             <p className="text-2xl font-black text-white">
-                                {formatCOP(finalTotalWithService)}
+                                {formatCOP(remainingToPay)}
                             </p>
                         </div>
                     </div>
@@ -451,10 +492,10 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                         onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge ? serviceChargePercent : 0, includeTip ? tipPercent : 0);
                                     }
                                 }}
-                                className={`flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-orange-500/25 ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : ''}`}
-                                style={{ background: customDivisionMismatch ? '#94a3b8' : 'linear-gradient(135deg, #F97316, #EA580C)' }}
+                                className={`flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg ${customDivisionMismatch ? 'opacity-40 cursor-not-allowed' : (remainingToPay === 0 ? 'shadow-emerald-500/25' : 'shadow-orange-500/25')}`}
+                                style={{ background: customDivisionMismatch ? '#94a3b8' : (remainingToPay === 0 ? 'linear-gradient(135deg, #10B981, #059669)' : 'linear-gradient(135deg, #F97316, #EA580C)') }}
                             >
-                                {data.seatId ? `Cobrar ${seats.find(s => s.id === data.seatId)?.label || 'Cliente'}` : 'Cobrar Todo'}
+                                {remainingToPay === 0 ? 'Liberar Mesa (Saldo $0)' : (data.seatId ? `Cobrar ${seats.find(s => s.id === data.seatId)?.label || 'Cliente'}` : 'Cobrar Todo')}
                                 <ChevronRight size={16} />
                             </button>
                         </div>
@@ -503,10 +544,10 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             )}
                             <button
                                 onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge ? serviceChargePercent : 0, includeTip ? tipPercent : 0)}
-                                className="flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-orange-500/25"
-                                style={{ background: 'linear-gradient(135deg, #F97316, #EA580C)' }}
+                                className={`flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg ${remainingToPay === 0 ? 'shadow-emerald-500/25' : 'shadow-orange-500/25'}`}
+                                style={{ background: remainingToPay === 0 ? 'linear-gradient(135deg, #10B981, #059669)' : 'linear-gradient(135deg, #F97316, #EA580C)' }}
                             >
-                                Cobrar {formatCOP(finalTotalWithService)}
+                                {remainingToPay === 0 ? 'Liberar Mesa (Saldo $0)' : `Cobrar ${formatCOP(remainingToPay)}`}
                                 <ChevronRight size={16} />
                             </button>
                         </div>

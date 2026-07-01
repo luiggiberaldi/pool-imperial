@@ -265,6 +265,72 @@ export function BillClassicBreakdown({
                 </div>
             </div>
         )}
+        {/* Abonos Realizados */}
+        {(() => {
+            const getAbonoBreakdown = (item) => {
+                if (item.netAmount !== undefined) {
+                    return {
+                        net: Number(item.netAmount) || 0,
+                        service: Number(item.serviceAmount) || 0
+                    };
+                }
+                const amt = Number(item.amount) || 0;
+                const commonFactors = [1.10, 1.08, 1.05];
+                for (const factor of commonFactors) {
+                    const net = Math.round(amt / factor);
+                    if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
+                        return { net, service: amt - net };
+                    }
+                }
+                return { net: amt, service: 0 };
+            };
+
+            const abonosList = (() => {
+                if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return [];
+                try {
+                    const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+                    return JSON.parse(histStr) || [];
+                } catch (_) {
+                    return [];
+                }
+            })();
+
+            if (abonosList.length === 0) return null;
+
+            return (
+                <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 rounded-2xl overflow-hidden mt-3 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2 px-4 py-2 border-b border-emerald-100 dark:border-emerald-900/30">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 dark:text-emerald-400">
+                            <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
+                        </svg>
+                        <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                            Abonos Realizados ({abonosList.length})
+                        </p>
+                    </div>
+                    <div className="divide-y divide-emerald-100 dark:divide-emerald-900/20">
+                        {abonosList.map((abono, i) => {
+                            const breakdown = getAbonoBreakdown(abono);
+                            return (
+                                <div key={i} className="flex items-center justify-between px-4 py-2.5 text-xs text-slate-600 dark:text-slate-300">
+                                    <div>
+                                        <p className="font-bold text-slate-700 dark:text-white">
+                                            Abono #{i + 1} ({abono.method || 'Efectivo'})
+                                        </p>
+                                        <p className="text-[9px] text-slate-400 mt-0.5">
+                                            {abono.date ? new Date(abono.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                            {breakdown.service > 0 ? ` · incluye ${formatCOP(breakdown.service)} de propina` : ''}
+                                        </p>
+                                    </div>
+                                    <p className="font-black text-emerald-600 dark:text-emerald-400">
+                                        -{formatCOP(breakdown.net)}
+                                    </p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        })()}
 
         {/* Sin consumos */}
         {(!currentItems || currentItems.length === 0) && timeCost === 0 && (

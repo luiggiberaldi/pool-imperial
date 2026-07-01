@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { capitalizeName } from './calculatorUtils';
+import { FinancialEngine } from '../core/FinancialEngine';
 
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
     style: 'currency', currency: 'COP', minimumFractionDigits: 0
@@ -37,7 +38,7 @@ export function generateSalesReportPDF(sales = [], meta = {}) {
     // Totales (las anuladas no suman)
     const completed = sales.filter(s => s.status !== 'ANULADA');
     const voided = sales.filter(s => s.status === 'ANULADA');
-    const totalRevenue = completed.reduce((a, s) => a + (s.totalCop || s.totalUsd || 0), 0);
+    const totalRevenue = completed.reduce((a, s) => a + FinancialEngine.calculateSaleNetTotal(s), 0);
 
     let y = M;
 
@@ -139,7 +140,7 @@ export function generateSalesReportPDF(sales = [], meta = {}) {
         const num = s.saleNumber !== undefined ? '#' + String(s.saleNumber).padStart(5, '0') : (s.id || '').substring(0, 6).toUpperCase();
         const usuario = capitalizeName(s.meseroNombre || s.vendedorNombre || '—');
         const cliente = s.customerName || 'Consumidor Final';
-        const total = s.totalCop || s.totalUsd || 0;
+        const total = FinancialEngine.calculateSaleNetTotal(s);
 
         // Fondo alterno
         if (i % 2 === 1) {

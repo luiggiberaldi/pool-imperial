@@ -156,49 +156,87 @@ export default function TableCardTimerDisplay({
                         </>
                     )}
                     {/* Total + Eye — visible for ALL occupied sessions */}
-                    <div className="flex flex-col items-center gap-1.5 mt-3">
-                        <div className="flex items-center justify-center gap-1.5">
-                            <div className="bg-white/10 px-3 py-1.5 rounded-xl flex flex-col items-center justify-center backdrop-blur-sm shadow-inner overflow-hidden max-w-full">
-                                <div className="flex items-center gap-1.5">
-                                    <span className="text-lg sm:text-xl font-black text-emerald-300 truncate">{formatCOP(grandTotal)}</span>
-                                </div>
-                            </div>
-                            <button
-                                onClick={onShowTotalDetails}
-                                className="bg-sky-500/80 hover:bg-sky-500 p-2 rounded-xl text-white transition-all active:scale-95 shrink-0 shadow-sm"
-                                title="Ver detalles"
-                            >
-                                <Eye size={16} />
-                            </button>
-                        </div>
+                    {(() => {
+                        const getAbonoBreakdown = (item) => {
+                            if (item.netAmount !== undefined) {
+                                return {
+                                    net: Number(item.netAmount) || 0,
+                                    service: Number(item.serviceAmount) || 0
+                                };
+                            }
+                            const amt = Number(item.amount) || 0;
+                            const commonFactors = [1.10, 1.08, 1.05];
+                            for (const factor of commonFactors) {
+                                const net = Math.round(amt / factor);
+                                if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
+                                    return { net, service: amt - net };
+                                }
+                            }
+                            return { net: amt, service: 0 };
+                        };
 
-                        <div className="flex flex-wrap items-center justify-center gap-1.5">
-                            {(() => {
-                                if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return null;
-                                try {
-                                    const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
-                                    const list = JSON.parse(histStr);
-                                    const total = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                                    if (total <= 0) return null;
-                                    return (
+                        let priorAbonoNetTotal = 0;
+                        let serviceTotal = 0;
+                        if (session?.notes && session.notes.includes('|||HISTORIAL_ABONOS:')) {
+                            try {
+                                const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+                                const list = JSON.parse(histStr);
+                                priorAbonoNetTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+                                serviceTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).service, 0);
+                            } catch (_) {}
+                        }
+
+                        const remainingToPay = Math.max(0, grandTotal - priorAbonoNetTotal);
+
+                        return (
+                            <div className="flex flex-col items-center gap-1.5 mt-3 w-full">
+                                <div className="flex items-center justify-center gap-1.5">
+                                    <div className="bg-white/10 px-3 py-1.5 rounded-xl flex flex-col items-center justify-center backdrop-blur-sm shadow-inner overflow-hidden max-w-full">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-lg sm:text-xl font-black text-emerald-300 truncate">
+                                                {formatCOP(remainingToPay)}
+                                            </span>
+                                        </div>
+                                        {priorAbonoNetTotal > 0 && (
+                                            <span className="text-[9px] text-white/50 font-bold leading-none mt-0.5">
+                                                Consumo: {formatCOP(grandTotal)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={onShowTotalDetails}
+                                        className="bg-sky-500/80 hover:bg-sky-500 p-2 rounded-xl text-white transition-all active:scale-95 shrink-0 shadow-sm"
+                                        title="Ver detalles"
+                                    >
+                                        <Eye size={16} />
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                                    {priorAbonoNetTotal > 0 && (
                                         <div className="text-[10px] sm:text-xs font-black bg-emerald-500/20 border border-emerald-450/30 text-emerald-300 px-2.5 py-1 rounded-lg flex items-center gap-1 animate-in fade-in duration-200">
                                             <span>Abonado:</span>
-                                            <span>{formatCOP(total)}</span>
+                                            <span>
+                                                {formatCOP(priorAbonoNetTotal)}
+                                                {serviceTotal > 0 && (
+                                                    <span className="text-[9px] font-bold text-emerald-400 opacity-85 ml-0.5">
+                                                        (+ {formatCOP(serviceTotal)} propina)
+                                                    </span>
+                                                )}
+                                            </span>
                                         </div>
-                                    );
-                                } catch (_) {
-                                    return null;
-                                }
-                            })()}
+                                    )}
 
-                            {retiredPaidShared > 0 && (
-                                <div className="text-[10px] sm:text-xs font-black bg-teal-500/20 border border-teal-450/30 text-teal-300 px-2.5 py-1 rounded-lg flex items-center gap-1 animate-in fade-in duration-200">
-                                    <span>Retirados:</span>
-                                    <span>{formatCOP(retiredPaidShared)}</span>
+                                    {retiredPaidShared > 0 && (
+                                        <div className="text-[10px] sm:text-xs font-black bg-teal-500/20 border border-teal-450/30 text-teal-300 px-2.5 py-1 rounded-lg flex items-center gap-1 animate-in fade-in duration-200">
+                                            <span>Retirados:</span>
+                                            <span>{formatCOP(retiredPaidShared)}</span>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                    </div>
+                            </div>
+                        );
+                    })()}
                     {hasPinas && !isMixedMode && (() => {
                         const sharedRounds = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
                         const seatRounds = (session?.seats || []).reduce((sum, s) => sum + (s.timeCharges || []).filter(tc => tc.type === 'pina').length, 0);

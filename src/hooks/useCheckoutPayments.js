@@ -44,7 +44,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         try {
             const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
             if (!Array.isArray(hist) || hist.length === 0) return 0;
-            return hist.reduce((sum, h) => sum + (Number(h.amount) || 0), 0);
+            return hist.reduce((sum, h) => sum + (Number(h.netAmount ?? h.amount) || 0), 0);
         } catch (_) { return 0; }
     }, [tableContext]);
 

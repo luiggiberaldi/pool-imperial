@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { X, Download, FileSpreadsheet, TrendingUp, ShoppingBag, CreditCard, Clock, Package } from 'lucide-react';
 import { getPaymentLabel } from '../../config/paymentMethods';
+import { FinancialEngine } from '../../core/FinancialEngine';
 
 function formatHora(ts) {
     if (!ts) return '—';
@@ -28,11 +29,11 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
     const openingUsd = activeCashSession?.base_bs || 0;
 
     const totalSalesCop = useMemo(() => {
-        return todaySales.reduce((sum, s) => sum + (s.totalCop || s.totalUsd || 0), 0);
+        return todaySales.reduce((sum, s) => sum + FinancialEngine.calculateSaleNetTotal(s), 0);
     }, [todaySales]);
 
     const totalSalesUsd = useMemo(() => {
-        return todaySales.reduce((sum, s) => sum + ((s.totalCop || s.totalUsd || 0) / (s.rate || 4150)), 0);
+        return todaySales.reduce((sum, s) => sum + (FinancialEngine.calculateSaleNetTotal(s) / (s.rate || 4150)), 0);
     }, [todaySales]);
 
     const tipsBreakdown = useMemo(() => {

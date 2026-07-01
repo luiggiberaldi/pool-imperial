@@ -439,6 +439,8 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                     const { cleanNotes, historial } = parseSessionNotes(session.notes);
                     const newHistorial = [...historial, {
                         amount: Number(grandTotal),
+                        netAmount: Number(baseGrandTotalBuilt),
+                        serviceAmount: Number(serviceChargeAmt + tipAmt),
                         method: isFiado ? 'FIADO' : method,
                         date: new Date().toISOString()
                     }];

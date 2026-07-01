@@ -157,6 +157,36 @@ export function TableQueuePanel({ onCheckoutTable }) {
                         console.error("Error calculating TableQueuePanel grand total:", e);
                     }
 
+                    // Calculate remainingToPay for this queue item
+                    const getAbonoBreakdown = (item) => {
+                        if (item.netAmount !== undefined) {
+                            return {
+                                net: Number(item.netAmount) || 0,
+                                service: Number(item.serviceAmount) || 0
+                            };
+                        }
+                        const amt = Number(item.amount) || 0;
+                        const commonFactors = [1.10, 1.08, 1.05];
+                        for (const factor of commonFactors) {
+                            const net = Math.round(amt / factor);
+                            if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
+                                return { net, service: amt - net };
+                            }
+                        }
+                        return { net: amt, service: 0 };
+                    };
+
+                    let priorAbonoNetTotal = 0;
+                    if (session.notes && session.notes.includes('|||HISTORIAL_ABONOS:')) {
+                        try {
+                            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+                            const list = JSON.parse(histStr);
+                            priorAbonoNetTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+                        } catch (_) {}
+                    }
+
+                    const remainingToPay = Math.max(0, grandTotal - priorAbonoNetTotal);
+
                     // SEAT SPECIFIC CALCULATIONS
                     let seatGrandTotal = 0;
                     let seatDisplayInfo = null;
@@ -308,9 +338,17 @@ export function TableQueuePanel({ onCheckoutTable }) {
 
                             {/* Total */}
                             <div className="text-right shrink-0">
-                                <p className="font-black text-orange-600 dark:text-orange-400 text-base">
-                                    {formatCOP(item.type === 'SEAT' ? seatGrandTotal : grandTotal)}
-                                </p>
+                                {item.type !== 'SEAT' && remainingToPay === 0 ? (
+                                    <div className="flex flex-col items-end">
+                                        <span className="px-2 py-0.5 rounded-lg text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 uppercase tracking-wider animate-pulse">
+                                            Pagada ($0)
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <p className="font-black text-orange-600 dark:text-orange-400 text-base">
+                                        {formatCOP(item.type === 'SEAT' ? seatGrandTotal : remainingToPay)}
+                                    </p>
+                                )}
                             </div>
 
                             <ChevronRight size={18} className="text-orange-400 shrink-0" />

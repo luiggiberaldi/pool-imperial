@@ -288,10 +288,19 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
             } catch (_) {
                 formattedDate = item.date || '';
             }
-            push(itemRow(`${index + 1}. ${item.method} (${formattedDate})`, formatCOP(item.amount), 'small'));
+            const hasSvc = Number(item.serviceAmount) > 0;
+            const labelStr = hasSvc 
+                ? `${index + 1}. ${item.method} (${formattedDate}) [Neto: ${formatCOP(item.netAmount ?? item.amount)}]`
+                : `${index + 1}. ${item.method} (${formattedDate})`;
+            push(itemRow(labelStr, formatCOP(item.amount), 'small'));
         });
-        const totalAbonosSum = historialAbonos.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-        push(itemRow('Total Abonado:', formatCOP(totalAbonosSum), 'bold'));
+        const totalAbonosSum = historialAbonos.reduce((sum, item) => sum + (Number(item.netAmount ?? item.amount) || 0), 0);
+        const totalAbonosServiceSum = historialAbonos.reduce((sum, item) => sum + (Number(item.serviceAmount) || 0), 0);
+        
+        push(itemRow('Abonado a Cuenta:', formatCOP(totalAbonosSum), 'bold'));
+        if (totalAbonosServiceSum > 0) {
+            push(itemRow('Abonado a Servicio/Propina:', formatCOP(totalAbonosServiceSum), 'small'));
+        }
     }
 
     push(`<div class="center disclaimer">*** NO ES RECIBO DE PAGO ***</div>`);

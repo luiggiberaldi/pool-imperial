@@ -3,6 +3,7 @@ import { printReceiptEscPos, getWebSerialConfig, printDailyCloseEscPos } from '.
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { showToast } from '../components/Toast';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
+import { FinancialEngine } from '../core/FinancialEngine';
 
 const formatCOP = (val) => {
     const rawVal = Math.round(val || 0);
@@ -673,7 +674,7 @@ export async function printThermalDailyClose({
                 ${visibleSales.map(s => {
                     const ref = String(s.saleNumber || 0).padStart(4, '0');
                     const staff = (s.meseroNombre || s.vendedorNombre || 'Sistema').substring(0, 8);
-                    const amountStr = formatCOP(s.totalCop || s.totalUsd);
+                    const amountStr = formatCOP(FinancialEngine.calculateSaleNetTotal(s));
                     return `
                         <tr>
                             <td>#${ref}</td>
