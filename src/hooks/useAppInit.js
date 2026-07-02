@@ -136,6 +136,8 @@ export function useAppInit() {
                 useAuthStore.setState({ cloudSession: session });
                 setCloudSession(session);
                 setCheckingSession(false);
+                // Sincronizar usuarios para tener la caché al día (nombres de meseros, etc.)
+                useAuthStore.getState().syncUsers().catch(() => {});
             }
         };
 

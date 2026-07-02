@@ -233,11 +233,45 @@ export async function generateDailyClosePDF({
     // ════════════════════════════════════
     //  2. DESGLOSE DE PAGOS Y CUADRE DE CAJA (LADO A LADO)
     // ════════════════════════════════════
+    // Calcular desglose de propinas por método de pago
+    const tipBreakdownByMethod = {};
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        const saleTip = (s.items || []).filter(item => 
+            item.isTip || (item.name && item.name.toLowerCase().includes('propina')) || (item.name && item.name.toLowerCase().includes('servicio voluntario'))
+        ).reduce((sum, item) => sum + (item.priceUsd || 0) * (item.qty || 1), 0);
+
+        if (saleTip <= 0) return;
+
+        if (s.payments && s.payments.length > 0) {
+            const netTotal = FinancialEngine.calculateSaleNetTotal(s) || 1;
+            if (s.fiadoUsd && s.fiadoUsd > 0) {
+                const ratio = s.fiadoUsd / netTotal;
+                const tipPart = saleTip * ratio;
+                tipBreakdownByMethod['fiado'] = (tipBreakdownByMethod['fiado'] || 0) + tipPart;
+            }
+            s.payments.forEach(p => {
+                if (p.isAbonoPrevio) return;
+                const payAmt = p.amountUsd || 0;
+                const ratio = payAmt / netTotal;
+                const tipPart = saleTip * ratio;
+                tipBreakdownByMethod[p.methodId] = (tipBreakdownByMethod[p.methodId] || 0) + tipPart;
+            });
+        } else {
+            const method = s.tipo === 'VENTA_FIADA' ? 'fiado' : (s.paymentMethod || 'efectivo');
+            tipBreakdownByMethod[method] = (tipBreakdownByMethod[method] || 0) + saleTip;
+        }
+    });
+
     const halfWidth = (WIDTH - M * 2 - 10) / 2; // ~87mm
 
     // Altura aproximada requerida para esta sección
-    const paymentRows = Object.keys(paymentBreakdown || {}).length;
-    const section2Height = Math.max(paymentRows * 6 + 15, 60);
+    let paymentHeight = 15;
+    Object.entries(paymentBreakdown || {}).forEach(([methodId, data]) => {
+        if (data.total <= 0) return;
+        paymentHeight += (tipBreakdownByMethod[methodId] > 0) ? 7.5 : 6;
+    });
+    const section2Height = Math.max(paymentHeight, 60);
     checkPageBreak(section2Height);
 
     // Guardamos la coordenada Y para dibujar las dos columnas de forma simétrica
@@ -282,19 +316,42 @@ export async function generateDailyClosePDF({
         const isUsd = data.currency === 'USD';
         const val = isUsd ? formatUsd(data.total) : formatCOP(data.total);
 
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7);
-        doc.setTextColor(...BODY);
-        doc.text(`${label}${countLabel}`, M + 3, y + 4.2);
-        
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...INK);
-        doc.text(val, M + halfWidth - 3, y + 4.2, { align: 'right' });
+        const tipAmt = tipBreakdownByMethod[methodId] || 0;
+        const baseAmt = Math.max(0, data.total - tipAmt);
+
+        if (tipAmt > 0) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...BODY);
+            doc.text(`${label}${countLabel}`, M + 3, y + 3);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...INK);
+            doc.text(val, M + halfWidth - 3, y + 3, { align: 'right' });
+            
+            y += 3.8;
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(6);
+            doc.setTextColor(...MUTED);
+            const tipValLabel = isUsd ? formatUsd(tipAmt) : formatCOP(tipAmt);
+            const baseValLabel = isUsd ? formatUsd(baseAmt) : formatCOP(baseAmt);
+            doc.text(`(Venta: ${baseValLabel}  ·  Propina: ${tipValLabel})`, M + 6, y + 2.5);
+            y += 3.2;
+        } else {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...BODY);
+            doc.text(`${label}${countLabel}`, M + 3, y + 4.2);
+            
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...INK);
+            doc.text(val, M + halfWidth - 3, y + 4.2, { align: 'right' });
+            y += 6;
+        }
         
         doc.setDrawColor(...RULE);
         doc.setLineWidth(0.2);
-        doc.line(M, y + 6, M + halfWidth, y + 6);
-        y += 6;
+        doc.line(M, y, M + halfWidth, y);
     });
 
     // Impuestos Recaudados (Debajo de métodos de pago)
@@ -523,6 +580,121 @@ export async function generateDailyClosePDF({
     y += 4;
     drawDivider(y);
     y += 8;
+
+    // --- Sección: Propinas del Personal ---
+    const detailedTips = [];
+    const tipsByUser = {};
+    let totalTipsAmt = 0;
+
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
+                const user = s.meseroNombre || s.vendedorNombre || 'Sistema';
+                const amt = (item.priceUsd || 0) * (item.qty || 1);
+                if (amt > 0) {
+                    tipsByUser[user] = (tipsByUser[user] || 0) + amt;
+                    totalTipsAmt += amt;
+                    detailedTips.push({
+                        saleRef: `#${s.saleNumber || s.sale_number || s.id.substring(0, 6).toUpperCase()}`,
+                        client: s.customerName || 'Consumidor Final',
+                        user: user,
+                        amount: amt,
+                        time: new Date(s.timestamp).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+                    });
+                }
+            }
+        });
+    });
+
+    const tipsUserRows = Object.keys(tipsByUser).length;
+    const tipsDetailRows = detailedTips.length;
+
+    if (totalTipsAmt > 0) {
+        const sectionTipsHeight = Math.max(tipsUserRows, tipsDetailRows) * 6 + 20;
+        checkPageBreak(sectionTipsHeight);
+        const startYTips = y;
+
+        // --- Columna Izquierda: Resumen de Propinas ---
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...BLUE);
+        doc.text('RESUMEN DE PROPINAS POR PERSONAL', M, y);
+        y += 5;
+
+        doc.setFillColor(...BG_LIGHT);
+        doc.rect(M, y, halfWidth, 6, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...INK);
+        doc.text('Mesero / Cajero', M + 2, y + 4.2);
+        doc.text('Total Propina', M + halfWidth - 2, y + 4.2, { align: 'right' });
+        y += 6;
+
+        Object.entries(tipsByUser).forEach(([user, amt]) => {
+            const userName = user.length > 22 ? user.substring(0, 20) + '…' : user;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...BODY);
+            doc.text(toTitleCase(userName || ''), M + 2, y + 4.2);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...GREEN);
+            doc.text(formatCOP(amt), M + halfWidth - 2, y + 4.2, { align: 'right' });
+
+            doc.setDrawColor(...RULE);
+            doc.setLineWidth(0.2);
+            doc.line(M, y + 6, M + halfWidth, y + 6);
+            y += 6;
+        });
+
+        // --- Columna Derecha: Detalle de Propinas por Venta ---
+        y = startYTips;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...BLUE);
+        doc.text('DETALLE DE PROPINAS POR VENTA', M + halfWidth + 10, y);
+        y += 5;
+
+        doc.setFillColor(...BG_LIGHT);
+        doc.rect(M + halfWidth + 10, y, halfWidth, 6, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...INK);
+        doc.text('Ref / Hora', M + halfWidth + 12, y + 4.2);
+        doc.text('Cliente', M + halfWidth + 33, y + 4.2);
+        doc.text('Mesero', M + halfWidth + 56, y + 4.2);
+        doc.text('Propina', M + halfWidth * 2 + 7, y + 4.2, { align: 'right' });
+        y += 6;
+
+        detailedTips.forEach((dt) => {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.setTextColor(...BODY);
+            doc.text(`${dt.saleRef} (${dt.time})`, M + halfWidth + 12, y + 4.2);
+            
+            const clientStr = dt.client.length > 10 ? dt.client.substring(0, 8) + '…' : dt.client;
+            doc.text(toTitleCase(clientStr || ''), M + halfWidth + 33, y + 4.2);
+
+            const userStr = dt.user.length > 10 ? dt.user.substring(0, 8) + '…' : dt.user;
+            doc.text(toTitleCase(userStr || ''), M + halfWidth + 56, y + 4.2);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...INK);
+            doc.text(formatCOP(dt.amount), M + halfWidth * 2 + 7, y + 4.2, { align: 'right' });
+
+            doc.setDrawColor(...RULE);
+            doc.setLineWidth(0.2);
+            doc.line(M + halfWidth + 10, y + 6, M + halfWidth * 2 + 10, y + 6);
+            y += 6;
+        });
+
+        y = Math.max(y, startYTips + sectionTipsHeight);
+        y += 4;
+        drawDivider(y);
+        y += 8;
+    }
 
     // ════════════════════════════════════
     //  4. HISTORIAL DETALLADO DE VENTAS

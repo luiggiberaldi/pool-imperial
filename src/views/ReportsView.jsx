@@ -4,7 +4,7 @@ import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatCop, formatUsd } from '../utils/calculatorUtils';
 import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
-import { generateSalesReportPDF } from '../utils/salesReportGenerator';
+import { generateSalesReportPDF, generateArticlesReportPDF, generateCierresListReportPDF } from '../utils/salesReportGenerator';
 import { useProductContext } from '../context/ProductContext';
 import { useCart } from '../context/CartContext';
 import EmptyState from '../components/EmptyState';
@@ -217,18 +217,46 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
     const handleExportPDF = async () => {
         triggerHaptic && triggerHaptic();
         try {
-            const { generateDailyClosePDF } = await import('../utils/dailyCloseGenerator');
-            await generateDailyClosePDF({
-                sales: salesForCashFlow,
-                allSales: salesForStats,
-                bcvRate: 0,
-                paymentBreakdown,
-                topProducts,
-                todayTotalUsd: totalUsd,
-                todayTotalBs: 0,
-                todayProfit: profit,
-                todayItemsSold: totalItems,
-            });
+            const rangeOpt = RANGE_OPTIONS.find(o => o.id === selectedRange);
+            let rangeLabel = rangeOpt ? rangeOpt.label : '';
+            if (selectedRange === 'custom' && (customFrom || customTo)) {
+                rangeLabel = `${customFrom || '...'} a ${customTo || '...'}`;
+            }
+
+            if (activeTab === 'metrics') {
+                const { generateDailyClosePDF } = await import('../utils/dailyCloseGenerator');
+                await generateDailyClosePDF({
+                    sales: salesForCashFlow,
+                    allSales: salesForStats,
+                    bcvRate: 0,
+                    paymentBreakdown,
+                    topProducts,
+                    todayTotalUsd: totalUsd,
+                    todayTotalBs: 0,
+                    todayProfit: profit,
+                    todayItemsSold: totalItems,
+                });
+            } else if (activeTab === 'articles') {
+                generateArticlesReportPDF(allProductsSold, {
+                    rangeLabel,
+                    search: articleSearch,
+                    businessName: localStorage.getItem('business_name') || 'Pool Imperial'
+                });
+            } else if (activeTab === 'sales') {
+                const filterLabel = { all: 'Todas', completed: 'Completadas', voided: 'Anuladas' }[historyFilter] || 'Todas';
+                generateSalesReportPDF(searchedSales, {
+                    rangeLabel,
+                    search: historySearch,
+                    filterLabel,
+                    userName: userFilter !== 'all' ? userFilter : '',
+                    commission: userFilter !== 'all' ? selectedUserCommission : null,
+                });
+            } else if (activeTab === 'history') {
+                generateCierresListReportPDF(groupedClosings, {
+                    rangeLabel,
+                    businessName: localStorage.getItem('business_name') || 'Pool Imperial'
+                });
+            }
         } catch (e) {
             console.error('Error generando PDF:', e);
         }
@@ -257,6 +285,14 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         if (s.vendedorNombre && s.vendedorNombre.toLowerCase().includes(q)) return true;
         return false;
     }), [historySales, historyFilter, historySearch, userFilter]);
+
+    const isDownloadDisabled = useMemo(() => {
+        if (activeTab === 'metrics') return salesForStats.length === 0 && salesForCashFlow.length === 0;
+        if (activeTab === 'articles') return allProductsSold.length === 0;
+        if (activeTab === 'sales') return searchedSales.length === 0;
+        if (activeTab === 'history') return groupedClosings.length === 0;
+        return true;
+    }, [activeTab, salesForStats, salesForCashFlow, allProductsSold, searchedSales, groupedClosings]);
 
     const completedInList = searchedSales.filter(s => s.status !== 'ANULADA');
     const voidedInList = searchedSales.filter(s => s.status === 'ANULADA');
@@ -320,13 +356,15 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                     </div>
                     Reportes
                 </h2>
-                <button
-                    onClick={handleExportPDF}
-                    disabled={salesForStats.length === 0 && salesForCashFlow.length === 0}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-500/20 active:scale-95 transition-all"
-                >
-                    <Download size={16} /> Descargar PDF
-                </button>
+                {activeTab !== 'metrics' && (
+                    <button
+                        onClick={handleExportPDF}
+                        disabled={isDownloadDisabled}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-500/20 active:scale-95 transition-all"
+                    >
+                        <Download size={16} /> Descargar PDF
+                    </button>
+                )}
             </div>
 
             {/* Tab Selector */}

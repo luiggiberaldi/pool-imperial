@@ -32,6 +32,13 @@ import CashierPaymentModal from '../../views/CashierPaymentModal';
 
 function useStaffName(staffId) {
     const cachedUsers = useAuthStore(s => s.cachedUsers);
+
+    useEffect(() => {
+        if (staffId && (!cachedUsers?.length || !cachedUsers.some(u => u.id === staffId))) {
+            useAuthStore.getState().syncUsers().catch(() => {});
+        }
+    }, [staffId, cachedUsers]);
+
     if (!staffId || !cachedUsers?.length) return null;
     const user = cachedUsers.find(u => u.id === staffId);
     return user?.name || user?.nombre || null;

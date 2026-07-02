@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
-import { Package, Plus, Trash2, X, Tag, Pencil, Search, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, List, Minus, ArrowUpDown, Percent, Printer, CheckSquare, Warehouse, Gift, ArrowDownUp } from 'lucide-react';
+import { Package, Plus, Trash2, X, Tag, Pencil, Search, ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, List, Minus, ArrowUpDown, Percent, Printer, CheckSquare, Warehouse, Gift, ArrowDownUp, Download } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { ProductShareModal } from '../components/ProductShareModal';
 import ShareInventoryModal from '../components/ShareInventoryModal';
-import { formatCop } from '../utils/calculatorUtils';
+import { formatCop, capitalizeName } from '../utils/calculatorUtils';
 import { generarEtiquetas } from '../utils/ticketGenerator';
 import { useWallet } from '../hooks/useWallet';
 import ProductCard from '../components/Products/ProductCard';
@@ -25,6 +25,7 @@ import { useProductPagination } from '../hooks/useProductPagination';
 import { useAuthStore } from '../hooks/store/authStore';
 import { useAudit } from '../hooks/useAudit';
 import { forcePushToCloud } from '../hooks/useCloudSync';
+import { generateInventoryReportPDF } from '../utils/inventoryReportGenerator';
 
 export const ProductsView = ({ rates, triggerHaptic }) => {
     const {
@@ -189,6 +190,22 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
     const { accounts } = useWallet();
     const { salesVelocityMap } = useInventoryVelocity(products.length);
 
+    const handleDownloadPDF = () => {
+        triggerHaptic && triggerHaptic();
+        const activeCatInfo = categories.find(c => c.id === activeCategory);
+        const activeCategoryLabel = activeCatInfo ? activeCatInfo.label : (activeCategory === 'bajo-stock' ? 'Bajo Stock' : capitalizeName(activeCategory || 'Todos'));
+        
+        generateInventoryReportPDF(filteredProducts, categories, {
+            search: searchTerm,
+            activeCategoryLabel,
+            businessName: localStorage.getItem('business_name') || 'Pool Imperial'
+        });
+        
+        try {
+            auditLog('INVENTARIO', 'EXPORTAR_PDF', `Exportado reporte PDF de inventario (${filteredProducts.length} productos)`);
+        } catch (e) { /* silencioso */ }
+    };
+
     // ── RENDER ──
     return (
         <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 p-3 sm:p-6 overflow-y-auto">
@@ -205,6 +222,10 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                     <div className="flex items-center gap-1 shrink-0">
                         {products.length > 0 && !isCajero && (
                             <>
+                                <button onClick={handleDownloadPDF}
+                                    className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-500 dark:text-indigo-400 rounded-xl transition-all active:scale-95" title="Descargar PDF de Inventario">
+                                    <Download size={16} strokeWidth={2.5} />
+                                </button>
                                 <button onClick={() => { triggerHaptic && triggerHaptic(); setIsStockAdjustOpen(true); }}
                                     className="p-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-500 dark:text-emerald-400 rounded-xl transition-all active:scale-95" title="Ingreso / Egreso de Inventario">
                                     <ArrowDownUp size={16} strokeWidth={2.5} />
