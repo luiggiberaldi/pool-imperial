@@ -54,7 +54,7 @@ export function useProductPagination({ products, effectiveRate, triggerHaptic })
 
     const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
     const paginatedProducts = filteredProducts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    const lowStockCount = products.filter(p => (p.stock ?? 0) <= (p.lowStockAlert ?? 5) && (p.stock ?? 0) >= 0).length;
+    const lowStockCount = products.filter(p => !p.isUnlimitedStock && (p.stock ?? 0) <= (p.lowStockAlert ?? 5) && (p.stock ?? 0) >= 0).length;
 
     const handleSetSearchTerm = (term) => { setSearchTerm(term); setCurrentPage(1); };
     const handleSetActiveCategory = (cat) => { setActiveCategory(cat); setCurrentPage(1); };

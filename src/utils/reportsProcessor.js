@@ -129,6 +129,8 @@ export function groupSalesByCierreId(allSales, from, to, products) {
         }
         if (entity.tipo === 'APERTURA_CAJA') {
             cMap[cId].apertura = entity;
+        } else if (entity.tipo === 'CIERRE_CAJA') {
+            cMap[cId].cierreRecord = entity;
         } else {
             cMap[cId].sales.push(entity);
         }
@@ -178,6 +180,11 @@ export function groupSalesByCierreId(allSales, from, to, products) {
                 paymentBreakdown,
                 totalTax,
                 taxBreakdown,
+                declaredCop: c.cierreRecord?.declaredCop,
+                declaredUsd: c.cierreRecord?.declaredUsd,
+                diffCop: c.cierreRecord?.diffCop,
+                diffUsd: c.cierreRecord?.diffUsd,
+                declaredOthers: c.cierreRecord?.declaredOthers || {}
             };
         })
         .sort((a, b) => b.cierreId - a.cierreId);

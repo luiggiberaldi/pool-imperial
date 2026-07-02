@@ -131,7 +131,14 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Pagos Recibidos</p>
                                 {receipt.payments.map(p => (
                                     <div key={p.id} className={`flex justify-between mb-1 ${p.isAbonoPrevio ? 'text-red-600 font-semibold' : 'text-slate-600'}`}>
-                                        <span>{p.methodLabel}:</span>
+                                        <span className="flex items-center gap-1.5 flex-wrap">
+                                            <span>{p.methodLabel}:</span>
+                                            {p.reference && (
+                                                <span className="text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded leading-none">
+                                                    Ref: {p.reference}
+                                                </span>
+                                            )}
+                                        </span>
                                         <span className="font-bold">{formatPaymentAmount(p)}</span>
                                     </div>
                                 ))}

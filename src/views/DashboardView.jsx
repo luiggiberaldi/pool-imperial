@@ -254,11 +254,27 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
         const currentCierreId = Date.now();
         const validTipos = ['VENTA','VENTA_FIADA','COBRO_DEUDA','PAGO_PROVEEDOR','APERTURA_CAJA','AJUSTE_ENTRADA','AJUSTE_SALIDA'];
-        const updatedSales = sales.map(s =>
+        let updatedSales = sales.map(s =>
             !s.cajaCerrada && validTipos.includes(s.tipo || 'VENTA') && isInSession(s)
                 ? { ...s, cajaCerrada: true, cierreId: currentCierreId }
                 : s
         );
+
+        // Crear registro especial de cierre para guardar metadatos de arqueo
+        const cierreRecord = {
+            id: `cierre_${currentCierreId}`,
+            tipo: 'CIERRE_CAJA',
+            cierreId: currentCierreId,
+            timestamp: new Date().toISOString(),
+            cajaCerrada: true,
+            declaredCop: reconData.declaredCop || 0,
+            declaredUsd: reconData.declaredUsd || 0,
+            diffCop: reconData.diffCop || 0,
+            diffUsd: reconData.diffUsd || 0,
+            declaredOthers: reconData.declaredOthers || {}
+        };
+        updatedSales = [...updatedSales, cierreRecord];
+
         await storageService.setItem(SALES_KEY, updatedSales);
         setSales(updatedSales);
         await closeCashSession(reconData, usuarioActivo?.email || 'admin');

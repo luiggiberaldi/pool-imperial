@@ -271,7 +271,18 @@ export async function generateDailyClosePDF({
         if (data.total <= 0) return;
         paymentHeight += (tipBreakdownByMethod[methodId] > 0) ? 7.5 : 6;
     });
-    const section2Height = Math.max(paymentHeight, 60);
+
+    let reconHeight = 25; // Base height for COP + USD cash
+    if (reconData) {
+        const otherPaymentEntries = Object.entries(paymentBreakdown || {}).filter(([methodId, data]) => {
+            return data.total > 0 && 
+                   !['efectivo', 'efectivo_cop', 'efectivo_usd', '_vuelto_cop', 'vuelto_cop', 'vuelto_usd'].includes(methodId) &&
+                   !data.currency?.startsWith('VUELTO');
+        });
+        reconHeight += otherPaymentEntries.length * 20; // 20mm per other payment method cuadre (3 rows + spacing)
+    }
+
+    const section2Height = Math.max(paymentHeight, reconHeight, 60);
     checkPageBreak(section2Height);
 
     // Guardamos la coordenada Y para dibujar las dos columnas de forma simétrica
@@ -391,7 +402,7 @@ export async function generateDailyClosePDF({
         const declaredUSD = reconData.declaredUsd || reconData.declaredUSD || 0;
         const diffUSD = declaredUSD - expectedUSD;
 
-        const drawReconRow = (label, val, isDiff = false, isCop = true) => {
+        const drawReconRow = (label, val, isDiff = false, isCop = true, specificDiffVal = null) => {
             doc.setFont('helvetica', isDiff ? 'bold' : 'normal');
             doc.setFontSize(7);
             doc.setTextColor(...BODY);
@@ -399,7 +410,7 @@ export async function generateDailyClosePDF({
 
             doc.setFont('helvetica', 'bold');
             if (isDiff) {
-                const diffVal = isCop ? diffCOP : diffUSD;
+                const diffVal = specificDiffVal !== null ? specificDiffVal : (isCop ? diffCOP : diffUSD);
                 if (Math.abs(diffVal) <= (isCop ? 500 : 0.05)) doc.setTextColor(...BODY);
                 else if (diffVal < 0) doc.setTextColor(...RED);
                 else doc.setTextColor(...GREEN);
@@ -424,6 +435,27 @@ export async function generateDailyClosePDF({
             drawReconRow('USD Declarado', formatUsd(declaredUSD));
             drawReconRow('USD Diferencia', (diffUSD >= 0 ? '+' : '') + formatUsd(diffUSD), true, false);
         }
+
+        // Draw other payment methods
+        const declaredOthers = reconData.declaredOthers || {};
+        const otherPaymentEntries = Object.entries(paymentBreakdown || {}).filter(([methodId, data]) => {
+            return data.total > 0 && 
+                   !['efectivo', 'efectivo_cop', 'efectivo_usd', '_vuelto_cop', 'vuelto_cop', 'vuelto_usd'].includes(methodId) &&
+                   !data.currency?.startsWith('VUELTO');
+        });
+
+        otherPaymentEntries.forEach(([methodId, data]) => {
+            const expected = data.total;
+            const declared = parseFloat(declaredOthers[methodId]) || 0;
+            const diff = declared - expected;
+            const isUsd = data.currency === 'USD';
+            const label = toTitleCase(getPaymentLabel(methodId, data.label));
+            
+            y += 2;
+            drawReconRow(`${label} Esperado`, isUsd ? formatUsd(expected) : formatCOP(expected));
+            drawReconRow(`${label} Declarado`, isUsd ? formatUsd(declared) : formatCOP(declared));
+            drawReconRow(`${label} Diferencia`, (diff >= 0 ? '+' : '') + (isUsd ? formatUsd(diff) : formatCOP(diff)), true, !isUsd, diff);
+        });
     } else {
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(7.5);
@@ -791,7 +823,8 @@ export async function generateDailyClosePDF({
                 doc.setFont('helvetica', 'normal');
                 doc.setFontSize(7);
                 doc.setTextColor(...BODY);
-                doc.text(`${label}: ${val}`, M + 140, payY);
+                const refSuffix = p.reference ? ` (${p.reference.length > 12 ? p.reference.substring(0, 10) + '..' : p.reference})` : '';
+                doc.text(`${label}${refSuffix}: ${val}`, M + 140, payY);
                 payY += 4;
             });
         } else if (s.paymentMethod) {

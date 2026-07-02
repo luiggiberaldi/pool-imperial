@@ -24,8 +24,13 @@ function detectPaymentAnomaly({ cartTotalUsd, totalPaidUsd }) {
 
 export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, cartTotalUsd, onConfirmSale, triggerHaptic, splitMeta = null, tdcSurchargePercent: initialSurchargePercent = 5, totalTax = 0, tableContext = null }) {
     const [barValues, setBarValues] = useState({});
+    const [references, setReferences] = useState({});
     const [changeUsdGiven, setChangeUsdGiven] = useState('');
     const [changeBsGiven, setChangeBsGiven] = useState(''); // Se mantiene por firma pero siempre es vacío
+
+    const handleReferenceChange = useCallback((methodId, value) => {
+        setReferences(prev => ({ ...prev, [methodId]: value }));
+    }, []);
     const [confirmFiar, setConfirmFiar] = useState(false);
     const [overpayAlertData, setOverpayAlertData] = useState(null);
     const [tdcSurchargePercent, setTdcSurchargePercent] = useState(initialSurchargePercent);
@@ -200,6 +205,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
                     const inputValue = parseFloat(barValues[m.id]);
                     const isUsd = m.currency === 'USD';
                     const convertedCOP = isUsd ? Math.round(inputValue * tasaCop) : Math.round(inputValue);
+                    const referenceVal = references[m.id] || '';
                     return {
                         id: crypto.randomUUID(),
                         methodId: m.id,
@@ -211,6 +217,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
                         amountOriginal: inputValue,
                         amountOriginalCurrency: m.currency || 'COP',
                         amountBs: 0,
+                        reference: referenceVal,
                     };
                 });
 
@@ -241,7 +248,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
             submittingRef.current = false;
             setIsSubmitting(false);
         }
-    }, [barValues, paymentMethods, onConfirmSale, triggerHaptic, changeUsdGiven, changeUsd, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax, tasaCop]);
+    }, [barValues, references, paymentMethods, onConfirmSale, triggerHaptic, changeUsdGiven, changeUsd, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax, tasaCop]);
 
     const handleConfirm = useCallback(async () => {
         const anomaly = detectPaymentAnomaly({ cartTotalUsd: adjustedTotal, totalPaidUsd });
@@ -258,7 +265,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
     }, [_doConfirm]);
 
     return {
-        barValues, setBarValues, totalPaidUsd, totalPaidBs,
+        barValues, setBarValues, references, handleReferenceChange, totalPaidUsd, totalPaidBs,
         remainingUsd, remainingBs, changeUsd, changeBs,
         isPaid, handleBarChange, fillBar, handleConfirm,
         changeUsdGiven, setChangeUsdGiven,

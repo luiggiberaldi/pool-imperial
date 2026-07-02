@@ -358,6 +358,7 @@ export function ProductProvider({ children, rates }) {
         let computedStock;
         setProducts(prevProducts => prevProducts.map(pr => {
             if (pr.id === productId) {
+                if (pr.isUnlimitedStock) return pr;
                 computedStock = allowNeg ? (pr.stock ?? 0) + delta : Math.max(0, (pr.stock ?? 0) + delta);
                 return { ...pr, stock: computedStock };
             }

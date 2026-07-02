@@ -273,7 +273,7 @@ export function useGlobalTableAlerts() {
             channelRef.current?.send({
                 type: 'broadcast',
                 event: 'stock_bajo',
-                payload: { products: products.filter(p => (parseFloat(p.stock) || 0) <= (parseFloat(p.lowStockAlert) || 5)).map(p => ({ id: p.id, name: p.name, stock: p.stock, unit: p.unit, lowStockAlert: p.lowStockAlert })) }
+                payload: { products: products.filter(p => !p.isUnlimitedStock && (parseFloat(p.stock) || 0) <= (parseFloat(p.lowStockAlert) || 5)).map(p => ({ id: p.id, name: p.name, stock: p.stock, unit: p.unit, lowStockAlert: p.lowStockAlert })) }
             });
         }
     };

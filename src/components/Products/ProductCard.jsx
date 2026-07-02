@@ -92,7 +92,7 @@ export default function ProductCard({
                     </div>
                 )}
                 {/* Low stock alert */}
-                {isLowStock && delta === 0 && (
+                {isLowStock && delta === 0 && !p.isUnlimitedStock && (
                     <div className="absolute top-1 right-1 bg-amber-500/90 backdrop-blur-sm text-white text-[9px] sm:text-xs font-black px-1.5 py-0.5 rounded flex items-center gap-0.5">
                         <AlertTriangle size={9} /> Bajo
                     </div>
@@ -214,33 +214,42 @@ export default function ProductCard({
                     </div>
                 ) : (
                 <div className="mt-auto pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-xl p-1">
-                        {!readOnly && (
-                            <button
-                                onClick={handleMinus}
-                                className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-500 hover:text-red-500 shadow-sm active:scale-95 transition-all"
-                            >
-                                <Minus size={18} strokeWidth={2.5} />
-                            </button>
-                        )}
-                        <div className="flex flex-col items-center justify-center px-2 text-center min-w-[50px]">
-                            <span className={`text-base font-black leading-none mb-0.5 transition-colors ${delta !== 0 ? 'text-brand dark:text-brand' : isLowStock ? 'text-amber-500' : 'text-slate-700 dark:text-slate-200'}`}>
-                                {stagedStock}
+                    {p.isUnlimitedStock ? (
+                        <div className="flex flex-col items-center justify-center py-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                            <span className="text-base font-black text-emerald-600 dark:text-emerald-400 leading-none mb-0.5">
+                                Ilimitado
                             </span>
-                            <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider leading-none">{(p.unit === 'kg' || p.unit === 'litro') ? unitInfo?.short : 'UND'}</span>
-                            {p.unit === 'paquete' && p.unitsPerPackage > 0 && Math.floor(stagedStock / p.unitsPerPackage) > 0 && (
-                                <span className="text-[8px] sm:text-[10px] text-slate-400 leading-none">= {Math.floor(stagedStock / p.unitsPerPackage)} lotes</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">STOCK</span>
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-xl p-1">
+                            {!readOnly && (
+                                <button
+                                    onClick={handleMinus}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-500 hover:text-red-500 shadow-sm active:scale-95 transition-all"
+                                >
+                                    <Minus size={18} strokeWidth={2.5} />
+                                </button>
+                            )}
+                            <div className="flex flex-col items-center justify-center px-2 text-center min-w-[50px]">
+                                <span className={`text-base font-black leading-none mb-0.5 transition-colors ${delta !== 0 ? 'text-brand dark:text-brand' : isLowStock ? 'text-amber-500' : 'text-slate-700 dark:text-slate-200'}`}>
+                                    {stagedStock}
+                                </span>
+                                <span className="text-[9px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider leading-none">{(p.unit === 'kg' || p.unit === 'litro') ? unitInfo?.short : 'UND'}</span>
+                                {p.unit === 'paquete' && p.unitsPerPackage > 0 && Math.floor(stagedStock / p.unitsPerPackage) > 0 && (
+                                    <span className="text-[8px] sm:text-[10px] text-slate-400 leading-none">= {Math.floor(stagedStock / p.unitsPerPackage)} lotes</span>
+                                )}
+                            </div>
+                            {!readOnly && (
+                                <button
+                                    onClick={handlePlus}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-500 hover:text-emerald-500 shadow-sm active:scale-95 transition-all"
+                                >
+                                    <Plus size={18} strokeWidth={2.5} />
+                                </button>
                             )}
                         </div>
-                        {!readOnly && (
-                            <button
-                                onClick={handlePlus}
-                                className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white dark:bg-slate-700 flex items-center justify-center text-slate-500 hover:text-emerald-500 shadow-sm active:scale-95 transition-all"
-                            >
-                                <Plus size={18} strokeWidth={2.5} />
-                            </button>
-                        )}
-                    </div>
+                    )}
 
                     {/* Confirm / Cancel — premium mobile-optimized */}
                     {delta !== 0 && !readOnly && (

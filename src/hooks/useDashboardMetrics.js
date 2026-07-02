@@ -190,7 +190,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     }), [sales, today]);
 
     const lowStockProducts = useMemo(() =>
-        products.filter(p => (p.stock ?? 0) <= (p.lowStockAlert ?? 5))
+        products.filter(p => !p.isUnlimitedStock && (p.stock ?? 0) <= (p.lowStockAlert ?? 5))
             .sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0)).slice(0, 6),
         [products]
     );

@@ -6,13 +6,13 @@ const PM_KEY = 'pool_imperial_payment_methods_v1';
 // ── MÉTODOS DE FÁBRICA — Pool Imperial (Colombia) ──
 // Todos operan en COP (Pesos Colombianos).
 export const FACTORY_PAYMENT_METHODS = [
-    { id: 'efectivo',      label: 'Efectivo',               icon: '💵', Icon: Banknote,    currency: 'COP', isFactory: true },
-    { id: 'efectivo_usd',  label: 'Efectivo USD',           icon: '💵', Icon: DollarSign,  currency: 'USD', isFactory: true },
-    { id: 'nequi',         label: 'Nequi',                  icon: '📱', Icon: Smartphone,  currency: 'COP', isFactory: true },
-    { id: 'daviplata',     label: 'Daviplata',              icon: '📲', Icon: Smartphone,  currency: 'COP', isFactory: true },
-    { id: 'transferencia', label: 'Transferencia Bancaria',  icon: '🏦', Icon: Store,       currency: 'COP', isFactory: true },
-    { id: 'datafono',      label: 'Datáfono',               icon: '💳', Icon: CreditCard,  currency: 'COP', isFactory: true },
-    { id: 'tdc',           label: 'Tarjeta de Crédito (TDC)', icon: '💳', Icon: CreditCard,  currency: 'COP', isFactory: true },
+    { id: 'efectivo',      label: 'Efectivo',               icon: '💵', Icon: Banknote,    currency: 'COP', isFactory: true, requiresReference: false },
+    { id: 'efectivo_usd',  label: 'Efectivo USD',           icon: '💵', Icon: DollarSign,  currency: 'USD', isFactory: true, requiresReference: false },
+    { id: 'nequi',         label: 'Nequi',                  icon: '📱', Icon: Smartphone,  currency: 'COP', isFactory: true, requiresReference: true },
+    { id: 'daviplata',     label: 'Daviplata',              icon: '📲', Icon: Smartphone,  currency: 'COP', isFactory: true, requiresReference: true },
+    { id: 'transferencia', label: 'Transferencia Bancaria',  icon: '🏦', Icon: Store,       currency: 'COP', isFactory: true, requiresReference: true },
+    { id: 'datafono',      label: 'Datáfono',               icon: '💳', Icon: CreditCard,  currency: 'COP', isFactory: true, requiresReference: true },
+    { id: 'tdc',           label: 'Tarjeta de Crédito (TDC)', icon: '💳', Icon: CreditCard,  currency: 'COP', isFactory: true, requiresReference: true },
 ];
 
 // Alias para compatibilidad
@@ -35,6 +35,7 @@ export async function getAllPaymentMethods() {
         return {
             ...factoryMethod,
             isEnabled: savedMethod ? savedMethod.isEnabled !== false : true,
+            requiresReference: savedMethod ? (savedMethod.requiresReference !== undefined ? savedMethod.requiresReference === true : factoryMethod.requiresReference) : factoryMethod.requiresReference,
         };
     });
 
@@ -42,6 +43,7 @@ export async function getAllPaymentMethods() {
     const customMethods = saved.filter(m => !m.isFactory).map(m => ({
         ...m,
         isEnabled: m.isEnabled !== false,
+        requiresReference: m.requiresReference === true,
         Icon: ICON_COMPONENTS[m.icon] || null,
     }));
 
@@ -67,7 +69,7 @@ export async function savePaymentMethods(methods) {
 }
 
 /** Agregar un método custom */
-export async function addPaymentMethod({ label, currency, icon }) {
+export async function addPaymentMethod({ label, currency, icon, requiresReference = false }) {
     const methods = await getAllPaymentMethods();
     const normalizedNew = label.trim().toLowerCase();
     const isDuplicate = methods.some(m => m.label.toLowerCase() === normalizedNew);
@@ -78,6 +80,7 @@ export async function addPaymentMethod({ label, currency, icon }) {
         icon: icon || '💵',
         currency,
         isFactory: false,
+        requiresReference,
     };
     methods.push(newMethod);
     await savePaymentMethods(methods);
@@ -231,3 +234,15 @@ export const PAYMENT_COLORS = {
         bar: 'bg-blue-500',
     },
 };
+
+export async function togglePaymentMethodReference(id) {
+    const methods = await getAllPaymentMethods();
+    const updated = methods.map(m => {
+        if (m.id === id) {
+            return { ...m, requiresReference: !m.requiresReference };
+        }
+        return m;
+    });
+    await savePaymentMethods(updated);
+    return updated;
+}

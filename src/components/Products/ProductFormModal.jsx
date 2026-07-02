@@ -20,6 +20,7 @@ export default function ProductFormModal({
     costUsd, handleCostUsdChange,
     stock, setStock,
     lowStockAlert, setLowStockAlert,
+    isUnlimitedStock, setIsUnlimitedStock,
 
     unitsPerPackage, setUnitsPerPackage: _setUnitsPerPackage,
     sellByUnit, setSellByUnit: _setSellByUnit,
@@ -388,22 +389,52 @@ export default function ProductFormModal({
                         )}
                     </div>
 
-                    <div data-tour="pf-stock" className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
-                            <div className="grid grid-cols-2 gap-3 animate-in fade-in zoom-in-95">
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase">Stock Físico</label>
-                                    <input type="number" inputMode="numeric" value={stock} onChange={e => setStock(e.target.value)} placeholder="0"
-                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl font-black text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand/50 text-lg" />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-amber-500 ml-1 mb-1 block uppercase flex items-center gap-1">
-                                        <AlertTriangle size={10} /> Alerta Mínima
-                                    </label>
-                                    <input type="number" inputMode="numeric" value={lowStockAlert} onChange={e => setLowStockAlert(e.target.value)} placeholder="5"
-                                        className="w-full bg-amber-50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/30 p-3.5 rounded-xl font-bold text-amber-700 dark:text-amber-400 outline-none focus:ring-2 focus:ring-amber-500/50" />
-                                </div>
-                            </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex justify-between items-center">
+                        <div>
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 block">Stock Ilimitado</span>
+                            <span className="text-[10px] text-slate-400 block mt-0.5">Útil para tragos, cócteles o servicios</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsUnlimitedStock(!isUnlimitedStock)}
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                isUnlimitedStock ? 'bg-emerald-500' : 'bg-slate-200 dark:bg-slate-700'
+                            }`}
+                        >
+                            <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                    isUnlimitedStock ? 'translate-x-5' : 'translate-x-0'
+                                }`}
+                            />
+                        </button>
                     </div>
+
+                    {!isUnlimitedStock ? (
+                        <div data-tour="pf-stock" className="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                                <div className="grid grid-cols-2 gap-3 animate-in fade-in zoom-in-95">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 ml-1 mb-1 block uppercase">Stock Físico</label>
+                                        <input type="number" inputMode="numeric" value={stock} onChange={e => setStock(e.target.value)} placeholder="0"
+                                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl font-black text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-brand/50 text-lg" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-amber-500 ml-1 mb-1 block uppercase flex items-center gap-1">
+                                            <AlertTriangle size={10} /> Alerta Mínima
+                                        </label>
+                                        <input type="number" inputMode="numeric" value={lowStockAlert} onChange={e => setLowStockAlert(e.target.value)} placeholder="5"
+                                            className="w-full bg-amber-50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-800/30 p-3.5 rounded-xl font-bold text-amber-700 dark:text-amber-400 outline-none focus:ring-2 focus:ring-amber-500/50" />
+                                    </div>
+                                </div>
+                        </div>
+                    ) : (
+                        <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-xl p-3.5 text-xs font-bold leading-normal flex items-start gap-2.5 animate-in fade-in zoom-in-95">
+                            <CheckCircle size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+                            <div>
+                                <span className="block font-black text-emerald-800 dark:text-emerald-400 mb-0.5">Control de stock desactivado</span>
+                                Este artículo tendrá existencias infinitas y no aparecerá en el reporte de inventario en PDF.
+                            </div>
+                        </div>
+                    )}
 
                     {name && parsedPrice > 0 && (
                         <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
@@ -423,6 +454,8 @@ export default function ProductFormModal({
                                         <>
                                             <div className="flex justify-between"><span className="text-violet-500">Tipo:</span><span className="font-bold text-violet-600">Combo / Promo</span></div>
                                         </>
+                                    ) : isUnlimitedStock ? (
+                                        <div className="flex justify-between"><span className="text-slate-400">Stock:</span><span className="font-bold text-emerald-500">Ilimitado</span></div>
                                     ) : (
                                         <div className="flex justify-between"><span className="text-slate-400">Stock:</span><span className="font-bold text-slate-700 dark:text-white">{stock || 0}</span></div>
                                     )}

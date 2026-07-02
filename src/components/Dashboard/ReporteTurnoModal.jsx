@@ -184,7 +184,7 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
         rows.push([]);
         rows.push(['Producto', 'Categoría', 'Precio USD', 'Costo USD', 'Costo Bs', 'Stock', 'Stock Mínimo', 'Estado']);
 
-        const sorted = [...products].sort((a, b) => (a.category || '').localeCompare(b.category || ''));
+        const sorted = [...products].filter(p => !p.isUnlimitedStock).sort((a, b) => (a.category || '').localeCompare(b.category || ''));
         sorted.forEach(p => {
             const stock = p.stock ?? 0;
             const minStock = p.lowStockAlert ?? 5;
@@ -202,7 +202,7 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
         });
 
         rows.push([]);
-        rows.push([`Total productos: ${products.length}`]);
+        rows.push([`Total productos: ${sorted.length}`]);
 
         const csv = rows.map(row =>
             row.map(cell => {

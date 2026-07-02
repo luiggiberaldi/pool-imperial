@@ -60,7 +60,13 @@ export default function CierreHistoryCard({ cierre, products: _products, cierreN
             todayTotalBs: 0,
             todayProfit: cierre.profit || 0,
             todayItemsSold: cierre.totalItems,
-            reconData: null,
+            reconData: cierre.declaredCop !== undefined ? {
+                declaredCop: cierre.declaredCop || 0,
+                declaredUsd: cierre.declaredUsd || 0,
+                diffCop: cierre.diffCop || 0,
+                diffUsd: cierre.diffUsd || 0,
+                declaredOthers: cierre.declaredOthers || {}
+            } : null,
             apertura: cierre.apertura,
             isReprint: true,
             totalTax: cierre.totalTax || 0,
@@ -104,7 +110,8 @@ export default function CierreHistoryCard({ cierre, products: _products, cierreN
                 declaredCop: cierre.declaredCop || cierre.declaredCOP || 0,
                 declaredUsd: cierre.declaredUsd || cierre.declaredUSD || 0,
                 diffCop: cierre.diffCop || cierre.diffCOP || 0,
-                diffUsd: cierre.diffUsd || cierre.diffUSD || 0
+                diffUsd: cierre.diffUsd || cierre.diffUSD || 0,
+                declaredOthers: cierre.declaredOthers || {}
             },
             apertura: cierre.apertura,
             totalTax: cierre.totalTax || 0,
@@ -173,7 +180,7 @@ export default function CierreHistoryCard({ cierre, products: _products, cierreN
                             const label = toTitleCase(getPaymentLabel(method, data.label));
                             return (
                                 <div key={method} className="flex justify-between items-center text-xs">
-                                    <span className="text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                    <span className="text-slate-600 dark:text-slate-350 flex items-center gap-1.5">
                                         <PayIcon size={12} className="text-slate-400" /> {label}
                                     </span>
                                     <span className="font-bold text-slate-700 dark:text-slate-200">{formatCop(data.total)}</span>
@@ -181,6 +188,50 @@ export default function CierreHistoryCard({ cierre, products: _products, cierreN
                             );
                         })}
                     </div>
+
+                    {cierre.declaredCop !== undefined && (
+                        <div className="py-3 mt-2 border-t border-slate-100 dark:border-slate-800/50 space-y-2">
+                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">Cuadre / Reconciliación</p>
+                            <div className="bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-850 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800/50 text-xs">
+                                <div className="grid grid-cols-4 gap-1 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-500 text-right">
+                                    <span className="text-left">Método</span>
+                                    <span>Esperado</span>
+                                    <span>Declarado</span>
+                                    <span>Dif.</span>
+                                </div>
+                                <div className="grid grid-cols-4 gap-1 px-3 py-2 text-right items-center">
+                                    <span className="text-left font-semibold text-slate-600 dark:text-slate-300">COP (Efe.)</span>
+                                    <span className="font-mono text-slate-500">{formatCop(openingCop + (cierre.paymentBreakdown['efectivo']?.total || 0) + (cierre.paymentBreakdown['efectivo_cop']?.total || 0) + (cierre.paymentBreakdown['_vuelto_cop']?.total || 0))}</span>
+                                    <span className="font-mono text-slate-700 dark:text-white font-bold">{formatCop(cierre.declaredCop)}</span>
+                                    <span className={`font-mono font-black ${cierre.diffCop >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{cierre.diffCop >= 0 ? '+' : ''}{formatCop(cierre.diffCop)}</span>
+                                </div>
+                                {(openingUsd > 0 || (cierre.paymentBreakdown['efectivo_usd']?.total || 0) > 0 || cierre.declaredUsd > 0) && (
+                                    <div className="grid grid-cols-4 gap-1 px-3 py-2 text-right items-center">
+                                        <span className="text-left font-semibold text-slate-600 dark:text-slate-300">USD (Efe.)</span>
+                                        <span className="font-mono text-slate-500">{formatUsd(openingUsd + (cierre.paymentBreakdown['efectivo_usd']?.total || 0))}</span>
+                                        <span className="font-mono text-slate-700 dark:text-white font-bold">{formatUsd(cierre.declaredUsd)}</span>
+                                        <span className={`font-mono font-black ${cierre.diffUsd >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{cierre.diffUsd >= 0 ? '+' : ''}{formatUsd(cierre.diffUsd)}</span>
+                                    </div>
+                                )}
+                                {Object.entries(cierre.paymentBreakdown || {}).filter(([m, d]) => {
+                                    return d.total > 0 && !['efectivo', 'efectivo_cop', 'efectivo_usd', '_vuelto_cop', 'vuelto_cop', 'vuelto_usd'].includes(m) && !d.currency?.startsWith('VUELTO');
+                                }).map(([method, data]) => {
+                                    const expected = data.total;
+                                    const declared = parseFloat(cierre.declaredOthers?.[method]) || 0;
+                                    const diff = declared - expected;
+                                    const isUsd = data.currency === 'USD';
+                                    return (
+                                        <div key={method} className="grid grid-cols-4 gap-1 px-3 py-2 text-right items-center">
+                                            <span className="text-left font-semibold text-slate-600 dark:text-slate-300 truncate">{toTitleCase(getPaymentLabel(method, data.label))}</span>
+                                            <span className="font-mono text-slate-500">{isUsd ? formatUsd(expected) : formatCop(expected)}</span>
+                                            <span className="font-mono text-slate-700 dark:text-white font-bold">{isUsd ? formatUsd(declared) : formatCop(declared)}</span>
+                                            <span className={`font-mono font-black ${diff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{diff >= 0 ? '+' : ''}{isUsd ? formatUsd(diff) : formatCop(diff)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="pt-3 mt-1 flex gap-2">
                         <button 

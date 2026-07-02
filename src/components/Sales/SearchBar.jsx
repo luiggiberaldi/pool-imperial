@@ -4,6 +4,7 @@ import { BODEGA_CATEGORIES, CATEGORY_ICONS, CATEGORY_COLORS } from '../../config
 import { formatCop } from '../../utils/calculatorUtils';
 
 function getEffectiveStock(p, allProducts) {
+    if (p.isUnlimitedStock) return Infinity;
     if (!p.isCombo) return p.stock ?? 0;
     const items = p.comboItems?.length > 0
         ? p.comboItems.map(ci => ({ product: (allProducts || []).find(lp => lp.id === ci.productId), qty: ci.qty }))
@@ -124,7 +125,7 @@ const SearchBar = forwardRef(function SearchBar({
                                         <span className={`text-[10px] font-medium flex items-center gap-1
                                             ${isOutOfStock ? 'text-red-500' : isLowStock ? 'text-amber-500' : 'text-slate-400'}`}>
                                             {isLowStock && !isOutOfStock && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />}
-                                            {isOutOfStock ? 'Sin stock' : `Stock: ${stock}`}
+                                            {p.isUnlimitedStock ? '∞ disp.' : isOutOfStock ? 'Sin stock' : `Stock: ${stock}`}
                                         </span>
                                     </div>
                                 </div>

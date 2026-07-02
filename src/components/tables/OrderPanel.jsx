@@ -111,6 +111,7 @@ export function OrderPanel({ session, table, onClose }) {
     const getAvailableStock = (productId) => {
         const product = products.find(p => p.id === productId);
         if (!product) return 0;
+        if (product.isUnlimitedStock) return Infinity;
         if (product.isCombo) {
             // Combo stock = min(componentStock / componentQty)
             if (product.comboItems && product.comboItems.length > 0) {
@@ -418,7 +419,7 @@ export function OrderPanel({ session, table, onClose }) {
                                         {/* Stock indicator */}
                                         {!p.isCombo && (
                                             <div className={`text-[9px] font-bold mb-1.5 ${isOutOfStock ? 'text-red-500' : isNegativeStock ? 'text-amber-500' : isLowStock ? 'text-amber-500' : 'text-slate-400'}`}>
-                                                {isOutOfStock ? 'Agotado' : isNegativeStock ? 'Sin stock' : `Stock: ${availableStock}`}
+                                                {p.isUnlimitedStock ? 'Stock: Ilimitado' : isOutOfStock ? 'Agotado' : isNegativeStock ? 'Sin stock' : `Stock: ${availableStock}`}
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between mt-auto">

@@ -51,6 +51,7 @@ export async function processVoidSale(sale, currentSales, currentProducts) {
 
         updatedProducts = currentProducts.map(p => {
             if (restorations[p.id]) {
+                if (p.isUnlimitedStock) return p;
                 return { ...p, stock: round2((p.stock || 0) + restorations[p.id]) };
             }
             return p;

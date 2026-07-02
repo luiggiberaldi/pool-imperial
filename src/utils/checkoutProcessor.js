@@ -272,6 +272,7 @@ export async function processSaleTransaction({
 
         updatedProducts = products.map(p => {
             if (deductions[p.id]) {
+                if (p.isUnlimitedStock) return p;
                 const allowNeg = localStorage.getItem('allow_negative_stock') === 'true';
                 const newStock = (p.stock ?? 0) - deductions[p.id];
                 return { ...p, stock: allowNeg ? newStock : Math.max(0, newStock) };

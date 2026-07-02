@@ -28,6 +28,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
     const [productMovements, setProductMovements] = useState([]);
     const [taxType, setTaxType] = useState('exento');
     const [taxMode, setTaxMode] = useState('inclusive');
+    const [isUnlimitedStock, setIsUnlimitedStock] = useState(false);
     const fileInputRef = useRef(null);
 
     const handleImageUpload = (e) => {
@@ -68,6 +69,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
         setIsCombo(false); setLinkedProductId(null); setLinkedQty('1');
         setProductMovements([]);
         setTaxType('exento'); setTaxMode('inclusive');
+        setIsUnlimitedStock(false);
     };
 
     const handleSave = () => {
@@ -78,13 +80,13 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
             return showToast('Nombre y precio requeridos', 'warning');
         }
         const hasCost = parseFloat(costUsd) > 0;
-        if (!hasCost) {
+        if (!hasCost && !isUnlimitedStock) {
             showToast('Sin costo registrado — la ganancia no se calculará correctamente', 'warning');
         }
         const productData = buildProductPayload({
             name, barcode, priceUsd, priceBs: '', costUsd, costBs: '', stock, stockInLotes,
             packagingType, unitsPerPackage, granelUnit, sellByUnit, unitPriceUsd,
-            category, lowStockAlert, taxType, taxMode
+            category, lowStockAlert, taxType, taxMode, isUnlimitedStock
         }, effectiveRate);
 
         if (editingId) {
@@ -164,6 +166,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
         setLinkedQty(product.linkedQty ? String(product.linkedQty) : '1');
         setTaxType(product.taxType || 'exento');
         setTaxMode(product.taxMode || 'inclusive');
+        setIsUnlimitedStock(!!product.isUnlimitedStock);
 
         try {
             const allSales = await storageService.getItem('bodega_sales_v1', []);
@@ -193,6 +196,7 @@ export function useProductForm({ products, effectiveRate, setProducts, broadcast
         isCombo, setIsCombo, linkedProductId, setLinkedProductId,
         linkedQty, setLinkedQty,
         taxType, setTaxType, taxMode, setTaxMode,
+        isUnlimitedStock, setIsUnlimitedStock,
         fileInputRef,
         handleImageUpload, handlePriceUsdChange,
         handleCostUsdChange,

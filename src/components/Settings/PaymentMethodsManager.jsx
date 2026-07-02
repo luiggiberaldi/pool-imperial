@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, CreditCard, Banknote, Smartphone, DollarSign, Store, ShoppingCart, Package, Coins, Key, Fingerprint } from 'lucide-react';
-import { getAllPaymentMethods, savePaymentMethods, togglePaymentMethodEnabled, FACTORY_PAYMENT_METHODS, PAYMENT_ICONS, ICON_COMPONENTS, toTitleCase } from '../../config/paymentMethods';
+import { getAllPaymentMethods, savePaymentMethods, togglePaymentMethodEnabled, togglePaymentMethodReference, FACTORY_PAYMENT_METHODS, PAYMENT_ICONS, ICON_COMPONENTS, toTitleCase } from '../../config/paymentMethods';
 import { showToast } from '../Toast';
 import { useAudit } from '../../hooks/useAudit';
 
@@ -24,10 +24,17 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
     const [newLabel, setNewLabel] = useState('');
     const [newIcon, setNewIcon] = useState('Banknote');
     const [newCurrency, setNewCurrency] = useState('COP');
+    const [newRequiresReference, setNewRequiresReference] = useState(false);
 
     useEffect(() => {
         getAllPaymentMethods().then(setMethods);
     }, []);
+
+    const handleToggleReference = async (id) => {
+        triggerHaptic && triggerHaptic();
+        const updated = await togglePaymentMethodReference(id);
+        setMethods(updated);
+    };
 
     const handleAdd = async () => {
         if (!newLabel.trim()) {
@@ -48,12 +55,14 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
             icon: newIcon,
             currency: newCurrency,
             isFactory: false,
+            requiresReference: newRequiresReference
         }];
         await savePaymentMethods(updated);
         // Rehidratar para el estado local del componente
         const hydrated = await getAllPaymentMethods();
         setMethods(hydrated);
         setNewLabel('');
+        setNewRequiresReference(false);
         setShowAdd(false);
         showToast('Método de pago agregado', 'success');
         log('CONFIG', 'METODO_PAGO_CREADO', `Método de pago creado: ${toTitleCase(newLabel.trim())} (${newCurrency})`, { label: toTitleCase(newLabel.trim()), currency: newCurrency, icon: newIcon });
@@ -96,7 +105,21 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
                         <span className="text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded shrink-0">Nat</span>
                     )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0 ml-2">
+                <div className="flex items-center gap-4 shrink-0 ml-2">
+                    {/* Referencia toggle */}
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold uppercase">Ref</span>
+                        <button
+                            onClick={() => handleToggleReference(m.id)}
+                            disabled={!isEnabled}
+                            className={`w-7 h-4 rounded-full transition-colors relative flex items-center ${
+                                m.requiresReference && isEnabled ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-slate-800'
+                            } ${!isEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        >
+                            <span className={`w-2.5 h-2.5 rounded-full bg-white shadow-sm transition-all`} style={{ transform: m.requiresReference && isEnabled ? 'translateX(12px)' : 'translateX(2px)' }} />
+                        </button>
+                    </div>
+
                     <button
                         onClick={() => handleToggleState(m.id)}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
@@ -174,6 +197,20 @@ export default function PaymentMethodsManager({ triggerHaptic }) {
                             </button>
                         ))}
                     </div>
+                    {/* Switch Referencia */}
+                    <div className="flex items-center justify-between p-2.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Solicitar Referencia al Cobrar</span>
+                        <button
+                            type="button"
+                            onClick={() => setNewRequiresReference(!newRequiresReference)}
+                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                newRequiresReference ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                            }`}
+                        >
+                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform`} style={{ transform: newRequiresReference ? 'translateX(18px)' : 'translateX(4px)' }} />
+                        </button>
+                    </div>
+
                     <button
                         onClick={handleAdd}
                         className="w-full py-2.5 bg-emerald-500 text-white font-bold text-sm rounded-xl hover:bg-emerald-600 transition-colors active:scale-[0.98]"

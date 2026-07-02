@@ -97,9 +97,10 @@ function _printThermalHTML(sale, _bcvRate) {
             ? `${formatUsdVal(p.amountOriginal)} USD` 
             : `${formatCOP(p.amountUsd || p.amountCOP || 0)} COP`;
         const labelStyle = p.isAbonoPrevio ? 'color:#dc3545;' : '';
+        const refSuffix = p.reference ? ` [Ref: ${p.reference}]` : '';
         return `
             <tr>
-                <td style="font-size:11px;padding:2px 0;${labelStyle}">${p.methodLabel || 'Pago'}</td>
+                <td style="font-size:11px;padding:2px 0;${labelStyle}">${p.methodLabel || 'Pago'}${refSuffix}</td>
                 <td style="font-size:11px;font-weight:bold;text-align:right;padding:2px 0;${labelStyle}">${amountStr}</td>
             </tr>`;
     }).join('');
@@ -567,6 +568,30 @@ export async function printThermalDailyClose({
 
         const getDiffStyle = (val) => val >= 0 ? 'color:#107c41;' : 'color:#dc3545;';
 
+        const declaredOthers = reconData.declaredOthers || {};
+        const otherPaymentEntries = Object.entries(paymentBreakdown || {}).filter(([methodId, data]) => {
+            return data.total > 0 && 
+                   !['efectivo', 'efectivo_cop', 'efectivo_usd', '_vuelto_cop', 'vuelto_cop', 'vuelto_usd'].includes(methodId) &&
+                   !data.currency?.startsWith('VUELTO');
+        });
+
+        let otherCuadresHtml = '';
+        if (otherPaymentEntries.length > 0) {
+            otherCuadresHtml = otherPaymentEntries.map(([methodId, data]) => {
+                const expected = data.total;
+                const declared = parseFloat(declaredOthers[methodId]) || 0;
+                const diff = declared - expected;
+                const isUsd = data.currency === 'USD';
+                const label = toTitleCase(getPaymentLabel(methodId, data.label));
+                const fmt = (v) => isUsd ? `$ ${v.toFixed(2)}` : formatCOP(v);
+                return `
+                    <tr style="border-top:1px dashed #ddd;"><td style="padding-top:4px;font-weight:500;">${label} Esperado:</td><td style="text-align:right;padding-top:4px;">${fmt(expected)}</td></tr>
+                    <tr><td>${label} Declarado:</td><td style="text-align:right;font-weight:bold;">${fmt(declared)}</td></tr>
+                    <tr style="font-weight:bold;${getDiffStyle(diff)}"><td>${label} Diferencia:</td><td style="text-align:right;">${diff >= 0 ? '+' : ''}${fmt(diff)}</td></tr>
+                `;
+            }).join('');
+        }
+
         cuadreHtml = `
             <div class="section-title">Cuadre de Caja</div>
             <table>
@@ -579,6 +604,7 @@ export async function printThermalDailyClose({
                 <tr><td>USD Esperado:</td><td style="text-align:right;">$ ${expectedUSD.toFixed(2)}</td></tr>
                 <tr><td>USD Declarado:</td><td style="text-align:right;font-weight:bold;">$ ${declaredUSD.toFixed(2)}</td></tr>
                 <tr style="font-weight:bold;${getDiffStyle(diffUSD)}"><td>USD Diferencia:</td><td style="text-align:right;">${diffUSD >= 0 ? '+' : ''}$ ${diffUSD.toFixed(2)}</td></tr>
+                ${otherCuadresHtml}
             </table>
         `;
     }

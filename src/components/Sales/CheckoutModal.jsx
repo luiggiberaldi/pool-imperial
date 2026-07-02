@@ -96,7 +96,7 @@ export default function CheckoutModal({
     const splitMeta = splitPeople ? { people: splitPeople, perPerson: [] } : null;
 
     const {
-        barValues, setBarValues, totalPaidUsd,
+        barValues, setBarValues, references, handleReferenceChange, totalPaidUsd,
         remainingUsd, changeUsd,
         isPaid, handleBarChange, fillBar, handleConfirm,
         changeUsdGiven, setChangeUsdGiven,
@@ -176,6 +176,17 @@ export default function CheckoutModal({
                 {hasValue && !isUsd && (
                     <div className="mt-1 ml-1 text-xs font-bold text-slate-500">
                         ≈ ${(parseFloat(val) / (tasaCop || 4150)).toFixed(2)} USD
+                    </div>
+                )}
+                {method.requiresReference && hasValue && (
+                    <div className="mt-2 ml-0.5 animate-in fade-in slide-in-from-top-1">
+                        <input
+                            type="text"
+                            placeholder="Referencia de pago (opcional)"
+                            value={references[method.id] || ''}
+                            onChange={e => handleReferenceChange(method.id, e.target.value)}
+                            className="w-full py-2 px-3 text-xs font-semibold border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 outline-none transition-all focus:border-indigo-400 focus:bg-white dark:focus:bg-slate-950 focus:ring-4 focus:ring-indigo-500/10"
+                        />
                     </div>
                 )}
                 {method.id === 'tdc' && hasValue && (() => {

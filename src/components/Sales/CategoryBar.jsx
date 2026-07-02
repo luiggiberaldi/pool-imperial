@@ -71,7 +71,7 @@ export default function CategoryBar({
                 <div className="flex-1 overflow-y-auto min-h-0 pb-2">
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
                         {visibleProducts.map(p => {
-                            let effectiveStock = p.stock ?? 0;
+                            let effectiveStock = p.isUnlimitedStock ? Infinity : (p.stock ?? 0);
                             if (p.isCombo) {
                                 const items = p.comboItems?.length > 0
                                     ? p.comboItems.map(ci => ({ product: products.find(lp => lp.id === ci.productId), qty: ci.qty }))
@@ -82,7 +82,7 @@ export default function CategoryBar({
                                     ? Math.min(...items.map(i => Math.floor((i.product.stock ?? 0) / i.qty)))
                                     : 0;
                             }
-                            const isOut = effectiveStock <= 0;
+                            const isOut = !p.isUnlimitedStock && effectiveStock <= 0;
                             const isDisabled = isOut && !allowNegativeStock;
                             const CatIcon = CATEGORY_ICONS[p.category] || Package;
                             return (
@@ -115,7 +115,9 @@ export default function CategoryBar({
                                             </p>
                                         );
                                     })()}
-                                    <p className="text-[9px] text-slate-400 font-medium">{isOut ? 'Agotado' : `${effectiveStock} disp.`}</p>
+                                    <p className="text-[9px] text-slate-400 font-medium">
+                                        {p.isUnlimitedStock ? '∞ disp.' : isOut ? 'Agotado' : `${effectiveStock} disp.`}
+                                    </p>
                                 </button>
                             );
                         })}

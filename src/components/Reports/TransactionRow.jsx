@@ -150,7 +150,14 @@ export default function TransactionRow({
                                     const label = toTitleCase(p.methodLabel || p.methodId);
                                     return (
                                         <div key={i} className="flex justify-between text-slate-600 dark:text-slate-300">
-                                            <span>{label}</span>
+                                            <span className="flex items-center gap-1 flex-wrap">
+                                                <span>{label}</span>
+                                                {p.reference && (
+                                                    <span className="text-[9px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1 py-0.5 rounded leading-none">
+                                                        Ref: {p.reference}
+                                                    </span>
+                                                )}
+                                            </span>
                                             <span className="font-bold">{formatPaymentAmount(p)}</span>
                                         </div>
                                     );

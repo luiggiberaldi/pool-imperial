@@ -480,6 +480,7 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                 costUsd={form.costUsd} handleCostUsdChange={form.handleCostUsdChange}
                 stock={form.stock} setStock={form.setStock}
                 lowStockAlert={form.lowStockAlert} setLowStockAlert={form.setLowStockAlert}
+                isUnlimitedStock={form.isUnlimitedStock} setIsUnlimitedStock={form.setIsUnlimitedStock}
                 unitsPerPackage={form.unitsPerPackage} setUnitsPerPackage={form.setUnitsPerPackage}
                 sellByUnit={form.sellByUnit} setSellByUnit={form.setSellByUnit}
                 unitPriceUsd={form.unitPriceUsd} setUnitPriceUsd={form.setUnitPriceUsd}

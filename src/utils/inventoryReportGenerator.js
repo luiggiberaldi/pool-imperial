@@ -12,7 +12,8 @@ const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
  * @param {Array} categories    Lista de categorías registradas en el sistema
  * @param {Object} meta         { search, activeCategoryLabel, businessName }
  */
-export function generateInventoryReportPDF(products = [], categories = [], meta = {}) {
+export function generateInventoryReportPDF(rawProducts = [], categories = [], meta = {}) {
+    const products = rawProducts.filter(p => !p.isUnlimitedStock);
     const {
         search = '',
         activeCategoryLabel = 'Todos',

@@ -11,6 +11,7 @@ export function useNotificationCenter({ products, activeSessions, pausedSessions
 
         // 1. Stock bajo (agrupado en una sola notificación)
         const lowStock = (products || []).filter(p => {
+            if (p.isUnlimitedStock) return false;
             const stock = p.stock ?? Infinity;
             const threshold = p.lowStockAlert ?? 5;
             return stock <= threshold && stock >= 0;

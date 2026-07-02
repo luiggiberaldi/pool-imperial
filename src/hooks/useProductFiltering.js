@@ -9,7 +9,7 @@ export function useProductFiltering(products, searchTerm, activeCategory, sortFi
             const term = deferredSearchTerm.toLowerCase();
             const matchesSearch = p.name.toLowerCase().includes(term) || (p.barcode && p.barcode.toLowerCase().includes(term));
             if (activeCategory === 'bajo-stock') {
-                return matchesSearch && (p.stock ?? 0) <= (p.lowStockAlert ?? 5);
+                return matchesSearch && !p.isUnlimitedStock && (p.stock ?? 0) <= (p.lowStockAlert ?? 5);
             }
             const matchesCategory = activeCategory === 'todos' || p.category === activeCategory;
             return matchesSearch && matchesCategory;
