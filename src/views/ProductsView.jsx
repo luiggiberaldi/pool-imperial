@@ -126,8 +126,6 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
 
     // ── Delete state ──
     const [deleteId, setDeleteId] = useState(null);
-    const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
-    const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
     const [isDeleteSelectedModalOpen, setIsDeleteSelectedModalOpen] = useState(false);
     const handleDelete = (id) => { triggerHaptic && triggerHaptic(); setDeleteId(id); };
     const confirmDelete = () => {
@@ -233,10 +231,6 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                                 <button onClick={() => { triggerHaptic && triggerHaptic(); setIsBulkPriceOpen(true); }}
                                     className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-500 dark:text-blue-400 rounded-xl transition-all active:scale-95" title="Ajuste Masivo de Precios">
                                     <Percent size={16} strokeWidth={2.5} />
-                                </button>
-                                <button onClick={() => { triggerHaptic && triggerHaptic(); setIsDeleteAllModalOpen(true); }}
-                                    className="p-2 bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 rounded-xl transition-all active:scale-95" title="Borrar Todo">
-                                    <Trash2 size={16} strokeWidth={2.5} />
                                 </button>
                             </>
                         )}
@@ -533,36 +527,6 @@ export const ProductsView = ({ rates, triggerHaptic }) => {
                 </div>
             </Modal>
 
-            <Modal isOpen={isDeleteAllModalOpen} onClose={() => { setIsDeleteAllModalOpen(false); setDeleteAllConfirmText(''); }} title="⚠️ Borrado de Inventario">
-                <div className="p-4 flex flex-col items-center text-center">
-                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/40 text-red-500 rounded-full flex items-center justify-center mb-4"><Trash2 size={32} /></div>
-                    <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">¿Estás absolutamente seguro?</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 px-2">Esta acción borrará <strong className="text-red-500">{products.length} productos</strong> y no se puede deshacer.</p>
-                    <div className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
-                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">Para confirmar, escribe "BORRAR":</p>
-                        <input type="text" value={deleteAllConfirmText} onChange={(e) => setDeleteAllConfirmText(e.target.value)} placeholder="Ej. BORRAR"
-                            className="w-full form-input bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 text-center font-black text-red-500 uppercase tracking-widest focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all outline-none" />
-                    </div>
-                </div>
-                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
-                    <button onClick={() => { setIsDeleteAllModalOpen(false); setDeleteAllConfirmText(''); }}
-                        className="flex-1 py-3.5 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-bold rounded-xl active:scale-[0.98] transition-all">Cancelar</button>
-                    <button onClick={async () => {
-                        triggerHaptic && triggerHaptic();
-                        if (deleteAllConfirmText.trim().toUpperCase() === 'BORRAR') {
-                            const count = products.length;
-                            await storageService.setItem('bodega_products_v1', []);
-                            setProducts([]);
-                            auditLog('INVENTARIO', 'BORRADO_TOTAL', `Borrado total: ${count} productos eliminados`);
-                            setIsDeleteAllModalOpen(false);
-                            setDeleteAllConfirmText('');
-                        }
-                    }} disabled={deleteAllConfirmText.trim().toUpperCase() !== 'BORRAR'}
-                        className="flex-1 py-3.5 bg-red-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-bold rounded-xl active:scale-[0.98] transition-all flex justify-center items-center gap-2">
-                        <Trash2 size={18} /> Borrar Todo
-                    </button>
-                </div>
-            </Modal>
 
             <ShareInventoryModal isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} products={products} categories={categories}
                 onImport={(result) => {

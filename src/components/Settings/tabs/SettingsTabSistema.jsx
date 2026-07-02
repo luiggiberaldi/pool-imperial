@@ -5,6 +5,7 @@ import {
     Volume2
 } from 'lucide-react';
 import { SectionCard, Toggle } from '../../SettingsShared';
+import { Modal } from '../../../components/Modal';
 import AuditLogViewer from '../AuditLogViewer';
 import WebSerialPanel from '../WebSerialPanel';
 
@@ -30,6 +31,8 @@ export default function SettingsTabSistema({
     const { log } = useAudit();
     const confirm = useConfirm();
     const { setProducts } = useProductContext();
+    const [isDeleteInventoryOpen, setIsDeleteInventoryOpen] = useState(false);
+    const [deleteInventoryConfirmText, setDeleteInventoryConfirmText] = useState('');
 
     const [posSoundsEnabled, setPosSoundsEnabled] = useState(() => localStorage.getItem('pos_sounds_enabled') !== 'false');
 
@@ -160,7 +163,7 @@ export default function SettingsTabSistema({
             <SectionCard icon={AlertTriangle} title="Zona de Peligro" subtitle="Acciones irreversibles" iconColor="text-red-500">
                 <div className="p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-xl mb-3">
                     <p className="text-[10px] text-red-700 dark:text-red-400 leading-relaxed font-bold">
-                        Esta accion eliminara todo el historial de ventas y reportes estadisticos. El inventario NO sera afectado.
+                        Estas acciones borraran permanentemente datos seleccionados del negocio.
                     </p>
                 </div>
                 <button
@@ -171,6 +174,17 @@ export default function SettingsTabSistema({
                     <div className="text-left flex-1">
                         <p className="text-sm font-bold text-red-700 dark:text-red-400">Borrar Historial de Ventas</p>
                         <p className="text-[10px] text-red-500/80 dark:text-red-400/80">El inventario no se borrara</p>
+                    </div>
+                </button>
+
+                <button
+                    onClick={() => { triggerHaptic && triggerHaptic(); setIsDeleteInventoryOpen(true); }}
+                    className="w-full flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors group active:scale-[0.98] mt-2"
+                >
+                    <div className="p-2 bg-red-100 dark:bg-red-900/40 rounded-lg"><Trash2 size={18} className="text-red-600 dark:text-red-400" /></div>
+                    <div className="text-left flex-1">
+                        <p className="text-sm font-bold text-red-700 dark:text-red-400">Borrar Todo el Inventario</p>
+                        <p className="text-[10px] text-red-500/80 dark:text-red-400/80">Eliminara todos los productos registrados</p>
                     </div>
                 </button>
 
@@ -186,6 +200,40 @@ export default function SettingsTabSistema({
                 </button>
             </SectionCard>
             )}
+
+            <Modal isOpen={isDeleteInventoryOpen} onClose={() => { setIsDeleteInventoryOpen(false); setDeleteInventoryConfirmText(''); }} title="⚠️ Borrado de Inventario">
+                <div className="p-4 flex flex-col items-center text-center">
+                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/40 text-red-500 rounded-full flex items-center justify-center mb-4"><Trash2 size={32} /></div>
+                    <h3 className="text-xl font-black text-slate-800 dark:text-white mb-2">¿Estás absolutamente seguro?</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 px-2">Esta acción borrará todos los productos registrados en el inventario y no se puede deshacer.</p>
+                    <div className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
+                        <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wide">Para confirmar, escribe "BORRAR":</p>
+                        <input type="text" value={deleteInventoryConfirmText} onChange={(e) => setDeleteInventoryConfirmText(e.target.value)} placeholder="Ej. BORRAR"
+                            className="w-full form-input bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl px-4 py-3 text-center font-black text-red-500 uppercase tracking-widest focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all outline-none" />
+                    </div>
+                </div>
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-3">
+                    <button onClick={() => { setIsDeleteInventoryOpen(false); setDeleteInventoryConfirmText(''); }}
+                        className="flex-1 py-3.5 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white font-bold rounded-xl active:scale-[0.98] transition-all">Cancelar</button>
+                    <button onClick={async () => {
+                        triggerHaptic && triggerHaptic();
+                        if (deleteInventoryConfirmText.trim().toUpperCase() === 'BORRAR') {
+                            try {
+                                await setProducts([]);
+                                log('INVENTARIO', 'BORRADO_TOTAL', 'Borrado total de inventario realizado desde configuración');
+                                showToast('Inventario borrado con éxito', 'success');
+                            } catch (err) {
+                                showToast('Error al borrar el inventario', 'error');
+                            }
+                            setIsDeleteInventoryOpen(false);
+                            setDeleteInventoryConfirmText('');
+                        }
+                    }} disabled={deleteInventoryConfirmText.trim().toUpperCase() !== 'BORRAR'}
+                        className="flex-1 py-3.5 bg-red-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-bold rounded-xl active:scale-[0.98] transition-all flex justify-center items-center gap-2">
+                        <Trash2 size={18} /> Borrar Todo
+                    </button>
+                </div>
+            </Modal>
         </>
     );
 }
