@@ -113,6 +113,15 @@ export default function CierreCajaWizard({
         currentAdjustments.forEach(adj => {
             if (adj.status === 'ANULADA') return;
             (adj.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                if (
+                    nameLower.startsWith('compartido') ||
+                    nameLower.startsWith('tiempo') ||
+                    nameLower.startsWith('jugada') ||
+                    nameLower.startsWith('abono') ||
+                    item.id === 'abono-monto-libre'
+                ) return;
+
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -132,6 +141,15 @@ export default function CierreCajaWizard({
             (sale.items || []).forEach(item => {
                 const nameLower = (item.name || '').toLowerCase();
                 if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
+                
+                if (
+                    nameLower.startsWith('compartido') ||
+                    nameLower.startsWith('tiempo') ||
+                    nameLower.startsWith('jugada') ||
+                    nameLower.startsWith('abono') ||
+                    item.id === 'abono-monto-libre'
+                ) return;
+
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };

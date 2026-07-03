@@ -616,6 +616,15 @@ export async function printThermalDailyClose({
         (adjustments || []).forEach(adj => {
             if (adj.status === 'ANULADA') return;
             (adj.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                if (
+                    nameLower.startsWith('compartido') ||
+                    nameLower.startsWith('tiempo') ||
+                    nameLower.startsWith('jugada') ||
+                    nameLower.startsWith('abono') ||
+                    item.id === 'abono-monto-libre'
+                ) return;
+
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -634,6 +643,15 @@ export async function printThermalDailyClose({
             (sale.items || []).forEach(item => {
                 const nameLower = (item.name || '').toLowerCase();
                 if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
+                
+                if (
+                    nameLower.startsWith('compartido') ||
+                    nameLower.startsWith('tiempo') ||
+                    nameLower.startsWith('jugada') ||
+                    nameLower.startsWith('abono') ||
+                    item.id === 'abono-monto-libre'
+                ) return;
+
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -653,22 +671,17 @@ export async function printThermalDailyClose({
     if (prodMovements.length > 0) {
         prodMovementsHtml = `
             <div class="section-title">Movimientos de Productos</div>
-            <table class="fixed-table" style="font-size: 9.5px;">
-                <colgroup>
-                    <col style="width: 56%;" />
-                    <col style="width: 22%;" />
-                    <col style="width: 22%;" />
-                </colgroup>
+            <table style="width: 100%; border-collapse: collapse; font-size: 9.5px;">
                 <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
                     <th style="text-align:left;">Producto</th>
-                    <th style="text-align:right;">Ent</th>
-                    <th style="text-align:right;">Sal</th>
+                    <th style="text-align:right; padding-left: 8px;">Ent</th>
+                    <th style="text-align:right; padding-left: 8px;">Sal</th>
                 </tr>
                 ${prodMovements.map(m => `
                     <tr>
-                         <td class="ellipsis">${m.name}</td>
-                         <td style="text-align:right;color:${m.entrada > 0 ? '#107c41' : '#555'};font-weight:bold;">${m.entrada > 0 ? '+' + m.entrada : '-'}</td>
-                         <td style="text-align:right;color:${m.salida > 0 ? '#dc3545' : '#555'};font-weight:bold;">${m.salida > 0 ? '-' + m.salida : '-'}</td>
+                         <td style="word-break:break-word;white-space:normal; padding-right: 4px;">${m.name}</td>
+                         <td style="text-align:right;color:${m.entrada > 0 ? '#107c41' : '#555'};font-weight:bold; padding-left: 8px; white-space: nowrap;">${m.entrada > 0 ? '+' + m.entrada : '-'}</td>
+                         <td style="text-align:right;color:${m.salida > 0 ? '#dc3545' : '#555'};font-weight:bold; padding-left: 8px; white-space: nowrap;">${m.salida > 0 ? '-' + m.salida : '-'}</td>
                     </tr>
                 `).join('')}
             </table>
@@ -680,22 +693,17 @@ export async function printThermalDailyClose({
     if (topProducts && topProducts.length > 0) {
         topProductsHtml = `
             <div class="section-title">Articulos Vendidos</div>
-            <table class="fixed-table" style="font-size: 9.5px;">
-                <colgroup>
-                    <col style="width: 16%;" />
-                    <col style="width: 48%;" />
-                    <col style="width: 36%;" />
-                </colgroup>
+            <table style="width: 100%; border-collapse: collapse; font-size: 9.5px;">
                 <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
-                    <th style="text-align:left;">Cant</th>
+                    <th style="text-align:left; padding-right: 8px;">Cant</th>
                     <th style="text-align:left;">Producto</th>
                     <th style="text-align:right;">Ingreso</th>
                 </tr>
                 ${topProducts.map(p => `
                     <tr>
-                         <td>${p.qty}u</td>
-                         <td class="ellipsis">${p.name}</td>
-                         <td style="text-align:right;font-weight:bold;">${formatCOP(p.revenue)}</td>
+                         <td style="padding-right: 8px; white-space: nowrap;">${p.qty}u</td>
+                         <td style="word-break:break-word;white-space:normal; padding-right: 4px;">${p.name}</td>
+                         <td style="text-align:right;font-weight:bold; white-space: nowrap;">${formatCOP(p.revenue)}</td>
                     </tr>
                 `).join('')}
             </table>
@@ -707,15 +715,10 @@ export async function printThermalDailyClose({
     if (visibleSales.length > 0) {
         salesHistoryHtml = `
             <div class="section-title">Historial de Ventas</div>
-            <table class="fixed-table" style="font-size: 9px; line-height: 1.1;">
-                <colgroup>
-                    <col style="width: 25%;" />
-                    <col style="width: 35%;" />
-                    <col style="width: 40%;" />
-                </colgroup>
+            <table style="width: 100%; border-collapse: collapse; font-size: 9px; line-height: 1.1;">
                 <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
-                    <th style="text-align:left;">Ref</th>
-                    <th style="text-align:left;">Atend.</th>
+                    <th style="text-align:left; padding-right: 6px;">Ref</th>
+                    <th style="text-align:left; padding-right: 6px;">Atend.</th>
                     <th style="text-align:right;">Total</th>
                 </tr>
                 ${visibleSales.map(s => {
@@ -724,9 +727,9 @@ export async function printThermalDailyClose({
                     const amountStr = formatCOP(FinancialEngine.calculateSaleNetTotal(s));
                     return `
                         <tr>
-                            <td>#${ref}</td>
-                            <td class="ellipsis">${staff}</td>
-                            <td style="text-align:right;font-weight:bold;">${amountStr}</td>
+                            <td style="white-space: nowrap; padding-right: 6px;">#${ref}</td>
+                            <td style="word-break:break-word; white-space:normal; padding-right: 6px;">${staff}</td>
+                            <td style="text-align:right; font-weight:bold; white-space: nowrap;">${amountStr}</td>
                         </tr>
                     `;
                 }).join('')}

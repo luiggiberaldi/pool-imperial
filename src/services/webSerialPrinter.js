@@ -524,6 +524,43 @@ export async function printTestWebSerial() {
 
 const ESC = 0x1B;
 const GS  = 0x1D;
+
+/**
+ * Convierte texto con tildes y caracteres especiales del español a
+ * equivalentes ASCII seguros para impresoras térmicas ESC/POS.
+ *
+ * La impresora interpreta los bytes como GBK/CP437, no UTF-8.
+ * Los bytes multibyte de UTF-8 (ej. C3 B1 para ñ) se leen como
+ * caracteres chinos. Esta función previene ese problema.
+ */
+function sanitizeForEscPos(str) {
+    if (!str) return '';
+    return str
+        // Vocales con acento
+        .replace(/[áàäâã]/g, 'a').replace(/[ÁÀÄÂÃ]/g, 'A')
+        .replace(/[éèëê]/g,  'e').replace(/[ÉÈËÊ]/g,  'E')
+        .replace(/[íìïî]/g,  'i').replace(/[ÍÌÏÎ]/g,  'I')
+        .replace(/[óòöôõ]/g, 'o').replace(/[ÓÒÖÔÕ]/g, 'O')
+        .replace(/[úùüû]/g,  'u').replace(/[ÚÙÜÛ]/g,  'U')
+        // Eñe
+        .replace(/ñ/g, 'n').replace(/Ñ/g, 'N')
+        // Caracteres especiales problemáticos
+        .replace(/÷/g,  '/')    // signo de division
+        .replace(/×/g,  'x')    // signo de multiplicacion
+        .replace(/…/g,  '...')  // ellipsis unicode → tres puntos ASCII
+        .replace(/‘|’/g, "'") // comillas curvas simples
+        .replace(/“|”/g, '"') // comillas curvas dobles
+        .replace(/–/g, '-')   // en dash
+        .replace(/—/g, '--')  // em dash
+        .replace(/•/g, '*')   // bullet
+        .replace(/º/g, 'o')   // grado masculino
+        .replace(/ª/g, 'a')   // grado femenino
+        .replace(/°/g, ' ')   // símbolo de grado
+        .replace(/ /g, ' ')   // espacio no separable
+        // Eliminar cualquier caracter no-ASCII que quede
+        // (rango 0x00-0x7E es ASCII estándar seguro)
+        .replace(/[\u0080-\uFFFF]/g, '?');
+}
 const LF  = 0x0A;
 
 function escposEncoder() {
@@ -536,19 +573,22 @@ function escposEncoder() {
         smallFont(on)    { chunks.push(new Uint8Array([ESC, 0x4D, on ? 1 : 0])); return api; }, // ESC M — Font B (9x17): 42 chars/línea en 58mm
         doubleHeight(on) { chunks.push(new Uint8Array([GS,  0x21, on ? 0x10 : 0x00])); return api; },
         bigText(on)      { chunks.push(new Uint8Array([GS,  0x21, on ? 0x11 : 0x00])); return api; },
-        text(str)        { chunks.push(encoder.encode(str)); return api; },
+        text(str)        { chunks.push(encoder.encode(sanitizeForEscPos(str))); return api; },
         newline(n = 1)   { for (let i = 0; i < n; i++) chunks.push(new Uint8Array([LF])); return api; },
         line(char = '-', len = 32) {
-            chunks.push(encoder.encode(char.repeat(len)));
+            chunks.push(encoder.encode(sanitizeForEscPos(char).repeat(len)));
             chunks.push(new Uint8Array([LF]));
             return api;
         },
         row(left, right, width = 32) {
+            // Sanitizar primero para que el conteo de chars sea correcto
+            const safeL = sanitizeForEscPos(left);
+            const safeR = sanitizeForEscPos(right);
             // Si el contenido total desborda, recortar 'left' para preservar 'right'
-            const maxLeft = width - right.length - 1;
-            const safeLeft = left.length > maxLeft ? left.substring(0, maxLeft - 1) + '…' : left;
-            const space = Math.max(1, width - safeLeft.length - right.length);
-            chunks.push(encoder.encode(safeLeft + ' '.repeat(space) + right));
+            const maxLeft = width - safeR.length - 1;
+            const trimmedLeft = safeL.length > maxLeft ? safeL.substring(0, maxLeft - 1) + '...' : safeL;
+            const space = Math.max(1, width - trimmedLeft.length - safeR.length);
+            chunks.push(encoder.encode(trimmedLeft + ' '.repeat(space) + safeR));
             chunks.push(new Uint8Array([LF]));
             return api;
         },
@@ -784,6 +824,15 @@ export async function printDailyCloseEscPos({
         (adjustments || []).forEach(adj => {
             if (adj.status === 'ANULADA') return;
             (adj.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                if (
+                    nameLower.startsWith('compartido') ||
+                    nameLower.startsWith('tiempo') ||
+                    nameLower.startsWith('jugada') ||
+                    nameLower.startsWith('abono') ||
+                    item.id === 'abono-monto-libre'
+                ) return;
+
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -802,6 +851,15 @@ export async function printDailyCloseEscPos({
             (sale.items || []).forEach(item => {
                 const nameLower = (item.name || '').toLowerCase();
                 if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
+                
+                if (
+                    nameLower.startsWith('compartido') ||
+                    nameLower.startsWith('tiempo') ||
+                    nameLower.startsWith('jugada') ||
+                    nameLower.startsWith('abono') ||
+                    item.id === 'abono-monto-libre'
+                ) return;
+
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -942,11 +1000,19 @@ export async function printDailyCloseEscPos({
     if (prodMovements && prodMovements.length > 0) {
         p.align(1).bold(true).text('MOVIMIENTOS DE PRODUCTOS').newline().bold(false).align(0);
         prodMovements.forEach((m) => {
-            const cleanLabel = m.name.length > WS - 15 ? m.name.substring(0, WS - 17) + '…' : m.name;
+            const cleanLabel = sanitizeForEscPos(m.name);
             const entStr = m.entrada > 0 ? `+${m.entrada}` : '-';
             const salStr = m.salida > 0 ? `-${m.salida}` : '-';
             const movStr = `E:${entStr} S:${salStr}`;
-            p.smallFont(true).row(cleanLabel, movStr, WS);
+            p.smallFont(true);
+            if (cleanLabel.length + movStr.length + 1 <= WS) {
+                // Cabe en una sola linea
+                p.text(cleanLabel + ' '.repeat(Math.max(1, WS - cleanLabel.length - movStr.length)) + movStr).newline();
+            } else {
+                // Nombre largo: nombre en primera linea, movimientos en segunda
+                p.text(cleanLabel).newline();
+                p.text(' '.repeat(Math.max(0, WS - movStr.length)) + movStr).newline();
+            }
             p.smallFont(false);
         });
         p.line('-', W);
@@ -956,9 +1022,19 @@ export async function printDailyCloseEscPos({
     if (topProducts && topProducts.length > 0) {
         p.align(1).bold(true).text('ARTICULOS VENDIDOS').newline().bold(false).align(0);
         topProducts.forEach((prod) => {
-            const label = prod.name;
-            const cleanLabel = label.length > W - 10 ? label.substring(0, W - 12) + '…' : label;
-            p.smallFont(true).row(`${prod.qty}u ${cleanLabel}`, formatCOP(prod.revenue), WS);
+            const cleanLabel = sanitizeForEscPos(prod.name);
+            const qtyPrefix = `${prod.qty}u `;
+            const revenueStr = formatCOP(prod.revenue);
+            const fullLeft = qtyPrefix + cleanLabel;
+            p.smallFont(true);
+            if (fullLeft.length + revenueStr.length + 1 <= WS) {
+                // Cabe en una sola linea
+                p.text(fullLeft + ' '.repeat(Math.max(1, WS - fullLeft.length - revenueStr.length)) + revenueStr).newline();
+            } else {
+                // Nombre largo: nombre completo en primera linea, precio en segunda
+                p.text(fullLeft).newline();
+                p.text(' '.repeat(Math.max(0, WS - revenueStr.length)) + revenueStr).newline();
+            }
             p.smallFont(false);
         });
         p.line('-', W);

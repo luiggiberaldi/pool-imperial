@@ -481,6 +481,15 @@ export async function generateDailyClosePDF({
         (adjustments || []).forEach(adj => {
             if (adj.status === 'ANULADA') return;
             (adj.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                if (
+                    nameLower.startsWith('compartido') ||
+                    nameLower.startsWith('tiempo') ||
+                    nameLower.startsWith('jugada') ||
+                    nameLower.startsWith('abono') ||
+                    item.id === 'abono-monto-libre'
+                ) return;
+
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
@@ -493,14 +502,21 @@ export async function generateDailyClosePDF({
             });
         });
 
-        // Process sales (salidas) — exclude synthetic abono items from inventory movements
+        // Process sales (salidas) — exclude synthetic items from inventory movements
         allSales.forEach(sale => {
             if (sale.status === 'ANULADA') return;
             (sale.items || []).forEach(item => {
                 const nameLower = (item.name || '').toLowerCase();
                 if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
-                // Exclude synthetic abono parcial items — they don't represent real inventory movement
-                if (nameLower.includes('abono parcial') || item.id === 'abono-monto-libre') return;
+                
+                if (
+                    nameLower.startsWith('compartido') ||
+                    nameLower.startsWith('tiempo') ||
+                    nameLower.startsWith('jugada') ||
+                    nameLower.startsWith('abono') ||
+                    item.id === 'abono-monto-libre'
+                ) return;
+
                 const prodId = item.id;
                 if (!movements[prodId]) {
                     movements[prodId] = { name: item.name || 'Producto', entrada: 0, salida: 0 };
