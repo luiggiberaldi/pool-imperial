@@ -653,13 +653,20 @@ export async function printThermalDailyClose({
     if (prodMovements.length > 0) {
         prodMovementsHtml = `
             <div class="section-title">Movimientos de Productos</div>
-            <table style="font-size: 10px;">
+            <table class="fixed-table" style="font-size: 9.5px;">
+                <colgroup>
+                    <col style="width: 56%;" />
+                    <col style="width: 22%;" />
+                    <col style="width: 22%;" />
+                </colgroup>
                 <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
-                    <td>Producto</td><td style="text-align:right;">Ent</td><td style="text-align:right;">Sal</td>
+                    <th style="text-align:left;">Producto</th>
+                    <th style="text-align:right;">Ent</th>
+                    <th style="text-align:right;">Sal</th>
                 </tr>
                 ${prodMovements.map(m => `
                     <tr>
-                         <td>${m.name.length > 18 ? m.name.substring(0, 18) + '…' : m.name}</td>
+                         <td class="ellipsis">${m.name}</td>
                          <td style="text-align:right;color:${m.entrada > 0 ? '#107c41' : '#555'};font-weight:bold;">${m.entrada > 0 ? '+' + m.entrada : '-'}</td>
                          <td style="text-align:right;color:${m.salida > 0 ? '#dc3545' : '#555'};font-weight:bold;">${m.salida > 0 ? '-' + m.salida : '-'}</td>
                     </tr>
@@ -673,14 +680,21 @@ export async function printThermalDailyClose({
     if (topProducts && topProducts.length > 0) {
         topProductsHtml = `
             <div class="section-title">Articulos Vendidos</div>
-            <table style="font-size: 10px;">
+            <table class="fixed-table" style="font-size: 9.5px;">
+                <colgroup>
+                    <col style="width: 16%;" />
+                    <col style="width: 48%;" />
+                    <col style="width: 36%;" />
+                </colgroup>
                 <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
-                    <td>Cant</td><td>Producto</td><td style="text-align:right;">Ingreso</td>
+                    <th style="text-align:left;">Cant</th>
+                    <th style="text-align:left;">Producto</th>
+                    <th style="text-align:right;">Ingreso</th>
                 </tr>
                 ${topProducts.map(p => `
                     <tr>
                          <td>${p.qty}u</td>
-                         <td>${p.name.length > 18 ? p.name.substring(0, 18) + '…' : p.name}</td>
+                         <td class="ellipsis">${p.name}</td>
                          <td style="text-align:right;font-weight:bold;">${formatCOP(p.revenue)}</td>
                     </tr>
                 `).join('')}
@@ -693,18 +707,25 @@ export async function printThermalDailyClose({
     if (visibleSales.length > 0) {
         salesHistoryHtml = `
             <div class="section-title">Historial de Ventas</div>
-            <table style="font-size: 9px; line-height: 1.1;">
+            <table class="fixed-table" style="font-size: 9px; line-height: 1.1;">
+                <colgroup>
+                    <col style="width: 25%;" />
+                    <col style="width: 35%;" />
+                    <col style="width: 40%;" />
+                </colgroup>
                 <tr style="border-bottom: 1px dashed #555;font-weight:bold;">
-                    <td>Ref</td><td>Atend.</td><td style="text-align:right;">Total</td>
+                    <th style="text-align:left;">Ref</th>
+                    <th style="text-align:left;">Atend.</th>
+                    <th style="text-align:right;">Total</th>
                 </tr>
                 ${visibleSales.map(s => {
                     const ref = String(s.saleNumber || 0).padStart(4, '0');
-                    const staff = (s.meseroNombre || s.vendedorNombre || 'Sistema').substring(0, 8);
+                    const staff = s.meseroNombre || s.vendedorNombre || 'Sistema';
                     const amountStr = formatCOP(FinancialEngine.calculateSaleNetTotal(s));
                     return `
                         <tr>
                             <td>#${ref}</td>
-                            <td>${staff}</td>
+                            <td class="ellipsis">${staff}</td>
                             <td style="text-align:right;font-weight:bold;">${amountStr}</td>
                         </tr>
                     `;
@@ -721,7 +742,7 @@ export async function printThermalDailyClose({
 <style>
     @page {
         size: 58mm auto;
-        margin: 0;
+        margin: 0 !important;
     }
     * {
         margin: 0;
@@ -732,16 +753,31 @@ export async function printThermalDailyClose({
     }
     body {
         font-family: Arial, Helvetica, sans-serif;
-        width: 46mm;
-        max-width: 46mm;
+        width: 44mm;
+        max-width: 44mm;
         margin: 0 auto;
-        padding: 4mm 1.5mm;
+        padding: 4mm 1mm;
         color: #000;
         background: #fff;
         font-weight: 900;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
         line-height: 1.3;
+    }
+    @media print {
+        body {
+            width: 44mm !important;
+            max-width: 44mm !important;
+            margin: 0 !important;
+            padding: 2mm 1.5mm !important;
+        }
+    }
+    @media screen {
+        body {
+            border: 1px solid #ccc;
+            margin: 10px auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
     }
     .center { text-align: center; }
     .bold { font-weight: bold; }
@@ -760,8 +796,17 @@ export async function printThermalDailyClose({
         padding-bottom: 1px;
     }
     table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
-    td { font-size: 10px; padding: 1.5px 0; vertical-align: top; }
+    .fixed-table {
+        table-layout: fixed;
+        width: 100%;
+    }
+    td { font-size: 9.5px; padding: 1.5px 0; vertical-align: top; }
     td:last-child, th:last-child { white-space: nowrap !important; }
+    .ellipsis {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 </style>
 </head>
 <body>
