@@ -22,6 +22,7 @@ import { CartProvider } from './context/CartContext';
 import TermsOverlay from './components/TermsOverlay';
 import OnboardingOverlay from './components/OnboardingOverlay';
 import ErrorBoundary from './components/ErrorBoundary';
+import SupportNoticeModal from './components/SupportNoticeModal';
 import { useOfflineQueue } from './hooks/useOfflineQueue';
 import { useAutoBackup } from './hooks/useAutoBackup';
 import CommandPalette from './components/CommandPalette';
@@ -244,11 +245,23 @@ export default function App() {
 
   // Global Hard Gate: Must have Cloud Session
   if (!cloudSession) {
-    return <CloudAuthModal forceLogin={true} />;
+    return (
+      <>
+        <CloudAuthModal forceLogin={true} />
+        <SupportNoticeModal />
+      </>
+    );
   }
 
   // Local Guard: Require PIN login for operators
-  if (!isAuthenticated) return <LoginScreen />;
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginScreen />
+        <SupportNoticeModal />
+      </>
+    );
+  }
 
   return (
     <div className="font-sans antialiased bg-[#F8FAFC] h-[100dvh] flex flex-col overflow-clip">
@@ -472,6 +485,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Mensaje Urgente de Soporte Técnico (Temporal) */}
+      <SupportNoticeModal />
 
     </div>
   );
