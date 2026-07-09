@@ -4,7 +4,7 @@ import { AlertTriangle, MessageCircle, X, Clock } from 'lucide-react';
 // ==========================================
 // CONFIGURACIÓN DE ACTIVACIÓN / REMOCIÓN
 // Para desactivar completamente este aviso, cambie ENABLED a false:
-const ENABLED = true;
+const ENABLED = false;
 // Tiempo en minutos para que el aviso vuelva a salir (Frecuencia):
 const COOLDOWN_MINUTES = 10; 
 // ==========================================
