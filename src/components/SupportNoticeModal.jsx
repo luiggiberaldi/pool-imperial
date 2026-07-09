@@ -5,6 +5,8 @@ import { AlertTriangle, MessageCircle, X, Clock } from 'lucide-react';
 // CONFIGURACIÓN DE ACTIVACIÓN / REMOCIÓN
 // Para desactivar completamente este aviso, cambie ENABLED a false:
 const ENABLED = true;
+// Tiempo en minutos para que el aviso vuelva a salir (Frecuencia):
+const COOLDOWN_MINUTES = 15; 
 // ==========================================
 
 export default function SupportNoticeModal() {
@@ -13,7 +15,7 @@ export default function SupportNoticeModal() {
     const [isOpen, setIsOpen] = useState(false);
     const [timeLeft, setTimeLeft] = useState(25);
 
-    // Revisar si ha pasado el tiempo (15 minutos) desde el último cierre
+    // Revisar si ha pasado el tiempo desde el último cierre
     const checkVisibility = () => {
         const lastClosed = localStorage.getItem('support_notice_last_closed');
         if (!lastClosed) {
@@ -24,9 +26,9 @@ export default function SupportNoticeModal() {
         }
 
         const timePassed = Date.now() - parseInt(lastClosed, 10);
-        const fifteenMinutes = 15 * 60 * 1000; // 15 minutos en milisegundos
+        const cooldownMs = COOLDOWN_MINUTES * 60 * 1000;
 
-        if (timePassed >= fifteenMinutes) {
+        if (timePassed >= cooldownMs) {
             setIsOpen(true);
             setTimeLeft(25);
         }
