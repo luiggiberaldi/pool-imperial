@@ -168,7 +168,9 @@ function LiveTimer({ session, className = '' }) {
 
     const elapsedSeconds = useMemo(() => {
         if (!session?.started_at) return 0;
-        if (isPaused) return (pausedData?.elapsedAtPause || 0) * 60;
+        // Floor: elapsedAtPause son minutos con decimales; sin redondear se mostraría
+        // como basura (ej. "3.2139999s") en el timer del mini-plano.
+        if (isPaused) return Math.floor((pausedData?.elapsedAtPause || 0) * 60);
         const start = new Date(session.started_at).getTime();
         const now = Date.now();
         return Math.max(0, Math.floor((now - start) / 1000));
@@ -195,7 +197,7 @@ function LiveCountdownTimer({ session, className = '' }) {
         
         let elapsedSecs;
         if (isPaused) {
-            elapsedSecs = (pausedData?.elapsedAtPause || 0) * 60;
+            elapsedSecs = Math.floor((pausedData?.elapsedAtPause || 0) * 60);
         } else {
             const start = new Date(session.started_at).getTime();
             const now = Date.now();

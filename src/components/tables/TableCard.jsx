@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Edit2, Printer, X, Users, UserCheck, Lock, MessageSquare, Move, Trash2 } from 'lucide-react';
-import { calculateElapsedTime, calculateSessionCost, calculateSessionCostBreakdown, calculateConsumptionBs, buildTableSyntheticCart } from '../../utils/tableBillingEngine';
+import { calculateElapsedTime, calculateElapsedTimePrecise, calculateSessionCost, calculateSessionCostBreakdown, calculateConsumptionBs, buildTableSyntheticCart } from '../../utils/tableBillingEngine';
 import { getServerNow } from '../../utils/serverClock';
 import { FinancialEngine } from '../../core/FinancialEngine';
 import { round2 } from '../../utils/dinero';
@@ -192,7 +192,10 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     // elapsed en segundos limitado al tope si tiene limite (para displays en tiempo real)
     const elapsedSeconds = useMemo(() => {
         if (!isPlaying || !session?.started_at) return 0;
-        if (isPaused) return (pausedData?.elapsedAtPause || 0) * 60;
+        // Al pausar, elapsedAtPause son minutos con decimales (precisión exacta del
+        // punto de pausa). Se redondea a segundos enteros con floor para que coincida
+        // con el timer en marcha (que también usa Math.floor) y no muestre decimales.
+        if (isPaused) return Math.floor((pausedData?.elapsedAtPause || 0) * 60);
         const start = new Date(session.started_at).getTime();
         const now = getServerNow();
         const rawSecs = Math.max(0, Math.floor((now - start) / 1000));
@@ -218,7 +221,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
 
     const handlePauseTimer = () => {
         if (!session) return;
-        const currentElapsed = calculateElapsedTime(session.started_at);
+        const currentElapsed = calculateElapsedTimePrecise(session.started_at);
         pauseSession(session.id, currentElapsed);
     };
 

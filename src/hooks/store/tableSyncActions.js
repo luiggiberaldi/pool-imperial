@@ -105,7 +105,14 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                         success = true;
                     } else {
                         const { error } = await supabaseCloud.from('table_sessions').update(action.payload).eq('id', action.sessionId);
-                        if (!error) success = true;
+                        if (!error) {
+                            success = true;
+                            set(state => ({
+                                activeSessions: state.activeSessions.map(s =>
+                                    s.id === action.sessionId ? { ...s, _pendingSync: false } : s
+                                )
+                            }));
+                        }
                     }
                 } else if (action.type === 'CLOSE_SESSION') {
                     if (String(action.sessionId).startsWith('temp-')) {
@@ -220,12 +227,21 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                 paidCache[s.id] ? { ...s, paid_at: paidCache[s.id] } : s
             );
 
-            // Preservar sesiones optimistas o pendientes de sincronización en progreso
-            const pendingOptimistic = get().activeSessions.filter(s => 
+            // Preservar sesiones optimistas o pendientes de sincronización en progreso.
+            // Si ya existe una fila en la nube para esa sesión (mismo id) pero el cambio
+            // local (ej. started_at al reanudar un pausado) todavía no se confirmó, se
+            // mantiene la versión local en vez de sobreescribirla con el dato viejo de la
+            // nube — evita que el cronómetro "retroceda" por una sincronización concurrente.
+            const pendingOptimistic = get().activeSessions.filter(s =>
                 String(s.id).startsWith('temp-') || s._pendingSync
             );
             pendingOptimistic.forEach(pending => {
-                const alreadyExists = mergedSessions.some(s => s.table_id === pending.table_id || s.id === pending.id);
+                const existingIdx = mergedSessions.findIndex(s => s.id === pending.id);
+                if (existingIdx !== -1) {
+                    mergedSessions[existingIdx] = pending;
+                    return;
+                }
+                const alreadyExists = mergedSessions.some(s => s.table_id === pending.table_id);
                 if (!alreadyExists) {
                     mergedSessions.push(pending);
                 }

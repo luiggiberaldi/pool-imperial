@@ -2,7 +2,7 @@ import { supabaseCloud } from '../../config/supabaseCloud';
 import { logEvent } from '../../services/auditService';
 import { useAuthStore } from './authStore';
 import { useOrdersStore } from './useOrdersStore';
-import { calculateElapsedTime, calculateFullTableBreakdown } from '../../utils/tableBillingEngine';
+import { calculateElapsedTime, calculateElapsedTimePrecise, calculateFullTableBreakdown } from '../../utils/tableBillingEngine';
 import { getServerNow } from '../../utils/serverClock';
 
 const getUser = () => useAuthStore.getState().currentUser;
@@ -203,14 +203,22 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
     },
 
     updateSessionTime: async (sessionId, newStartedAt) => {
+        // _pendingSync evita que un syncTablesAndSessions concurrente (disparado por
+        // el cambio de CUALQUIER mesa en el local) sobreescriba este started_at recién
+        // calculado con el valor viejo que aún está en la nube mientras el UPDATE viaja.
         const newSessions = get().activeSessions.map(s =>
-            s.id === sessionId ? { ...s, started_at: newStartedAt } : s
+            s.id === sessionId ? { ...s, started_at: newStartedAt, _pendingSync: true } : s
         );
         set({ activeSessions: newSessions });
         await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
         try {
             const { error } = await supabaseCloud.from('table_sessions').update({ started_at: newStartedAt }).eq('id', sessionId);
             if (error) throw error;
+            set(state => ({
+                activeSessions: state.activeSessions.map(s =>
+                    s.id === sessionId ? { ...s, _pendingSync: false } : s
+                )
+            }));
         } catch (e) {
             await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload: { started_at: newStartedAt } });
         }
@@ -248,7 +256,7 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
         if (isPool) {
             const paused = get().pausedSessions[sessionId];
             if (!paused?.isPaused) {
-                const currentElapsed = calculateElapsedTime(session.started_at);
+                const currentElapsed = calculateElapsedTimePrecise(session.started_at);
                 get().pauseSession(sessionId, currentElapsed);
             }
         }

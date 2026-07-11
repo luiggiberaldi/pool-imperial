@@ -4,7 +4,7 @@ import { useAuthStore } from '../hooks/store/authStore';
 import TableCard from '../components/tables/TableCard';
 import FloorPlanView from '../components/tables/FloorPlanView';
 import { Layers, PauseCircle, PlayCircle, LayoutGrid, Map, X, ArrowRight, AlertTriangle } from 'lucide-react';
-import { calculateElapsedTime } from '../utils/tableBillingEngine';
+import { calculateElapsedTimePrecise } from '../utils/tableBillingEngine';
 import { showToast } from '../components/Toast';
 import { Modal } from '../components/Modal';
 import { useBackdropClose } from '../hooks/useBackdropClose';
@@ -137,7 +137,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
         let count = 0;
         pausableSessions.forEach(s => {
             if (pausedSessions[s.id]?.isPaused) return;
-            const currentElapsed = calculateElapsedTime(s.started_at);
+            const currentElapsed = calculateElapsedTimePrecise(s.started_at);
             pauseSession(s.id, currentElapsed);
             count++;
         });

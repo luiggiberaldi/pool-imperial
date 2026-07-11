@@ -6,8 +6,9 @@ import {
     DollarSign
 } from 'lucide-react';
 import { 
-    calculateElapsedTime, 
-    calculateSessionCost, 
+    calculateElapsedTime,
+    calculateElapsedTimePrecise,
+    calculateSessionCost,
     calculateSessionCostBreakdown, 
     calculateConsumptionBs,
     buildTableSyntheticCart
@@ -51,9 +52,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const table = tables.find(t => t.id === tableId);
     const session = activeSessions.find(s => s.table_id === tableId);
 
-    if (!table) return null;
-
-    const { 
+    const {
         config, openSession, closeSession, requestCheckout, 
         cancelCheckoutRequest, updateSessionMetadata, updateSessionSeats, 
         updateSessionTime, addPinaToSession, addHoursToSession, 
@@ -200,7 +199,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
 
     const handlePauseTimer = () => {
         if (!session) return;
-        const currentElapsed = calculateElapsedTime(session.started_at);
+        const currentElapsed = calculateElapsedTimePrecise(session.started_at);
         pauseSession(session.id, currentElapsed);
     };
 
@@ -455,13 +454,13 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     };
 
     // Live cost variables
-    const isTimeFree = table.type === 'NORMAL';
+    const isTimeFree = table?.type === 'NORMAL';
     const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
     const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
     const elapsedOffset = session ? ((paidElapsedOffsets || {})[session.id] || 0) : 0;
-    
-    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
-    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats, table.type) : null;
+
+    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table?.type) : 0;
+    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats, table?.type) : null;
     const isMixedMode = costBreakdown ? (costBreakdown.hasPinas && costBreakdown.hasHours) : false;
     
     const seatHasPinas = (session?.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
@@ -486,8 +485,9 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     }, 0) : 0;
 
     const grandTotal = useMemo(() => {
+        if (!table || !session) return 0;
         const baseTotal = round2(timeCost + seatTimeCost + totalConsumption);
-        if (baseTotal <= 0 || !session) return 0;
+        if (baseTotal <= 0) return 0;
         let totalBuilt = baseTotal;
         try {
             const tableCheckoutData = {
@@ -526,6 +526,10 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
 
         return totalBuilt;
     }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, products]);
+
+    // Guard tras el último hook del componente: bloquea solo el render/JSX,
+    // no la ejecución de hooks (evita "Rendered fewer hooks than expected").
+    if (!table) return null;
 
     const isPaidIdle = isPlaying && !!session?.paid_at && grandTotal === 0;
 
@@ -748,6 +752,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                         {((timeCost + seatTimeCost) * tasaUSD + consumptionBs).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs
                                     </span>
                                 </div>
+                            )}
                         </div>
 
                         {(() => {

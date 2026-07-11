@@ -37,6 +37,15 @@ export function calculateElapsedTime(startTimeISO) {
     return diffMinutes;
 }
 
+// Igual que calculateElapsedTime pero sin redondear hacia abajo al minuto.
+// Necesario para capturar el punto exacto de pausa: si se usa la versión
+// redondeada, cada pausa "pierde" hasta 59s y el temporizador retrocede al reanudar.
+export function calculateElapsedTimePrecise(startTimeISO) {
+    const start = new Date(startTimeISO);
+    const now = new Date(getServerNow());
+    return (now - start) / 60000;
+}
+
 /**
  * Calcula el desglose de costos de una sesión (piñas + horas por separado).
  * Soporta modo mixto: cualquier sesión puede tener piñas Y horas simultáneamente.
@@ -106,6 +115,11 @@ export function calculateSessionCost(elapsedMinutes, gameMode, config, hoursPaid
  */
 export function formatElapsedTime(elapsedMinutes) {
     if (elapsedMinutes < 0) return "00:00";
+
+    // Redondear a minutos enteros: elapsedAtPause puede llegar con decimales
+    // (minutos exactos del punto de pausa) y sin esto se mostrarían como basura
+    // (ej. "8.253999999m") al hacer toString() sobre un float.
+    elapsedMinutes = Math.floor(elapsedMinutes);
 
     if (elapsedMinutes < 60) {
         return `${elapsedMinutes.toString().padStart(2, '0')} min`;

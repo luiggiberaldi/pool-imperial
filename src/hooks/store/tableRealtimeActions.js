@@ -1,5 +1,6 @@
 import { supabaseCloud } from '../../config/supabaseCloud';
 import { useAuthStore } from './authStore';
+import { getServerNow } from '../../utils/serverClock';
 
 export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
     let lastRequestTime = 0;
@@ -347,11 +348,11 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
         if (pauseData) {
             const session = get().activeSessions.find(s => s.id === sessionId);
             if (session) {
-                const now = new Date();
-                const startedAt = new Date(session.started_at);
-                const currentElapsed = (now - startedAt) / 60000;
-                const pausedMinutes = currentElapsed - pauseData.elapsedAtPause;
-                const newStartedAt = new Date(startedAt.getTime() + pausedMinutes * 60000).toISOString();
+                // Se recalcula started_at contra getServerNow() —el MISMO reloj que usa
+                // el display— para que el timer reanude exactamente en el segundo pausado
+                // y no "retroceda" por el desfase entre el reloj local y el del servidor.
+                // elapsedAtPause está en minutos (con decimales): started_at = ahora - pausado.
+                const newStartedAt = new Date(getServerNow() - pauseData.elapsedAtPause * 60000).toISOString();
                 await get().updateSessionTime(sessionId, newStartedAt);
             }
         }
