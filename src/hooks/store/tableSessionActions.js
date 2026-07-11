@@ -563,6 +563,39 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
                 }
             }
 
+            // Fusionar clientes (seats) y metadata de la sesión origen en la destino.
+            // Sin esto se perdían los clientes de la mesa origen (con sus nombres y
+            // cargos de tiempo por cliente), y los ítems movidos quedaban atribuidos
+            // a seats inexistentes en el destino.
+            const sourceSeats = Array.isArray(sourceSession.seats) ? sourceSession.seats : [];
+            const targetSeats = Array.isArray(targetSession.seats) ? targetSession.seats : [];
+            const mergedSeats = [...targetSeats, ...sourceSeats];
+            const sourceGuests = Number(sourceSession.guest_count) || 0;
+            const targetGuests = Number(targetSession.guest_count) || 0;
+            // Los seat IDs son únicos entre sesiones (seat-<ts>-<rand>), no colisionan.
+            const mergedGuestCount = Math.max(mergedSeats.length, targetGuests + sourceGuests);
+            const mergedClientName = targetSession.client_name || sourceSession.client_name || null;
+            const mergedClientId = targetSession.client_id || sourceSession.client_id || null;
+
+            const mergePayload = {
+                seats: mergedSeats,
+                guest_count: mergedGuestCount,
+                client_name: mergedClientName,
+                client_id: mergedClientId,
+            };
+            const mergedSessions = get().activeSessions.map(s =>
+                s.id === targetSession.id ? { ...s, ...mergePayload } : s
+            );
+            set({ activeSessions: mergedSessions });
+            await tablesCache.setItem(scopedKey('active_sessions'), mergedSessions);
+            try {
+                const { error } = await supabaseCloud.from('table_sessions').update(mergePayload).eq('id', targetSession.id);
+                if (error) throw error;
+            } catch (e) {
+                console.warn("Error sync fusión de clientes, encolado:", e);
+                await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId: targetSession.id, payload: mergePayload });
+            }
+
             // Close source session with $0 cost
             await get().closeSession(sourceSessionId, getUser()?.id || 'SYSTEM', 0);
 

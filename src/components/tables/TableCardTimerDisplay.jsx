@@ -20,7 +20,7 @@ const fmtTimer = (seconds) => {
 
 export default function TableCardTimerDisplay({
     table, session, elapsed,
-    isAvailable, isTimeFree, isPaidIdle, isMixedMode,
+    isAvailable, isTimeFree, isPaidIdle, isMixedMode, isLibreSession,
     hasPinas, hasHoursActive, hasLimit, remainingMins, isExceeded,
     isPaused, isLockedForMe,
     timeCost, grandTotal, totalConsumption,
@@ -110,7 +110,7 @@ export default function TableCardTimerDisplay({
                                         );
                                     })()}
                                 </div>
-                            ) : session.game_mode === 'PINA' || (hasPinas && !hasHoursActive) ? (
+                            ) : (session.game_mode === 'PINA' || (hasPinas && !hasHoursActive)) && !isLibreSession ? (
                                 <div className="flex flex-col items-center gap-1 mt-1">
                                     <div className="flex items-center gap-2">
                                         <div className="w-8 h-8 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center shrink-0">

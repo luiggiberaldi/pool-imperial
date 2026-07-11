@@ -697,6 +697,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                         isTimeFree={isTimeFree}
                         isPaidIdle={isPaidIdle}
                         isMixedMode={isMixedMode}
+                        isLibreSession={isLibreSession}
                         hasPinas={hasPinas}
                         hasHoursActive={hasHoursActive}
                         hasLimit={hasLimit}
