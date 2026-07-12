@@ -2,7 +2,7 @@ import { supabaseCloud } from '../../config/supabaseCloud';
 import { logEvent } from '../../services/auditService';
 import { useAuthStore } from './authStore';
 import { useOrdersStore } from './useOrdersStore';
-import { calculateElapsedTime, calculateElapsedTimePrecise, calculateFullTableBreakdown } from '../../utils/tableBillingEngine';
+import { calculateElapsedTime, calculateElapsedTimePrecise, calculateFullTableBreakdown, buildFrozenTimeCharge } from '../../utils/tableBillingEngine';
 import { getServerNow } from '../../utils/serverClock';
 
 const getUser = () => useAuthStore.getState().currentUser;
@@ -494,31 +494,115 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
             s => s.table_id === targetTableId && (s.status === 'ACTIVE' || s.status === 'CHECKOUT')
         );
 
+        // Tipos de mesa origen/destino. El cobro de tiempo lo define el tipo de la
+        // mesa (POOL cobra tiempo, NORMAL no), NO la sesión. Por eso al cruzar tipos
+        // hay que transformar la sesión para no perder ni inventar cobros de tiempo.
+        const sourceTable = get().tables.find(t => t.id === sourceSession.table_id);
+        const targetTable = get().tables.find(t => t.id === targetTableId);
+        const sourceType = sourceTable?.type || 'POOL';
+        const targetType = targetTable?.type || 'POOL';
+        const config = get().config;
+
+        // elapsed consistente con la tarjeta: si está pausada usa el punto de pausa.
+        const paused = get().pausedSessions?.[sourceSessionId];
+        const sourceElapsed = paused?.isPaused
+            ? (paused.elapsedAtPause || 0)
+            : calculateElapsedTime(sourceSession.started_at);
+        const hoursOff = get().paidHoursOffsets?.[sourceSessionId] || 0;
+        const roundsOff = get().paidRoundsOffsets?.[sourceSessionId] || 0;
+
         if (transferType === 'ALL') {
             if (targetSession) {
                 throw new Error("La mesa de destino ya está ocupada. Solo puedes transferir el consumo.");
             }
 
+            const { orders } = useOrdersStore.getState();
+            const sourceOrder = orders.find(o => o.table_session_id === sourceSessionId);
+
+            // ── Cruce POOL → NORMAL: congelar el tiempo jugado como cargo fijo ──
+            // La mesa destino no cobra tiempo, así que materializamos lo jugado como
+            // un ítem de consumo y neutralizamos los campos de tiempo de la sesión.
+            let frozen = null;
+            if (sourceType === 'POOL' && targetType === 'NORMAL') {
+                frozen = buildFrozenTimeCharge(sourceSession, sourceElapsed, config, sourceType, hoursOff, roundsOff);
+                if (frozen) {
+                    try {
+                        await useOrdersStore.getState().addItemToSession(
+                            sourceSession.table_id, sourceSessionId, sourceSession.opened_by,
+                            frozen.productInfo, sourceOrder?.exchange_rate_used || 1, null
+                        );
+                    } catch (e) {
+                        console.error("Error congelando tiempo en transferencia Pool→Normal:", e);
+                        throw new Error("No se pudo preservar el cobro de tiempo. Transferencia cancelada.");
+                    }
+                }
+            }
+
+            // Payload de la sesión: siempre cambia table_id. Al cruzar tipos, además
+            // se transforma para que el tipo destino no reinterprete el cobro.
+            const sessionPatch = { table_id: targetTableId };
+            if (sourceType === 'POOL' && targetType === 'NORMAL') {
+                // Tiempo ya congelado como consumo → sesión pasa a modo Bar puro.
+                sessionPatch.game_mode = 'NORMAL';
+                sessionPatch.hours_paid = 0;
+                sessionPatch.extended_times = 0;
+                sessionPatch.seats = (sourceSession.seats || []).map(s => ({ ...s, timeCharges: [] }));
+            } else if (sourceType === 'NORMAL' && targetType === 'POOL') {
+                // El reloj de pool arranca en 0: sin cobro retroactivo del rato en el bar.
+                sessionPatch.started_at = new Date(getServerNow()).toISOString();
+                sessionPatch.game_mode = 'NORMAL';
+                sessionPatch.hours_paid = 0;
+                sessionPatch.extended_times = 0;
+            }
+
             // optimistic session update
             const newSessions = get().activeSessions.map(s =>
-                s.id === sourceSessionId ? { ...s, table_id: targetTableId } : s
+                s.id === sourceSessionId ? { ...s, ...sessionPatch } : s
             );
             set({ activeSessions: newSessions });
             await tablesCache.setItem(scopedKey('active_sessions'), newSessions);
 
+            // Al reiniciar el reloj (Normal→Pool) hay que limpiar offsets viejos
+            // (mismo saneo que closeSession) para que el nuevo tiempo cuente desde 0.
+            if (sourceType === 'NORMAL' && targetType === 'POOL') {
+                const offsetCache = await tablesCache.getItem(scopedKey('paid_hours_offsets')) || {};
+                if (offsetCache[sourceSessionId] !== undefined) {
+                    delete offsetCache[sourceSessionId];
+                    await tablesCache.setItem(scopedKey('paid_hours_offsets'), offsetCache);
+                }
+                const roundsOffsetCache = await tablesCache.getItem(scopedKey('paid_rounds_offsets')) || {};
+                if (roundsOffsetCache[sourceSessionId] !== undefined) {
+                    delete roundsOffsetCache[sourceSessionId];
+                    await tablesCache.setItem(scopedKey('paid_rounds_offsets'), roundsOffsetCache);
+                }
+                const elapsedOffsetCache = await tablesCache.getItem(scopedKey('paid_elapsed_offsets')) || {};
+                if (elapsedOffsetCache[sourceSessionId] !== undefined) {
+                    delete elapsedOffsetCache[sourceSessionId];
+                    await tablesCache.setItem(scopedKey('paid_elapsed_offsets'), elapsedOffsetCache);
+                }
+                set({
+                    paidHoursOffsets: (() => { const n = { ...get().paidHoursOffsets }; delete n[sourceSessionId]; return n; })(),
+                    paidRoundsOffsets: (() => { const n = { ...get().paidRoundsOffsets }; delete n[sourceSessionId]; return n; })(),
+                    paidElapsedOffsets: (() => { const n = { ...(get().paidElapsedOffsets || {}) }; delete n[sourceSessionId]; return n; })(),
+                });
+                get().realtimeChannel?.send({
+                    type: 'broadcast',
+                    event: 'table_offsets_clear',
+                    payload: { sessionId: sourceSessionId }
+                });
+            }
+
             try {
                 const { error } = await supabaseCloud.from('table_sessions')
-                    .update({ table_id: targetTableId })
+                    .update(sessionPatch)
                     .eq('id', sourceSessionId);
                 if (error) throw error;
             } catch (e) {
                 console.warn("Error sync transfer DB session, encolado:", e);
-                await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId: sourceSessionId, payload: { table_id: targetTableId } });
+                await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId: sourceSessionId, payload: sessionPatch });
             }
 
             // order update
-            const { orders } = useOrdersStore.getState();
-            const sourceOrder = orders.find(o => o.table_session_id === sourceSessionId);
             if (sourceOrder) {
                 try {
                     const { error } = await supabaseCloud.from('orders')
@@ -531,9 +615,14 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
                 }
             }
 
-            const sourceTableName = get().tables.find(t => t.id === sourceSession.table_id)?.name ?? sourceSession.table_id;
-            const targetTableName = get().tables.find(t => t.id === targetTableId)?.name ?? targetTableId;
-            logEvent('MESAS', 'TRANSFERENCIA', `Transferencia total de ${sourceTableName} a ${targetTableName}`, getUser(), { sourceSessionId, targetTableId });
+            const sourceTableName = sourceTable?.name ?? sourceSession.table_id;
+            const targetTableName = targetTable?.name ?? targetTableId;
+            const crossNote = sourceType !== targetType
+                ? (sourceType === 'POOL'
+                    ? ` · tiempo congelado${frozen ? ` $${frozen.total.toFixed(2)}` : ' $0'} (Pool→Bar)`
+                    : ' · reloj reiniciado (Bar→Pool)')
+                : '';
+            logEvent('MESAS', 'TRANSFERENCIA', `Transferencia total de ${sourceTableName} a ${targetTableName}${crossNote}`, getUser(), { sourceSessionId, targetTableId, sourceType, targetType, frozenTime: frozen?.total || 0 });
         } else if (transferType === 'CONSUMPTION') {
             if (!targetSession) {
                 throw new Error("La mesa de destino debe estar ocupada para poder recibir el consumo.");
@@ -560,6 +649,24 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
                     await cancelOrderBySessionId(sourceSessionId);
                 } catch (e) {
                     console.error("Error cleaning source order:", e);
+                }
+            }
+
+            // Preservar el tiempo jugado del origen: como la sesión origen se cerrará
+            // en $0, su cobro de tiempo se perdería. Si el origen es POOL con tiempo,
+            // se congela como cargo fijo y se suma a la cuenta destino.
+            let frozenMerge = null;
+            if (sourceType === 'POOL') {
+                frozenMerge = buildFrozenTimeCharge(sourceSession, sourceElapsed, config, sourceType, hoursOff, roundsOff);
+                if (frozenMerge) {
+                    try {
+                        await addItemToSession(
+                            targetTableId, targetSession.id, sourceSession.opened_by,
+                            frozenMerge.productInfo, targetSession.exchange_rate_used || 1, null
+                        );
+                    } catch (e) {
+                        console.error("Error preservando tiempo del origen en la fusión:", e);
+                    }
                 }
             }
 
@@ -599,9 +706,10 @@ export const createSessionActions = (set, get, tablesCache, scopedKey) => ({
             // Close source session with $0 cost
             await get().closeSession(sourceSessionId, getUser()?.id || 'SYSTEM', 0);
 
-            const sourceTableName = get().tables.find(t => t.id === sourceSession.table_id)?.name ?? sourceSession.table_id;
-            const targetTableName = get().tables.find(t => t.id === targetTableId)?.name ?? targetTableId;
-            logEvent('MESAS', 'TRANSFERENCIA', `Consumo de ${sourceTableName} unificado en ${targetTableName}`, getUser(), { sourceSessionId, targetTableId });
+            const sourceTableName = sourceTable?.name ?? sourceSession.table_id;
+            const targetTableName = targetTable?.name ?? targetTableId;
+            const timeNote = frozenMerge ? ` (incl. tiempo $${frozenMerge.total.toFixed(2)})` : '';
+            logEvent('MESAS', 'TRANSFERENCIA', `Consumo de ${sourceTableName} unificado en ${targetTableName}${timeNote}`, getUser(), { sourceSessionId, targetTableId, frozenTime: frozenMerge?.total || 0 });
         }
     },
 });

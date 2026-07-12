@@ -17,6 +17,7 @@ import {
     calculateTimeCostBsBreakdown,
     calculateTimeCostBs,
     formatHoursPaid,
+    buildFrozenTimeCharge,
 } from '../utils/tableBillingEngine';
 
 // ── Test State ──
@@ -1792,6 +1793,59 @@ function scenarioU() {
     return { passed, failed };
 }
 
+// ════════════════════════════════════════════
+// SCENARIO V: Transferencia Pool ↔ Normal (congelar tiempo)
+// ════════════════════════════════════════════
+function scenarioV() {
+    section('ESCENARIO V: Transferencia Pool ↔ Normal — congelar tiempo');
+    const config = { ...TEST_CONFIG };
+
+    let passed = 0, failed = 0;
+    const check = (c, p, f) => { if (assert(c, p, f)) passed++; else failed++; };
+
+    // 1) Pool prepago 1h + 1 jugada → monto congelado = 1*5 + 1*2 = $7
+    log('--- Pool (1h prepago + 1 jugada) → congelar ---');
+    const poolSession = { id: 'test-frz-1', game_mode: 'NORMAL', hours_paid: 1, extended_times: 1, seats: [], paid_at: null };
+    const frozen1 = buildFrozenTimeCharge(poolSession, 60, config, 'POOL', 0, 0);
+    check(!!frozen1, `Devuelve cargo congelado`, `NO devuelve cargo`);
+    check(frozen1 && frozen1.total === 7, `Total congelado = $7 (1h + 1 jugada): $${frozen1?.total}`, `Total INCORRECTO: $${frozen1?.total}`);
+    check(frozen1 && frozen1.productInfo.id === 'frozen-time-test-frz-1', `product_id sintético correcto: ${frozen1?.productInfo.id}`, `product_id INCORRECTO: ${frozen1?.productInfo.id}`);
+    check(frozen1 && frozen1.productInfo.priceUsd === 7, `priceUsd = total: $${frozen1?.productInfo.priceUsd}`, `priceUsd INCORRECTO`);
+
+    // 2) Pool modo LIBRE 90 min → 1.5h * $5 = $7.5
+    log('--- Pool modo libre 90min → congelar ---');
+    const libreSession = { id: 'test-frz-2', game_mode: 'NORMAL', hours_paid: 0, extended_times: 0, seats: [], paid_at: null };
+    const frozen2 = buildFrozenTimeCharge(libreSession, 90, config, 'POOL', 0, 0);
+    check(frozen2 && frozen2.total === 7.5, `Libre 90min = $7.5: $${frozen2?.total}`, `Libre INCORRECTO: $${frozen2?.total}`);
+
+    // 3) Pool con seat timeCharges (1h + 1 piña por asiento) → 5 + 2 = $7
+    log('--- Pool con cargos por asiento → congelar ---');
+    const seatSession = { id: 'test-frz-3', game_mode: 'NORMAL', hours_paid: 0, extended_times: 0, paid_at: null,
+        seats: [{ id: 's1', label: 'A', paid: false, timeCharges: [{ type: 'hora', amount: 1, id: 't1' }, { type: 'pina', amount: 1, id: 't2' }] }] };
+    const frozen3 = buildFrozenTimeCharge(seatSession, 30, config, 'POOL', 0, 0);
+    check(frozen3 && frozen3.total === 7, `Seat charges = $7 (1h + 1 piña): $${frozen3?.total}`, `Seat charges INCORRECTO: $${frozen3?.total}`);
+
+    // 4) Mesa NORMAL nunca congela (destino no cobra tiempo)
+    log('--- tableType NORMAL → sin congelar ---');
+    const frozenNormal = buildFrozenTimeCharge(poolSession, 60, config, 'NORMAL', 0, 0);
+    check(frozenNormal === null, `NORMAL devuelve null (no cobra tiempo)`, `NORMAL NO devuelve null`);
+
+    // 5) Sesión sin tiempo → null (nada que congelar)
+    log('--- Sesión Pool sin tiempo → null ---');
+    const emptySession = { id: 'test-frz-4', game_mode: 'NORMAL', hours_paid: 0, extended_times: 0, seats: [], paid_at: null };
+    const frozenEmpty = buildFrozenTimeCharge(emptySession, 0, config, 'POOL', 0, 0);
+    check(frozenEmpty === null, `Sin tiempo → null: ${frozenEmpty}`, `Sin tiempo NO es null`);
+
+    // 6) Simulación Normal→Pool: reloj reinicia → sin cobro retroactivo.
+    // Al mover, started_at = ahora, por lo que elapsed ≈ 0 y el modo libre cobra $0.
+    log('--- Normal→Pool: reloj en 0 → sin cobro retroactivo ---');
+    const bd0 = calculateSessionCostBreakdown(0, 'NORMAL', config, 0, 0, 0, 0, null, 'POOL');
+    check(bd0.total === 0, `elapsed 0 en Pool → $0: $${bd0.total}`, `elapsed 0 NO es $0: $${bd0.total}`);
+
+    log(`Escenario V completado: ${passed} pasaron, ${failed} fallaron`, failed > 0 ? 'error' : 'success');
+    return { passed, failed };
+}
+
 // ── Suite definitions ──
 const ALL_SUITES = [
     { key: 'scenario_a', name: 'Abrir → Cobrar → Liberar', fn: scenarioA },
@@ -1815,6 +1869,7 @@ const ALL_SUITES = [
     { key: 'scenario_s', name: 'Recobro — Bs con Seat TimeCharges', fn: scenarioS },
     { key: 'scenario_t', name: 'Registro en Reportes — Cobro/Recobro/Re-recobro', fn: scenarioT },
     { key: 'scenario_u', name: 'Datos de Ticket — Compra y Recompra', fn: scenarioU },
+    { key: 'scenario_v', name: 'Transferencia Pool ↔ Normal (congelar tiempo)', fn: scenarioV },
 ];
 
 // ── Public API ──

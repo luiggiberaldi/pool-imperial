@@ -4,7 +4,7 @@ import { useAuthStore } from '../hooks/store/authStore';
 import TableCard from '../components/tables/TableCard';
 import FloorPlanView from '../components/tables/FloorPlanView';
 import { Layers, PauseCircle, PlayCircle, LayoutGrid, Map, X, ArrowRight, AlertTriangle } from 'lucide-react';
-import { calculateElapsedTimePrecise } from '../utils/tableBillingEngine';
+import { calculateElapsedTime, calculateElapsedTimePrecise, buildFrozenTimeCharge } from '../utils/tableBillingEngine';
 import { showToast } from '../components/Toast';
 import { Modal } from '../components/Modal';
 import { useBackdropClose } from '../hooks/useBackdropClose';
@@ -457,6 +457,30 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                 );
                 const isTargetOccupied = !!targetSession;
 
+                // ── Detección de cruce de tipo (Pool ↔ Normal) ──
+                const sourceType = sourceTable.type || 'POOL';
+                const targetType = transferTargetTable.type || 'POOL';
+                const isCrossType = sourceType !== targetType;
+                const isPoolToNormal = sourceType === 'POOL' && targetType === 'NORMAL';
+
+                // Monto de tiempo que se congelará si origen es POOL (llevándolo a
+                // Normal, o fusionándolo con cualquier destino ocupado).
+                let frozenTimeTotal = 0;
+                if (sourceType === 'POOL' && (isPoolToNormal || isTargetOccupied)) {
+                    const st = useTablesStore.getState();
+                    const pausedSrc = st.pausedSessions?.[sourceSession.id];
+                    const srcElapsed = pausedSrc?.isPaused
+                        ? (pausedSrc.elapsedAtPause || 0)
+                        : calculateElapsedTime(sourceSession.started_at);
+                    const frozen = buildFrozenTimeCharge(
+                        sourceSession, srcElapsed, st.config, sourceType,
+                        st.paidHoursOffsets?.[sourceSession.id] || 0,
+                        st.paidRoundsOffsets?.[sourceSession.id] || 0
+                    );
+                    frozenTimeTotal = frozen?.total || 0;
+                }
+                const fmtMoney = (n) => `$${Number(n || 0).toLocaleString('es-CO')}`;
+
                 return (
                     <Modal 
                         isOpen={!!transferTargetTable} 
@@ -495,6 +519,30 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                 </div>
                             </div>
 
+                            {/* Aviso de cruce de tipo (Pool ↔ Normal) */}
+                            {isCrossType && (
+                                <div className="bg-sky-50 border border-sky-200 text-sky-800 p-4 rounded-xl flex items-start gap-3 dark:bg-sky-950/20 dark:border-sky-900/30 dark:text-sky-300">
+                                    <AlertTriangle className="shrink-0 mt-0.5 text-sky-500" size={18} />
+                                    <div>
+                                        <h4 className="font-bold text-sm">
+                                            {isPoolToNormal ? 'Mesa de Pool → Mesa Normal (Bar)' : 'Mesa Normal (Bar) → Mesa de Pool'}
+                                        </h4>
+                                        {isPoolToNormal ? (
+                                            <p className="text-xs opacity-90 mt-1 leading-relaxed">
+                                                El tiempo jugado se cobrará como consumo fijo
+                                                {frozenTimeTotal > 0 ? <> (<strong>{fmtMoney(frozenTimeTotal)}</strong>)</> : ''} y
+                                                el cronómetro se detendrá. La mesa pasará a modo Bar.
+                                            </p>
+                                        ) : (
+                                            <p className="text-xs opacity-90 mt-1 leading-relaxed">
+                                                El cronómetro de pool <strong>iniciará desde cero</strong> al mover la mesa.
+                                                No se cobrará tiempo por el rato previo en el bar. El consumo actual se conserva.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Warning/Info Box */}
                             {isTargetOccupied ? (
                                 <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl flex items-start gap-3 dark:bg-amber-950/20 dark:border-amber-900/30 dark:text-amber-300">
@@ -504,6 +552,11 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                         <p className="text-xs opacity-90 mt-1 leading-relaxed">
                                             La mesa de destino ya está jugando. Se sumará todo el consumo de bebidas/comida de <strong>{sourceTable.name}</strong> a la comanda activa de <strong>{transferTargetTable.name}</strong>.
                                         </p>
+                                        {frozenTimeTotal > 0 && (
+                                            <p className="text-xs opacity-90 mt-1 leading-relaxed">
+                                                También se trasladará el tiempo jugado de {sourceTable.name} como cargo fijo (<strong>{fmtMoney(frozenTimeTotal)}</strong>).
+                                            </p>
+                                        )}
                                         <p className="text-xs opacity-90 mt-2 font-bold leading-relaxed">
                                             ⚠️ La sesión original en {sourceTable.name} se cerrará en $0 y quedará LIBRE.
                                         </p>
@@ -518,7 +571,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                             Se moverá la sesión completa de <strong>{sourceTable.name}</strong> a <strong>{transferTargetTable.name}</strong>.
                                         </p>
                                         <ul className="text-xs opacity-90 mt-1.5 list-disc pl-4 space-y-0.5">
-                                            <li>El temporizador de juego no se detendrá.</li>
+                                            {!isCrossType && <li>El temporizador de juego no se detendrá.</li>}
                                             <li>Se conservará el cliente asignado, notas y comanda.</li>
                                             <li>La mesa {sourceTable.name} quedará completamente LIBRE.</li>
                                         </ul>

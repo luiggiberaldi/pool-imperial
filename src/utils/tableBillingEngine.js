@@ -547,3 +547,70 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
 
     return { syntheticCart, subtotalLimpio: round2(syntheticCart.reduce((sum, item) => sum + round2((item.priceUsd || 0) * (item.qty || 1)), 0)) };
 }
+
+/**
+ * Calcula el monto TOTAL de tiempo/jugadas de una sesión POOL, tal como se vería
+ * en la tarjeta de mesa (timeCost de sesión + seatTimeCost de asientos, ambos
+ * tax-inclusive). Se usa para "congelar" el tiempo al mover una mesa de Pool a
+ * una mesa Normal: el cobro por tiempo no viaja con el tipo de mesa destino, así
+ * que se materializa aquí como un cargo fijo.
+ *
+ * Devuelve { productInfo, qty, total, label } listo para addItemToSession, o null
+ * si no hay nada que cobrar (sesión sin tiempo, o mesa que ya es Normal).
+ */
+export function buildFrozenTimeCharge(session, elapsedMinutes, config, tableType = 'POOL', hoursOffset = 0, roundsOffset = 0) {
+    // Mesa Normal no cobra tiempo: nada que congelar.
+    if (!session || tableType === 'NORMAL') return null;
+
+    // 1) Costo de tiempo a nivel sesión (piñas + horas + modo libre), con offsets.
+    const sessionTotal = calculateSessionCost(
+        elapsedMinutes,
+        session.game_mode,
+        config,
+        Number(session.hours_paid) || 0,
+        session.extended_times,
+        session.paid_at,
+        hoursOffset,
+        roundsOffset,
+        session.seats,
+        tableType
+    );
+
+    // 2) Costo de cargos de tiempo por asiento (horas/piñas asignadas a clientes),
+    //    solo de los asientos aún no pagados — igual que seatTimeCost en TableCard.
+    const seatTotal = (session.seats || [])
+        .filter(s => !s.paid)
+        .reduce((sum, s) => sum + calculateSeatTimeChargesCost(s.timeCharges, config).total, 0);
+
+    const total = round2(sessionTotal + seatTotal);
+    if (total <= 0) return null;
+
+    // Etiqueta legible para ticket/comanda.
+    const parts = [];
+    const seatHasHours = (session.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
+    const isLibre = tableType === 'POOL' && session.game_mode === 'NORMAL'
+        && (Number(session.hours_paid) || 0) === 0 && !seatHasHours;
+    if (isLibre) {
+        parts.push(formatElapsedTime(Math.round(elapsedMinutes)));
+    } else if ((Number(session.hours_paid) || 0) > 0) {
+        parts.push(formatHoursPaid(Number(session.hours_paid) || 0));
+    }
+    const hasPinas = session.game_mode === 'PINA' || (Number(session.extended_times) || 0) > 0
+        || (session.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
+    if (hasPinas) parts.push('jugadas');
+    const detail = parts.length ? ` (${parts.join(' + ')})` : '';
+    const label = `Tiempo de juego${detail}`;
+
+    return {
+        total,
+        label,
+        qty: 1,
+        productInfo: {
+            // product_id sintético: order_items.product_id es TEXT, no requiere catálogo.
+            id: `frozen-time-${session.id}`,
+            name: label,
+            // El monto ya incluye impuesto; se cobra tal cual sin re-gravar.
+            priceUsd: total,
+        },
+    };
+}
