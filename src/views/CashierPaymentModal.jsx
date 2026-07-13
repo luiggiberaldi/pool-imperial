@@ -4,7 +4,7 @@ import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useOrdersStore } from '../hooks/store/useOrdersStore';
 import { useAuthStore } from '../hooks/store/authStore';
 import { useCustomersStore } from '../hooks/store/useCustomersStore';
-import { calculateSessionCost, calculateElapsedTime, calculateSessionCostBreakdown, formatHoursPaid, buildTableSyntheticCart } from '../utils/tableBillingEngine';
+import { calculateSessionCost, calculateSessionCostBreakdown, formatHoursPaid, buildTableSyntheticCart, getSessionElapsedMinutes } from '../utils/tableBillingEngine';
 import { Modal } from '../components/Modal';
 import { processSaleTransaction } from '../utils/checkoutProcessor';
 import { useProductContext } from '../context/ProductContext';
@@ -117,8 +117,9 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
     // Elapsed time calculation
     const isPlaying = session && (session.status === 'ACTIVE' || session.status === 'CHECKOUT');
     const pausedSessions = useTablesStore(state => state.pausedSessions);
-    const paused = pausedSessions?.[session?.id];
-    const elapsed = isAnyAbono ? 0 : (paused?.isPaused ? (paused.elapsedAtPause || 0) : (session?.started_at ? calculateElapsedTime(session.started_at) : 0));
+    // getSessionElapsedMinutes respeta la pausa por el mapa volátil O por session.paused_at
+    // durable — así la caja SIEMPRE cobra el tiempo congelado, no el corrido.
+    const elapsed = isAnyAbono ? 0 : getSessionElapsedMinutes(session, pausedSessions);
 
     const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
     const hoursOffset = (paidHoursOffsets || {})[session?.id] || 0;

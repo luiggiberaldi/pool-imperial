@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useTablesStore } from './store/useTablesStore';
 import { useAuthStore } from './store/authStore';
-import { calculateElapsedTime, calculateSessionCost } from '../utils/tableBillingEngine';
+import { getSessionElapsedMinutes, calculateSessionCost } from '../utils/tableBillingEngine';
 import { useNotifications } from './useNotifications';
 import { showToast } from '../components/Toast';
 import { supabaseCloud } from '../config/supabaseCloud';
@@ -101,8 +101,7 @@ export function useGlobalTableAlerts() {
                         const key = `cobrar-${session.id}`;
                         if (!notifiedRef.current.has(key)) {
                             notifiedRef.current.add(key);
-                            const paused = pausedSessions?.[session.id];
-                            const elapsed = paused?.isPaused ? (paused.elapsedAtPause || 0) : (session.started_at ? calculateElapsedTime(session.started_at) : 0);
+                            const elapsed = getSessionElapsedMinutes(session, pausedSessions);
                             const hoursOff = (paidHoursOffsets || {})[session.id] || 0;
                             const roundsOff = (paidRoundsOffsets || {})[session.id] || 0;
                             const isTimeFree = table.type === 'NORMAL';
@@ -198,14 +197,8 @@ export function useGlobalTableAlerts() {
                 const effectiveHours = Math.max(0, totalHours - hoursOffset);
                 if (effectiveHours <= 0) return;
 
-                // Check if paused
-                const paused = pausedSessions?.[session.id];
-                let elapsedMin;
-                if (paused?.isPaused) {
-                    elapsedMin = paused.elapsedAtPause || 0;
-                } else {
-                    elapsedMin = calculateElapsedTime(session.started_at);
-                }
+                // Elapsed consciente de pausa (mapa volátil o paused_at durable)
+                const elapsedMin = getSessionElapsedMinutes(session, pausedSessions);
 
                 const elapsedOffset = (paidElapsedOffsets || {})[session.id] || 0;
                 const effectiveElapsed = elapsedOffset > 0 ? Math.max(0, elapsedMin - elapsedOffset) : elapsedMin;

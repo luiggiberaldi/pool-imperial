@@ -4,7 +4,7 @@ import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useOrdersStore } from '../../hooks/store/useOrdersStore';
 import { useAuthStore } from '../../hooks/store/authStore';
 import { useCashStore } from '../../hooks/store/cashStore';
-import { formatElapsedTime, calculateElapsedTime, calculateSessionCost, buildTableSyntheticCart, calculateFullTableBreakdown } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, calculateSessionCost, buildTableSyntheticCart, calculateFullTableBreakdown, getSessionElapsedMinutes } from '../../utils/tableBillingEngine';
 import { round2 } from '../../utils/dinero';
 import { showToast } from '../Toast';
 import { useProductContext } from '../../context/ProductContext';
@@ -111,8 +111,7 @@ export function TableQueuePanel({ onCheckoutTable }) {
                     const order = orders.find(o => o.table_session_id === session.id);
                     const currentItems = isAbono ? abonoItems : (isAbonoMonto ? [] : (order ? orderItems.filter(i => i.order_id === order.id) : []));
                     const totalConsumption = isAbonoMonto ? (abonoMonto?.amount || 0) : currentItems.reduce((a, i) => a + Number(i.unit_price_usd) * Number(i.qty), 0);
-                    const paused = pausedSessions?.[session.id];
-                    const elapsed = isAnyAbono ? 0 : (paused?.isPaused ? (paused.elapsedAtPause || 0) : (session.started_at ? calculateElapsedTime(session.started_at) : 0));
+                    const elapsed = isAnyAbono ? 0 : getSessionElapsedMinutes(session, pausedSessions);
                     
                     const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
                     const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, (paidHoursOffsets || {})[session.id] || 0, (paidRoundsOffsets || {})[session.id] || 0, session.seats, table.type) : 0;

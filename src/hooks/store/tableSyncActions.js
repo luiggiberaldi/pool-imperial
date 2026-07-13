@@ -39,6 +39,9 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
             const cachedOffsets = await tablesCache.getItem(scopedKey('paid_hours_offsets')) || {};
             const cachedRoundsOffsets = await tablesCache.getItem(scopedKey('paid_rounds_offsets')) || {};
             const cachedElapsedOffsets = await tablesCache.getItem(scopedKey('paid_elapsed_offsets')) || {};
+            // Pausas: se rehidratan del caché para no perder el estado tras una recarga
+            // antes de que llegue el primer sync (que las derivará del paused_at durable).
+            const cachedPaused = await tablesCache.getItem(scopedKey('paused_sessions')) || {};
 
             set({
                 tables: sortTables(cachedTables),
@@ -46,6 +49,7 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                 paidHoursOffsets: cachedOffsets,
                 paidRoundsOffsets: cachedRoundsOffsets,
                 paidElapsedOffsets: cachedElapsedOffsets,
+                pausedSessions: cachedPaused,
                 loading: false
             });
 
@@ -251,6 +255,29 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
             set({ tables: finalTables, activeSessions: mergedSessions });
             await tablesCache.setItem(scopedKey('tables'), finalTables);
             await tablesCache.setItem(scopedKey('active_sessions'), mergedSessions);
+
+            // Hidratar el mapa volátil de pausas desde el paused_at durable de cada sesión.
+            // Esto hace que la pausa llegue por el sync confiable de sesiones (no por un
+            // broadcast que se puede perder), quedando consistente en TODOS los dispositivos
+            // y tras recargas. Se preserva cualquier pausa local en vuelo (_pendingSync).
+            const derivedPaused = {};
+            mergedSessions.forEach(s => {
+                if (s.paused_at && s.started_at) {
+                    derivedPaused[s.id] = {
+                        isPaused: true,
+                        elapsedAtPause: Math.max(0, (new Date(s.paused_at).getTime() - new Date(s.started_at).getTime()) / 60000)
+                    };
+                }
+            });
+            const localPaused = get().pausedSessions || {};
+            const pendingIds = new Set(mergedSessions.filter(s => s._pendingSync).map(s => s.id));
+            // Las sesiones _pendingSync mandan con su estado local (pausa o resume en vuelo).
+            pendingIds.forEach(id => {
+                if (localPaused[id]) derivedPaused[id] = localPaused[id];
+                else delete derivedPaused[id];
+            });
+            set({ pausedSessions: derivedPaused });
+            await tablesCache.setItem(scopedKey('paused_sessions'), derivedPaused);
 
             const offsetCache = await tablesCache.getItem(scopedKey('paid_hours_offsets')) || {};
             const roundsOffsetCache = await tablesCache.getItem(scopedKey('paid_rounds_offsets')) || {};

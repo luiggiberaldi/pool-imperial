@@ -37,6 +37,23 @@ export function calculateElapsedTime(startTimeISO) {
     return diffMinutes;
 }
 
+/**
+ * Elapsed de una sesión en minutos, CONSCIENTE de pausa. Fuente de verdad:
+ *   1) mapa volátil pausedSessions (feedback instantáneo local), luego
+ *   2) session.paused_at durable (fiable en todos los dispositivos y tras recargas),
+ *   3) si no está pausada, tiempo corrido normal desde started_at.
+ * Úsalo en todo cálculo de cobro/timer para que la pausa se respete en un solo lugar.
+ */
+export function getSessionElapsedMinutes(session, pausedMap = null, precise = false) {
+    if (!session?.started_at) return 0;
+    const p = pausedMap?.[session.id];
+    if (p?.isPaused) return p.elapsedAtPause || 0;
+    if (session.paused_at) {
+        return Math.max(0, (new Date(session.paused_at).getTime() - new Date(session.started_at).getTime()) / 60000);
+    }
+    return precise ? calculateElapsedTimePrecise(session.started_at) : calculateElapsedTime(session.started_at);
+}
+
 // Igual que calculateElapsedTime pero sin redondear hacia abajo al minuto.
 // Necesario para capturar el punto exacto de pausa: si se usa la versión
 // redondeada, cada pausa "pierde" hasta 59s y el temporizador retrocede al reanudar.

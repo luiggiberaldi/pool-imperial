@@ -3,7 +3,7 @@ import { CheckCircle2, AlertCircle, RefreshCw, DollarSign } from 'lucide-react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useOrdersStore } from '../hooks/store/useOrdersStore';
 import { useAuthStore } from '../hooks/store/authStore';
-import { calculateSessionCost, calculateElapsedTime, buildTableSyntheticCart } from '../utils/tableBillingEngine';
+import { calculateSessionCost, buildTableSyntheticCart, getSessionElapsedMinutes } from '../utils/tableBillingEngine';
 import { useConfirm } from '../hooks/useConfirm.jsx';
 import { round2 } from '../utils/dinero';
 import CashierPaymentModal from './CashierPaymentModal';
@@ -11,7 +11,7 @@ import { useProductContext } from '../context/ProductContext';
 import { FinancialEngine } from '../core/FinancialEngine';
 
 export default function CashierCheckoutView({ triggerHaptic, isActive }) {
-    const { tables, activeSessions, config, closeSession, cancelCheckoutRequest, syncTablesAndSessions, paidHoursOffsets, paidRoundsOffsets, cancelSeatCheckoutRequest } = useTablesStore();
+    const { tables, activeSessions, config, closeSession, cancelCheckoutRequest, syncTablesAndSessions, paidHoursOffsets, paidRoundsOffsets, cancelSeatCheckoutRequest, pausedSessions } = useTablesStore();
     const { orders: allOrders, orderItems: allItems } = useOrdersStore();
     const { currentUser } = useAuthStore();
     const { effectiveRate, products } = useProductContext();
@@ -129,7 +129,7 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                 const currentItems = isAbono ? abonoItems : (isAbonoMonto ? [] : (order ? allItems.filter(i => i.order_id === order.id) : []));
                                 const totalConsumption = isAbonoMonto ? (abonoMonto?.amount || 0) : round2(currentItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0));
 
-                                const elapsed = isAnyAbono ? 0 : calculateElapsedTime(session.started_at);
+                                const elapsed = isAnyAbono ? 0 : getSessionElapsedMinutes(session, pausedSessions);
                                 const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
                                 const hoursOffset = (paidHoursOffsets || {})[session.id] || 0;
                                 const roundsOffset = (paidRoundsOffsets || {})[session.id] || 0;
@@ -182,7 +182,7 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                 const currentItems = order ? allItems.filter(i => i.order_id === order.id) : [];
                                 const totalConsumption = round2(currentItems.reduce((acc, item) => acc + (Number(item.unit_price_usd) * Number(item.qty)), 0));
 
-                                const elapsed = calculateElapsedTime(session.started_at);
+                                const elapsed = getSessionElapsedMinutes(session, pausedSessions);
                                 const isTimeFree = table.type === 'NORMAL';
                                 const hoursOffset = (paidHoursOffsets || {})[session.id] || 0;
                                 const roundsOffset = (paidRoundsOffsets || {})[session.id] || 0;

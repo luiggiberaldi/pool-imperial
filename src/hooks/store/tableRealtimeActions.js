@@ -234,13 +234,28 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
                         // Mesa cerrada desde otro dispositivo → eliminarla del estado local
                         set(state => ({ activeSessions: state.activeSessions.filter(s => s.id !== payload.new.id) }));
                     } else {
-                        set(state => ({ activeSessions: state.activeSessions.map(s => {
-                            if (s.id !== payload.new.id) return s;
-                            // Preserve local-only field paid_at (not a DB column)
-                            const merged = { ...payload.new };
-                            if (s.paid_at && !merged.paid_at) merged.paid_at = s.paid_at;
-                            return merged;
-                        }) }));
+                        set(state => {
+                            const next = { activeSessions: state.activeSessions.map(s => {
+                                if (s.id !== payload.new.id) return s;
+                                // Preserve local-only field paid_at (not a DB column)
+                                const merged = { ...payload.new };
+                                if (s.paid_at && !merged.paid_at) merged.paid_at = s.paid_at;
+                                return merged;
+                            }) };
+                            // Reflejar la pausa/reanudación al instante (sin esperar el
+                            // debouncedSync de 300ms) para que el plano no siga corriendo.
+                            const id = payload.new.id;
+                            if (payload.new.paused_at && payload.new.started_at) {
+                                next.pausedSessions = { ...state.pausedSessions, [id]: {
+                                    isPaused: true,
+                                    elapsedAtPause: Math.max(0, (new Date(payload.new.paused_at).getTime() - new Date(payload.new.started_at).getTime()) / 60000)
+                                } };
+                            } else if (state.pausedSessions[id]) {
+                                const { [id]: _, ...rest } = state.pausedSessions;
+                                next.pausedSessions = rest;
+                            }
+                            return next;
+                        });
                     }
                 } else if (payload.eventType === 'INSERT') {
                     // Solo agregar si está activa (no insertar sesiones cerradas)
@@ -329,42 +344,96 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
         }
     },
 
-    pauseSession: (sessionId, elapsedAtPause) => {
+    pauseSession: async (sessionId, elapsedAtPause) => {
+        const session = get().activeSessions.find(s => s.id === sessionId);
+        // paused_at exacto = started_at + elapsedAtPause, para que el elapsed derivado
+        // en cualquier dispositivo (paused_at - started_at) coincida con el punto pausado.
+        const pausedAtISO = session?.started_at
+            ? new Date(new Date(session.started_at).getTime() + elapsedAtPause * 60000).toISOString()
+            : new Date(getServerNow()).toISOString();
+
+        // Estado volátil (feedback instantáneo local) + marca DURABLE en la sesión.
+        // _pendingSync evita que un sync concurrente revierta el paused_at recién puesto.
         set(state => ({
             pausedSessions: {
                 ...state.pausedSessions,
                 [sessionId]: { isPaused: true, elapsedAtPause }
-            }
+            },
+            activeSessions: state.activeSessions.map(s =>
+                s.id === sessionId ? { ...s, paused_at: pausedAtISO, _pendingSync: true } : s
+            )
         }));
+        await tablesCache.setItem(scopedKey('active_sessions'), get().activeSessions);
+        await tablesCache.setItem(scopedKey('paused_sessions'), get().pausedSessions);
+
+        // Broadcast: sigue como aceleración; la fuente de verdad ahora es paused_at.
         get().realtimeChannel?.send({
             type: 'broadcast',
             event: 'table_pause',
             payload: { sessionId, elapsedAtPause }
         });
+
+        try {
+            const { error } = await supabaseCloud.from('table_sessions').update({ paused_at: pausedAtISO }).eq('id', sessionId);
+            if (error) throw error;
+            set(state => ({
+                activeSessions: state.activeSessions.map(s => s.id === sessionId ? { ...s, _pendingSync: false } : s)
+            }));
+            await tablesCache.setItem(scopedKey('active_sessions'), get().activeSessions);
+        } catch (e) {
+            console.warn('Pausa en nube fallida, encolada:', e);
+            await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload: { paused_at: pausedAtISO } });
+        }
     },
 
     resumeSession: async (sessionId) => {
         const pauseData = get().pausedSessions[sessionId];
-        if (pauseData) {
-            const session = get().activeSessions.find(s => s.id === sessionId);
-            if (session) {
-                // Se recalcula started_at contra getServerNow() —el MISMO reloj que usa
-                // el display— para que el timer reanude exactamente en el segundo pausado
-                // y no "retroceda" por el desfase entre el reloj local y el del servidor.
-                // elapsedAtPause está en minutos (con decimales): started_at = ahora - pausado.
-                const newStartedAt = new Date(getServerNow() - pauseData.elapsedAtPause * 60000).toISOString();
-                await get().updateSessionTime(sessionId, newStartedAt);
-            }
+        const session = get().activeSessions.find(s => s.id === sessionId);
+        // Se recalcula started_at contra getServerNow() —el MISMO reloj que usa el display—
+        // para que el timer reanude exactamente en el segundo pausado y no "retroceda" por
+        // el desfase entre el reloj local y el del servidor. elapsedAtPause está en minutos.
+        // Fallback: si no hay pauseData volátil pero la sesión tiene paused_at durable,
+        // se deriva el elapsed congelado de ahí.
+        let elapsedAtPause = pauseData?.elapsedAtPause;
+        if (elapsedAtPause == null && session?.paused_at && session?.started_at) {
+            elapsedAtPause = Math.max(0, (new Date(session.paused_at).getTime() - new Date(session.started_at).getTime()) / 60000);
         }
+
+        const newStartedAt = session && elapsedAtPause != null
+            ? new Date(getServerNow() - elapsedAtPause * 60000).toISOString()
+            : session?.started_at;
+
+        // Update optimista: started_at recalculado + paused_at limpiado, en un solo write.
         set(state => {
             const { [sessionId]: _, ...rest } = state.pausedSessions;
-            return { pausedSessions: rest };
+            return {
+                pausedSessions: rest,
+                activeSessions: state.activeSessions.map(s =>
+                    s.id === sessionId ? { ...s, started_at: newStartedAt, paused_at: null, _pendingSync: true } : s
+                )
+            };
         });
+        await tablesCache.setItem(scopedKey('active_sessions'), get().activeSessions);
+        await tablesCache.setItem(scopedKey('paused_sessions'), get().pausedSessions);
+
         get().realtimeChannel?.send({
             type: 'broadcast',
             event: 'table_resume',
             payload: { sessionId }
         });
+
+        const payload = { started_at: newStartedAt, paused_at: null };
+        try {
+            const { error } = await supabaseCloud.from('table_sessions').update(payload).eq('id', sessionId);
+            if (error) throw error;
+            set(state => ({
+                activeSessions: state.activeSessions.map(s => s.id === sessionId ? { ...s, _pendingSync: false } : s)
+            }));
+            await tablesCache.setItem(scopedKey('active_sessions'), get().activeSessions);
+        } catch (e) {
+            console.warn('Reanudar en nube fallido, encolado:', e);
+            await get().addPendingAction({ type: 'UPDATE_SESSION', sessionId, payload });
+        }
     },
 };
 };
