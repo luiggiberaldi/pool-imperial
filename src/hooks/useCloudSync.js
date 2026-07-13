@@ -3,6 +3,7 @@ import { supabaseCloud } from '../config/supabaseCloud';
 import { storageService } from '../utils/storageService';
 import { scopedKey } from './store/accountScope';
 import { useAuthStore } from './store/authStore';
+import { subscribeResilient } from '../utils/realtimeReconnect';
 
 const SYNC_KEYS = [
     'bodega_products_v1',
@@ -499,8 +500,9 @@ export function useCloudSync() {
     useEffect(() => {
         if (!isCloudConfigured) {
             if (globalSubscription) {
-                globalSubscription.unsubscribe();
+                globalSubscription.teardown();
                 globalSubscription = null;
+                globalSubscriptionUserId = null;
                 isInitialized.current = false;
             }
             // Si no hay nube instalada, el motor local es el maestro
@@ -571,38 +573,18 @@ export function useCloudSync() {
                 // ── Suscripción Broadcast P2P (0 WAL egress) ─────────────────
                 // Reemplaza postgres_changes en sync_documents por broadcast
                 if (globalSubscription && globalSubscriptionUserId !== userId) {
-                    globalSubscription.unsubscribe();
+                    globalSubscription.teardown();
                     globalSubscription = null;
                     globalSubscriptionUserId = null;
                 }
                 if (!globalSubscription) {
                     globalSubscriptionUserId = userId;
-                    const ch = _getSyncBroadcastChannel(userId);
-                    
-                    const subscribeSync = () => {
-                        ch.subscribe((status) => {
-                            if (status === 'SUBSCRIBED') {
-                                console.log('[CloudSync] Conectado en Tiempo Real (Broadcast P2P)');
-                            }
-                            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                                console.warn('[CloudSync] Canal P2P desconectado, reintentando...');
-                                setTimeout(() => {
-                                    try {
-                                        ch.unsubscribe().then(() => {
-                                            subscribeSync();
-                                        }).catch(() => {
-                                            subscribeSync();
-                                        });
-                                    } catch (_) {
-                                        subscribeSync();
-                                    }
-                                }, 5000);
-                            }
-                        });
-                    };
 
-                    globalSubscription = ch
-                        .on('broadcast', { event: 'sync_doc_changed' }, async ({ payload }) => {
+                    // Factory: instancia NUEVA del canal con su handler, publicada como
+                    // el canal cacheado de envío (_getSyncBroadcastChannel / los .send).
+                    const factory = () => {
+                        const ch = supabaseCloud.channel(`sync_docs:${userId}`);
+                        ch.on('broadcast', { event: 'sync_doc_changed' }, async ({ payload }) => {
                             if (!payload?.doc_id) return;
 
                             // Ventas individuales → merge, no reemplazar
@@ -620,8 +602,17 @@ export function useCloudSync() {
                             console.log(`[CloudSync] Recibido P2P (broadcast): ${payload.doc_id}`);
                             await _applyFromCloud(payload.doc_id, payload.collection, payload.data);
                         });
+                        syncBroadcastChannel = ch;
+                        syncBroadcastUserId = userId;
+                        return ch;
+                    };
 
-                    subscribeSync();
+                    globalSubscription = subscribeResilient(factory, {
+                        label: '[CloudSync]',
+                        onSubscribed: () => {
+                            console.log('[CloudSync] Conectado en Tiempo Real (Broadcast P2P)');
+                        },
+                    });
                 }
 
                 // Suscripción Broadcast para ventas en tiempo real (0 DB egress)

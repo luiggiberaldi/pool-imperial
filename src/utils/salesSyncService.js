@@ -13,6 +13,7 @@
 import { supabaseCloud } from '../config/supabaseCloud';
 import { storageService } from './storageService';
 import { scopedKey } from '../hooks/store/accountScope';
+import { subscribeResilient } from './realtimeReconnect';
 
 const SALES_KEY = 'bodega_sales_v1';
 const LAST_SALES_PULL_KEY_BASE = '_cloud_last_sales_pull_at';
@@ -21,7 +22,6 @@ const getLastSalesPullKey = () => scopedKey(LAST_SALES_PULL_KEY_BASE);
 let salesBroadcastChannel = null;
 let salesBroadcastUserId = null;
 let salesBroadcastSubscribed = false;
-let salesStatusChannel = null;
 
 function getSalesBroadcastChannel(userId) {
     if (salesBroadcastChannel && salesBroadcastUserId === userId) {
@@ -349,93 +349,73 @@ export async function applyCierreMarks(marks) {
 export function subscribeSalesStatusChanges(userId, onStatusChange) {
     if (!userId) return () => {};
 
-    // Evitar duplicar la suscripción
-    if (salesStatusChannel) {
-        salesStatusChannel.unsubscribe();
-        salesStatusChannel = null;
-    }
-
     console.log('[SalesSync] Suscribiendo a cambios de status de ventas (postgres_changes)...');
 
-    salesStatusChannel = supabaseCloud
-        .channel(`sales_status:${userId}`)
-        .on(
-            'postgres_changes',
-            {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'sales',
-                filter: `user_id=eq.${userId}`,
-            },
-            (payload) => {
-                const updated = payload.new;
-                if (!updated?.id) return;
-                console.log(`[SalesSync] postgres_changes UPDATE sales: id=${updated.id} status=${updated.status}`);
-                // Notificar para aplicar en IndexedDB local
-                onStatusChange(updated.id, updated.status);
-            }
-        )
-        .subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-                console.log('[SalesSync] ✅ postgres_changes sales activo — anulaciones se propagan en tiempo real');
-            }
-            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                console.warn('[SalesSync] postgres_changes sales desconectado, reintentando en 5s...');
-                setTimeout(() => {
-                    subscribeSalesStatusChanges(userId, onStatusChange);
-                }, 5000);
-            }
-        });
+    const factory = () => {
+        const ch = supabaseCloud
+            .channel(`sales_status:${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'sales',
+                    filter: `user_id=eq.${userId}`,
+                },
+                (payload) => {
+                    const updated = payload.new;
+                    if (!updated?.id) return;
+                    console.log(`[SalesSync] postgres_changes UPDATE sales: id=${updated.id} status=${updated.status}`);
+                    // Notificar para aplicar en IndexedDB local
+                    onStatusChange(updated.id, updated.status);
+                }
+            );
+        return ch;
+    };
+
+    const handle = subscribeResilient(factory, {
+        label: '[SalesSync status]',
+        onSubscribed: () => {
+            console.log('[SalesSync] ✅ postgres_changes sales activo — anulaciones se propagan en tiempo real');
+        },
+    });
 
     return () => {
-        if (salesStatusChannel) {
-            salesStatusChannel.unsubscribe();
-            salesStatusChannel = null;
-        }
+        handle.teardown();
     };
 }
 
 export function subscribeSalesRealtime(userId, onSaleReceived) {
     if (!userId) return () => {};
 
-    const ch = getSalesBroadcastChannel(userId);
-
-    const subscribeChannel = () => {
-        ch.subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-                salesBroadcastSubscribed = true;
-                console.log('[SalesSync] Canal Broadcast de ventas activo');
-            }
-            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                salesBroadcastSubscribed = false;
-                console.warn('[SalesSync] Canal de ventas desconectado, reintentando...');
-                setTimeout(() => {
-                    try {
-                        ch.unsubscribe().then(() => {
-                            subscribeChannel();
-                        }).catch(() => {
-                            subscribeChannel();
-                        });
-                    } catch (_) {
-                        subscribeChannel();
-                    }
-                }, 5000);
-            }
+    // Factory: crea SIEMPRE una instancia nueva del canal con sus handlers, y la
+    // publica como el canal cacheado de envío (broadcastNewSale usa esa referencia).
+    const factory = () => {
+        const ch = supabaseCloud.channel(`sales_live:${userId}`);
+        ch.on('broadcast', { event: 'new_sale' }, ({ payload }) => {
+            if (payload) onSaleReceived(payload);
+        }).on('broadcast', { event: 'void_sale' }, ({ payload }) => {
+            if (payload) onSaleReceived(payload);
+        }).on('broadcast', { event: 'cierre_marks' }, ({ payload }) => {
+            if (payload) applyCierreMarks(payload);
         });
+        salesBroadcastChannel = ch;
+        salesBroadcastUserId = userId;
+        salesBroadcastSubscribed = false;
+        return ch;
     };
 
-    ch.on('broadcast', { event: 'new_sale' }, ({ payload }) => {
-        if (payload) onSaleReceived(payload);
-    }).on('broadcast', { event: 'void_sale' }, ({ payload }) => {
-        if (payload) onSaleReceived(payload);
-    }).on('broadcast', { event: 'cierre_marks' }, ({ payload }) => {
-        if (payload) applyCierreMarks(payload);
+    const handle = subscribeResilient(factory, {
+        label: '[SalesSync]',
+        onSubscribed: () => {
+            salesBroadcastSubscribed = true;
+            console.log('[SalesSync] Canal Broadcast de ventas activo');
+        },
+        onClosed: () => { salesBroadcastSubscribed = false; },
     });
 
-    subscribeChannel();
-
     return () => {
-        ch.unsubscribe();
+        handle.teardown();
         salesBroadcastChannel = null;
         salesBroadcastUserId = null;
         salesBroadcastSubscribed = false;

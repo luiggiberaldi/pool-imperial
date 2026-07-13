@@ -37,3 +37,21 @@ function getSupabase() {
 }
 
 export const supabaseCloud = getSupabase();
+
+// Mantener autenticado el WebSocket de Realtime tras la expiración horaria del
+// access token. Sin esto, al caducar el token los canales entran en CHANNEL_ERROR
+// permanente y disparan la tormenta de reconexión. setAuth re-inyecta el token
+// nuevo en la conexión realtime existente.
+try {
+    supabaseCloud.auth.onAuthStateChange((event, session) => {
+        if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && session?.access_token) {
+            try {
+                supabaseCloud.realtime.setAuth(session.access_token);
+            } catch (e) {
+                console.warn('[SupabaseAuth] realtime.setAuth falló:', e?.message);
+            }
+        }
+    });
+} catch (e) {
+    console.warn('[SupabaseAuth] No se pudo enganchar el refresco de auth realtime:', e?.message);
+}
