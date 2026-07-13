@@ -13,6 +13,15 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
         const userId = useAuthStore.getState().cloudSession?.user?.id;
         const channelName = userId ? `pool_tables_sync_v2:${userId}` : 'pool_tables_sync_v2';
 
+        // Filtro server-side por dueño: sin esto, el WAL de realtime empuja a este
+        // cliente CADA cambio de fila de TODAS las cuentas del proyecto (RLS solo
+        // filtra en lectura, no el stream). Con el filtro, Postgres solo serializa
+        // y envía las filas propias → recorta el Realtime Egress drásticamente.
+        // Fallback sin filtro si aún no hay userId (no rompe el arranque).
+        const ownerFilter = (table) => userId
+            ? { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` }
+            : { event: '*', schema: 'public', table };
+
         const debouncedSync = () => {
             clearTimeout(get()._syncTimeout);
             const t = setTimeout(() => get().syncTablesAndSessions(), 300);
@@ -226,7 +235,7 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
                     return { paidElapsedOffsets: rest };
                 });
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'table_sessions' }, (payload) => {
+            .on('postgres_changes', ownerFilter('table_sessions'), (payload) => {
                 console.log("[REALTIME] table_sessions change received:", payload);
                 if (payload.eventType === 'UPDATE') {
                     const newStatus = payload.new?.status;
@@ -267,7 +276,7 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
                 }
                 debouncedSync();
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, (payload) => {
+            .on('postgres_changes', ownerFilter('tables'), (payload) => {
                 console.log("[REALTIME] tables change received:", payload);
                 if (payload.eventType === 'UPDATE') {
                     set(state => ({ tables: state.tables.map(t => t.id === payload.new.id ? payload.new : t) }));
@@ -278,7 +287,7 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
                 }
                 debouncedSync();
             })
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'pool_config' }, (payload) => {
+            .on('postgres_changes', ownerFilter('pool_config'), (payload) => {
                 console.log("[REALTIME] pool_config change received:", payload);
                 if (payload.eventType === 'UPDATE' && payload.new) {
                     set(state => ({

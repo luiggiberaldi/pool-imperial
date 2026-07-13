@@ -165,12 +165,16 @@ export const useCashStore = create((set, get) => ({
                 console.log('[Caja] Broadcast recibido — sincronizando...');
                 await get().syncCashSession(true);
             })
-            // postgres_changes: backup por si la tabla está en la publicación de realtime
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'cash_sessions',
-            }, async () => {
+            // postgres_changes: backup por si la tabla está en la publicación de realtime.
+            // Filtro por dueño: sin él, el WAL de realtime empuja los cambios de caja
+            // de TODAS las cuentas del proyecto (RLS solo filtra lectura). Con el filtro,
+            // solo llegan las filas propias → menos Realtime Egress. Fallback sin filtro
+            // si aún no hay cachedUserId.
+            .on('postgres_changes',
+                cachedUserId
+                    ? { event: '*', schema: 'public', table: 'cash_sessions', filter: `user_id=eq.${cachedUserId}` }
+                    : { event: '*', schema: 'public', table: 'cash_sessions' },
+                async () => {
                 console.log('[Caja] DB change recibido — sincronizando...');
                 await get().syncCashSession(true);
             })
