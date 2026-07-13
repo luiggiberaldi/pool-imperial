@@ -16,6 +16,14 @@ import { broadcastNewSale } from './salesSyncService';
 const SALES_KEY = 'bodega_sales_v1';
 const EPSILON = 1; // 1 peso colombiano de tolerancia (antes era $0.01)
 
+// Guarda anti-doble-cobro de mesas. Candado en memoria por clave de cobro
+// (sesión + asiento + monto + tipo) para bloquear reenvíos concurrentes antes
+// de que la venta se persista. Los duplicados ya persistidos los detecta la
+// verificación contra la lista local de ventas (ver processSaleTransaction).
+const _tableCheckoutLocks = new Map(); // dedupKey -> timestamp ms
+const TABLE_CHECKOUT_LOCK_TTL = 20000; // ventana del candado en vuelo
+const TABLE_DUP_WINDOW_MS = 10 * 60 * 1000; // ventana para detectar duplicado ya cobrado
+
 // UUID v4 regex - productos sin formato UUID no se envían al RPC de Supabase
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isValidUUID = (id) => UUID_REGEX.test(id);
@@ -34,6 +42,8 @@ export async function processSaleTransaction({
     meseroNombre = null,
     tableName = null,
     tableSessionId = null,
+    seatId = null,
+    isPartial = false,
     splitMeta = null,
     skipStockDeduction = false,
     // Alias de compatibilidad (llamadores legacy pueden pasar cartTotalUsd)
@@ -53,21 +63,57 @@ export async function processSaleTransaction({
 
     if (cart.length === 0) return { success: false, error: 'Carrito vacío' };
 
+    // ── Guarda anti-doble-cobro (solo ventas de mesa con monto > 0) ──
+    // Antes no había idempotencia por sesión: el idempotency_key era aleatorio por
+    // llamada y el RPC insertaba sin verificar, así que la misma mesa podía cobrarse
+    // varias veces a precio completo (agravado por el lag de sync que la hacía
+    // reaparecer como "por cobrar"). La clave distingue asiento y tipo (abono/final)
+    // para NO bloquear cobros legítimos por-asiento ni abonos parciales.
+    let _lockKey = null;
+    if (tableSessionId && totalCOP > EPSILON) {
+        _lockKey = `${tableSessionId}|${seatId || 'ALL'}|${isPartial ? 'P' : 'F'}|${Math.round(totalCOP)}`;
+        const prevTs = _tableCheckoutLocks.get(_lockKey);
+        if (prevTs && (Date.now() - prevTs) < TABLE_CHECKOUT_LOCK_TTL) {
+            return { success: false, duplicate: true, error: 'Hay un cobro en curso para esta mesa. Espera unos segundos y verifica antes de reintentar.' };
+        }
+        try {
+            const priorSales = await storageService.getItem(SALES_KEY, []);
+            const nowMs = Date.now();
+            const dup = priorSales.find(s =>
+                s.tableSessionId === tableSessionId &&
+                (s.seatId || null) === (seatId || null) &&
+                (s.status === 'COMPLETADA' || s.status === 'PENDIENTE_SYNC' || s.status === 'PENDIENTE_VERIFICACION') &&
+                Math.abs(Number(s.totalCop ?? s.totalUsd ?? 0) - Number(totalCOP)) <= EPSILON &&
+                s.timestamp && (nowMs - new Date(s.timestamp).getTime()) < TABLE_DUP_WINDOW_MS
+            );
+            if (dup) {
+                return { success: false, duplicate: true, error: `Esta mesa ya fue cobrada${dup.saleNumber ? ` (venta #${dup.saleNumber})` : ''} hace un momento. Si necesitas cobrarla de nuevo, libera la mesa primero.` };
+            }
+        } catch (_) { /* si falla la lectura local, no bloquear el cobro */ }
+        _tableCheckoutLocks.set(_lockKey, Date.now());
+    }
+
     const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
     const totalPaid = sumR(payments.map(p => p.amountUsd));
     const remaining = round2(Math.max(0, subR(totalCOP, totalPaid)));
 
     console.log('[checkoutProcessor] totalCOP:', totalCOP, 'totalPaid:', totalPaid, 'remaining:', remaining, 'EPSILON:', EPSILON);
+    // Liberar el candado de mesa en cualquier salida temprana por validación,
+    // para no bloquear un reintento legítimo del cajero tras corregir el error.
+    const releaseLock = () => { if (_lockKey) _tableCheckoutLocks.delete(_lockKey); };
     if (!selectedCustomer && remaining > EPSILON) {
         console.warn('[checkoutProcessor] FIADO triggered! remaining:', remaining, '| cartTotal:', totalCOP, '- totalPaid:', totalPaid);
+        releaseLock();
         return { success: false, error: 'Se requiere cliente para ventas fiadas' };
     }
 
     if (isNaN(totalCOP) || totalCOP < 0 || isNaN(totalPaid) || totalPaid < 0) {
+        releaseLock();
         return { success: false, error: 'Integridad matemática comprometida' };
     }
 
     if (totalCOP <= EPSILON) {
+        releaseLock();
         return { success: false, error: 'No se pueden generar ventas de $ 0' };
     }
 
@@ -75,6 +121,7 @@ export async function processSaleTransaction({
     if (selectedCustomerId) {
         const saldoFavorUsed = payments.filter(p => p.methodId === 'saldo_favor').reduce((sum, p) => sum + p.amountUsd, 0);
         if (saldoFavorUsed > (selectedCustomer?.favor || 0) + EPSILON) {
+            releaseLock();
             return { success: false, error: 'Saldo a favor insuficiente' };
         }
     }
@@ -196,6 +243,7 @@ export async function processSaleTransaction({
         meseroNombre: capitalizeName(meseroNombre) || null,
         tableName: tableName || null,
         tableSessionId: tableSessionId || null,
+        seatId: seatId || null,
         // Campos de items — priceUsd almacena precio COP (campo heredado)
         items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costUsd: i.costUsd || 0, isWeight: i.isWeight, taxType: i.taxType || 'exento', taxMode: i.taxMode || 'inclusive', isTip: i.isTip || false, isServiceCharge: i.isServiceCharge || false })),
         cartSubtotalUsd: subtotalCOP,   // heredado — ahora COP
@@ -230,6 +278,10 @@ export async function processSaleTransaction({
     const finalPersistedSale = Object.freeze({ ...sale, saleNumber });
 
     await storageService.setItem(SALES_KEY, [finalPersistedSale, ...existingSales]);
+
+    // La venta ya está persistida: liberar el candado en vuelo. A partir de aquí,
+    // cualquier reintento se detecta como duplicado contra la lista local de ventas.
+    if (_lockKey) _tableCheckoutLocks.delete(_lockKey);
 
     // Sincronizar a otros dispositivos vía Broadcast P2P
     supabase.auth.getSession().then(({ data: { session } }) => {

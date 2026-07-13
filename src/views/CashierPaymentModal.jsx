@@ -366,11 +366,21 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                 meseroNombre: meseroUser?.name || meseroUser?.nombre || null,
                 tableName: table?.name || null,
                 tableSessionId: session?.id || null,
+                seatId: seatId || null,
+                isPartial: isAnyAbono,
                 skipStockDeduction: true,
                 tasaCop: tasaCop
             });
 
             if (!saleResult.success) {
+                if (saleResult.duplicate) {
+                    // Doble cobro evitado: informar con claridad y cerrar el modal para
+                    // que el cajero verifique el estado real de la mesa.
+                    showToast('Cobro duplicado evitado', saleResult.error, 'warning');
+                    setIsProcessing(false);
+                    onClose();
+                    return;
+                }
                 showToast('Error', saleResult.error || 'Fallo registrando en el motor de ventas', 'error');
                 setIsProcessing(false);
                 return;
