@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { FinancialEngine } from '../core/FinancialEngine';
+import { formatGameHours } from './calculatorUtils';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -687,7 +688,7 @@ export async function generateDailyClosePDF({
         doc.text('Horas Facturadas (Cobro)', M + 2, y + 4.2);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...INK);
-        doc.text(`${gameStats.totalHours.toFixed(1)} h`, M + halfWidth - 2, y + 4.2, { align: 'right' });
+        doc.text(`${formatGameHours(gameStats.totalHours)}`, M + halfWidth - 2, y + 4.2, { align: 'right' });
         
         doc.setDrawColor(...RULE);
         doc.setLineWidth(0.2);

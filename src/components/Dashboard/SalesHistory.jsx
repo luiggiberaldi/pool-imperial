@@ -24,8 +24,8 @@ export default function SalesHistory({
             <div className="mb-20 mt-4">
                 <EmptyState
                     icon={Receipt}
-                    title="Aún no hay ventas"
-                    description="Las ventas recientes aparecerán aquí una vez que comiences a facturar."
+                    title="No hay ventas en este turno"
+                    description="Las ventas del turno actual aparecerán aquí una vez que comiences a facturar."
                 />
             </div>
         );

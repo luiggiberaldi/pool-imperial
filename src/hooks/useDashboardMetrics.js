@@ -173,9 +173,12 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
             });
         }
         return sales
-            .filter(s => validTypes.includes(s.tipo) && s.status !== 'ANULADA')
+            .filter(s => {
+                if (!validTypes.includes(s.tipo) || s.status === 'ANULADA') return false;
+                return activeCashSession ? isInSessionPeriod(s) : isToday(s);
+            })
             .slice(0, 7);
-    }, [sales, selectedChartDate, today]);
+    }, [sales, selectedChartDate, today, activeCashSession, isInSessionPeriod, isToday]);
 
     const weekData = useMemo(() => Array.from({ length: 7 }, (_, i) => {
         const d = new Date();

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent, Trash2 } from 'lucide-react';
+import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent, Trash2, AlertTriangle } from 'lucide-react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
-import { formatCop, formatUsd } from '../utils/calculatorUtils';
+import { formatCop, formatUsd, formatGameHours } from '../utils/calculatorUtils';
 import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
 import { generateSalesReportPDF, generateArticlesReportPDF, generateCierresListReportPDF } from '../utils/salesReportGenerator';
@@ -21,6 +21,7 @@ import { storageService } from '../utils/storageService';
 
 
 const RANGE_OPTIONS = [
+    { id: 'current_shift', label: 'Turno Actual' },
     { id: 'today', label: 'Hoy' },
     { id: 'yesterday', label: 'Ayer' },
     { id: 'week', label: 'Esta Semana' },
@@ -34,6 +35,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
     const { loadCart } = useCart();
     const { role } = useAuthStore();
     const isAdmin = role === 'ADMIN';
+    const activeCashSession = useCashStore(state => state.activeCashSession);
     const [cierreToDelete, setCierreToDelete] = useState(null);
     const [activeTab, setActiveTab] = useState('metrics');
     const [selectedRange, setSelectedRange] = useState('week');
@@ -437,6 +439,17 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                 ))}
             </div>
 
+            {/* Warning when Current Shift is selected but cash is closed */}
+            {selectedRange === 'current_shift' && !activeCashSession && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-4 flex items-center gap-3 mt-3 mb-1 animate-in fade-in duration-200">
+                    <AlertTriangle className="text-amber-500 shrink-0" size={20} />
+                    <div>
+                        <p className="text-sm font-bold text-slate-700 dark:text-white">La caja está cerrada</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Abre la caja desde el panel principal para iniciar un turno y ver el acumulado de ventas del turno actual.</p>
+                    </div>
+                </div>
+            )}
+
             {/* Custom Date Range */}
             {selectedRange === 'custom' && (
                 <div className="flex flex-col sm:flex-row gap-3 bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
@@ -481,7 +494,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                 <div className="bg-emerald-50/40 dark:bg-emerald-950/10 rounded-xl p-3 border border-emerald-100/30 dark:border-emerald-900/20 flex flex-col">
                                     <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">Tiempo de Juego Facturado</span>
                                     <span className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                                        {gameStats.totalHours.toFixed(1)} h <span className="text-xs font-medium text-slate-400">({formatCop(gameStats.hoursRevenue)})</span>
+                                        {formatGameHours(gameStats.totalHours)} <span className="text-xs font-medium text-slate-400">({formatCop(gameStats.hoursRevenue)})</span>
                                     </span>
                                 </div>
                                 <div className="bg-amber-50/40 dark:bg-amber-950/10 rounded-xl p-3 border border-amber-100/30 dark:border-amber-900/20 flex flex-col">

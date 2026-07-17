@@ -7,12 +7,23 @@ import { getLocalISODate } from './dateHelpers';
  * NOTA: Los campos totalUsd en las ventas ahora almacenan valores COP.
  * El parámetro bcvRate ya no se usa — se mantiene en la firma por compatibilidad.
  */
-export function calculateReportsData(allSales, from, to, _bcvRate, products, tasaCop) {
+export function calculateReportsData(allSales, from, to, _bcvRate, products, tasaCop, selectedRange, activeCashSession) {
+    const sessionOpenedAt = activeCashSession?.opened_at || null;
+
+    const isInRange = (s) => {
+        if (selectedRange === 'current_shift') {
+            if (s.cajaCerrada === true) return false;
+            if (!sessionOpenedAt) return false;
+            return s.timestamp >= sessionOpenedAt;
+        }
+        const dateStr = getLocalISODate(new Date(s.timestamp));
+        return dateStr >= from && dateStr <= to;
+    };
+
     // Ventas de Mercancía (para Totales, Profit, Top Productos)
     const salesForStats = allSales.filter(s => {
         if (s.status === 'ANULADA' || (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA')) return false;
-        const dateStr = getLocalISODate(new Date(s.timestamp));
-        return dateStr >= from && dateStr <= to;
+        return isInRange(s);
     });
 
     // Flujo de Dinero (incluye pagos de deudas y proveedores)
@@ -20,14 +31,12 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
         if (s.status === 'ANULADA') return false;
         if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'COBRO_DEUDA' && s.tipo !== 'PAGO_PROVEEDOR') return false;
         if (s.tipo === 'PAGO_PROVEEDOR' && s.afectaCaja === false) return false;
-        const dateStr = getLocalISODate(new Date(s.timestamp));
-        return dateStr >= from && dateStr <= to;
+        return isInRange(s);
     });
 
     const historySales = allSales.filter(s => {
         if (s.tipo === 'AJUSTE_ENTRADA' || s.tipo === 'AJUSTE_SALIDA') return false;
-        const dateStr = getLocalISODate(new Date(s.timestamp));
-        return dateStr >= from && dateStr <= to;
+        return isInRange(s);
     });
 
     // totalUsd ahora almacena COP en Pool Imperial

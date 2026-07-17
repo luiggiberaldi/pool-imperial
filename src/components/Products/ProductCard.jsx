@@ -164,13 +164,37 @@ export default function ProductCard({
                                 <p className="text-[10px] sm:text-[11px] font-extrabold text-slate-500 dark:text-slate-400 mt-1.5 leading-none">
                                     ≈ ${(finalPrice / (tasaCop || 4150)).toFixed(2)} USD
                                 </p>
+                                {(() => {
+                                    const taxLabel = p.taxType === 'iva_19'
+                                        ? 'IVA 19%'
+                                        : p.taxType === 'impoconsumo_8'
+                                            ? 'Impo. 8%'
+                                            : 'Exento';
+                                    const taxBadgeColor = p.taxType === 'iva_19'
+                                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400 border-blue-100 dark:border-blue-900/30'
+                                        : p.taxType === 'impoconsumo_8'
+                                            ? 'bg-violet-50 text-violet-600 dark:bg-violet-950/20 dark:text-violet-400 border-violet-100 dark:border-violet-900/30'
+                                            : 'bg-slate-50 text-slate-500 dark:bg-slate-800/40 dark:text-slate-400 border-slate-100 dark:border-slate-800/50';
+                                    return (
+                                        <div className="mt-2 flex items-center gap-1.5">
+                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border leading-none ${taxBadgeColor}`}>
+                                                {taxLabel}
+                                            </span>
+                                            {taxRate > 0 && (
+                                                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 leading-none">
+                                                    {p.taxMode === 'exclusive' ? '(Base + Imp)' : '(Imp Inc.)'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                                 {isExclusiveTax && (
                                     <p className="text-[9px] font-bold text-slate-450 dark:text-slate-500 mt-1.5 leading-none">
                                         Base: {formatCop(p.priceUsdt)} + {p.taxType === 'iva_19' ? `${useTablesStore.getState().config?.taxRateIva ?? 19}% IVA` : `${useTablesStore.getState().config?.taxRateImpoconsumo ?? 8}% Impo.`}
                                     </p>
                                 )}
                                 {p.unit === 'paquete' && p.sellByUnit && (
-                                    <p className="text-[10px] sm:text-xs font-bold text-indigo-500 dark:text-indigo-400 mt-0.5 flex items-center gap-0.5">
+                                    <p className="text-[10px] sm:text-xs font-bold text-indigo-500 dark:text-indigo-400 mt-1.5 flex items-center gap-0.5">
                                         <Layers size={10} />
                                         {formatCop(p.unitPriceUsd ?? p.priceUsdt / (p.unitsPerPackage || 1))} / ud
                                     </p>
@@ -302,10 +326,10 @@ export default function ProductCard({
             </div>
 
             {/* Actions */}
-            <div className="flex border-t border-slate-100 dark:border-slate-800">
-                <button onClick={onPrint} className="flex-1 py-1.5 flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-brand hover:bg-brand/10 transition-colors" title="Imprimir Etiqueta"><Printer size={12} /></button>
-                {!readOnly && <button onClick={() => onEdit(p)} className="flex-1 py-1.5 flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"><Pencil size={12} /></button>}
-                {!readOnly && <button onClick={() => onDelete(p.id)} className="flex-1 py-1.5 flex items-center justify-center text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"><Trash2 size={12} /></button>}
+            <div className="flex border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 divide-x divide-slate-100 dark:divide-slate-800">
+                <button onClick={onPrint} className="flex-1 py-2.5 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-brand hover:bg-brand/10 transition-colors" title="Imprimir Etiqueta"><Printer size={14} /></button>
+                {!readOnly && <button onClick={() => onEdit(p)} className="flex-1 py-2.5 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors" title="Editar Producto"><Pencil size={14} /></button>}
+                {!readOnly && <button onClick={() => onDelete(p.id)} className="flex-1 py-2.5 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors" title="Eliminar Producto"><Trash2 size={14} /></button>}
             </div>
         </div>
     );

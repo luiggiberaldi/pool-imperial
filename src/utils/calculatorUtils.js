@@ -68,3 +68,17 @@ export const formatVzlaPhone = (raw) => {
     if (digits.startsWith('58')) return '57' + digits.slice(2);
     return '57' + digits;
 };
+
+export function formatGameHours(hours) {
+    if (!hours || hours <= 0) return '0 h';
+    const totalMinutes = Math.round(hours * 60);
+    if (totalMinutes < 1) {
+        return '< 1 min';
+    }
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    if (h > 0) {
+        return m > 0 ? `${h}h ${m}m` : `${h} h`;
+    }
+    return `${m} min`;
+}

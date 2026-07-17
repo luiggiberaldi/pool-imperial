@@ -8,7 +8,7 @@
  * Open Drawer: [27, 112, 0, 50, 250]
  */
 
-import { capitalizeName } from '../utils/calculatorUtils';
+import { capitalizeName, formatGameHours } from '../utils/calculatorUtils';
 import { lookupPrinter } from './printerDatabase';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart, getRoundedLibreMinutes } from '../utils/tableBillingEngine';
@@ -980,7 +980,7 @@ export async function printDailyCloseEscPos({
     if (gameStats.totalHours > 0 || gameStats.totalRounds > 0) {
         p.align(1).bold(true).text('ACTIVIDAD DE JUEGO').newline().bold(false).align(0);
         if (gameStats.totalHours > 0) {
-            p.row('Horas de Juego:', `${gameStats.totalHours.toFixed(1)} h`, W);
+            p.row('Horas de Juego:', formatGameHours(gameStats.totalHours), W);
             p.row('Recaudo por Tiempo:', formatCOP(gameStats.hoursRevenue), W);
         }
         if (gameStats.totalRounds > 0) {
