@@ -468,7 +468,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                         <StatCard icon={ShoppingBag} label="Ventas" value={salesForStats.length} color="emerald" />
                         <StatCard icon={DollarSign} label="Ingresos (Neto)" value={formatCop(netRevenue)} sub={`Bruto: ${formatCop(totalUsd)}`} color="blue" />
                         <StatCard icon={TrendingUp} label="Ganancia" value={formatCop(profit)} sub={`≈ ${formatUsd(profitUsdReal)}`} color="indigo" />
-                        <StatCard icon={Package} label="Artículos" value={totalItems} color="amber" />
+                        <StatCard icon={Package} label="Artículos" value={totalItems % 1 === 0 ? totalItems : Number(totalItems.toFixed(2))} color="amber" />
                     </div>
 
                     {/* Game Metrics */}
@@ -485,7 +485,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                     </span>
                                 </div>
                                 <div className="bg-amber-50/40 dark:bg-amber-950/10 rounded-xl p-3 border border-amber-100/30 dark:border-amber-900/20 flex flex-col">
-                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">Partidas Jugadas (Piñas)</span>
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">Jugadas Facturadas</span>
                                     <span className="text-base font-black text-amber-600 dark:text-amber-400 mt-1">
                                         {gameStats.totalRounds} u <span className="text-xs font-medium text-slate-400">({formatCop(gameStats.roundsRevenue)})</span>
                                     </span>

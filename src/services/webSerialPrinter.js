@@ -984,8 +984,8 @@ export async function printDailyCloseEscPos({
             p.row('Recaudo por Tiempo:', formatCOP(gameStats.hoursRevenue), W);
         }
         if (gameStats.totalRounds > 0) {
-            p.row('Partidas (Pinas):', `${gameStats.totalRounds} u`, W);
-            p.row('Recaudo por Partidas:', formatCOP(gameStats.roundsRevenue), W);
+            p.row('Jugadas Facturadas:', `${gameStats.totalRounds} u`, W);
+            p.row('Recaudo por Jugadas:', formatCOP(gameStats.roundsRevenue), W);
         }
         p.bold(true).row('Total Recaudo Mesas:', formatCOP(gameStats.totalRevenue), W).bold(false);
         p.line('-', W);

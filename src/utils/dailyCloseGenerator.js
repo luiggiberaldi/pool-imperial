@@ -708,12 +708,12 @@ export async function generateDailyClosePDF({
         doc.line(M, y + 6, M + halfWidth, y + 6);
         y += 6;
 
-        // --- Columna Derecha: Partidas (Piñas) ---
+        // --- Columna Derecha: Actividad de Jugadas ---
         y = startYGame;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8.5);
         doc.setTextColor(...BLUE);
-        doc.text('ACTIVIDAD DE PARTIDAS (PIÑAS)', M + halfWidth + 10, y);
+        doc.text('ACTIVIDAD DE JUGADAS', M + halfWidth + 10, y);
         y += 5;
 
         doc.setFillColor(...BG_LIGHT);
@@ -725,11 +725,11 @@ export async function generateDailyClosePDF({
         doc.text('Valor', M + halfWidth * 2 + 7, y + 4.2, { align: 'right' });
         y += 6;
 
-        // Fila 1: Partidas facturadas
+        // Fila 1: Jugadas facturadas
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
         doc.setTextColor(...BODY);
-        doc.text('Jugadas (Piñas) Facturadas', M + halfWidth + 12, y + 4.2);
+        doc.text('Jugadas Facturadas', M + halfWidth + 12, y + 4.2);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...INK);
         doc.text(`${gameStats.totalRounds} u`, M + halfWidth * 2 + 7, y + 4.2, { align: 'right' });
