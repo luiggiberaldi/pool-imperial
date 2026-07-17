@@ -11,7 +11,7 @@
 import { capitalizeName } from '../utils/calculatorUtils';
 import { lookupPrinter } from './printerDatabase';
 import { useTablesStore } from '../hooks/store/useTablesStore';
-import { formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart } from '../utils/tableBillingEngine';
+import { formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart, getRoundedLibreMinutes } from '../utils/tableBillingEngine';
 import { round2 } from '../utils/dinero';
 import { FinancialEngine } from '../core/FinancialEngine';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
@@ -346,9 +346,9 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
                 const isLibreShared = table.type === 'POOL' && session.game_mode === 'NORMAL' && totalHours === 0 && !seatHasHours;
                 if (isLibreShared && elapsed > 0) {
                     const ph = config?.pricePerHour || 0;
-                    const billableMinutes = Math.max(0, elapsed - (hoursOffset * 60));
-                    const billableHours = billableMinutes / 60;
-                    p.row(`${formatElapsedTime(elapsed)} x ${formatCOP(ph)}`, `${formatCOP(billableHours * ph)}`, W);
+                    const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset);
+                    const billableHours = billedMinutes / 60;
+                    p.row(`${formatElapsedTime(billedMinutes)} x ${formatCOP(ph)}`, `${formatCOP(billableHours * ph)}`, W);
                 }
                 if (breakdown.sharedItems.length > 0) {
                     breakdown.sharedItems.forEach(i => {
@@ -430,11 +430,11 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
             const pricePerHour = config?.pricePerHour || 0;
             p.bold(true).text('Tiempo de Mesa').newline().bold(true);
             if (isLibre) {
-                const billableMinutes = Math.max(0, elapsed - (hoursOffset * 60));
-                const billableHours = billableMinutes / 60;
+                const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset);
+                const billableHours = billedMinutes / 60;
                 const fullCost = round2(billableHours * pricePerHour);
                 const paidCost = round2(hoursOffset * pricePerHour);
-                p.row(`${formatElapsedTime(elapsed)} x ${formatCOP(pricePerHour)}`, `${formatCOP(fullCost)}`, W);
+                p.row(`${formatElapsedTime(billedMinutes)} x ${formatCOP(pricePerHour)}`, `${formatCOP(fullCost)}`, W);
                 if (hoursOffset > 0) {
                     p.row(`Pagado (${formatElapsedTime(hoursOffset * 60)})`, `-${formatCOP(paidCost)}`, W);
                 }

@@ -64,6 +64,26 @@ export function calculateElapsedTimePrecise(startTimeISO) {
 }
 
 /**
+ * Retorna los minutos facturables de tiempo libre según las reglas:
+ *   - Mínimo de 30 minutos si no hay horas pagadas previamente (hoursOffset === 0).
+ *   - Redondeo hacia arriba en bloques de 15 minutos.
+ */
+export function getRoundedLibreMinutes(elapsedMinutes, hoursOffset = 0) {
+    const rawMinutes = Math.max(0, elapsedMinutes - (hoursOffset * 60));
+    if (rawMinutes <= 0) return 0;
+
+    // Redondear al siguiente bloque de 15 minutos (ej. 31 min -> 45 min)
+    let billedMinutes = Math.ceil(rawMinutes / 15) * 15;
+
+    // Cobrar tarifa mínima de 30 minutos si es una sesión limpia (sin pagos parciales previos)
+    if (hoursOffset === 0 && billedMinutes < 30) {
+        billedMinutes = 30;
+    }
+
+    return billedMinutes;
+}
+
+/**
  * Calcula el desglose de costos de una sesión (piñas + horas por separado).
  * Soporta modo mixto: cualquier sesión puede tener piñas Y horas simultáneamente.
  * Todos los valores son en COP (Pesos Colombianos).
@@ -100,8 +120,8 @@ export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, 
     let libreCost = 0;
     if (isLibre && elapsedMinutes > 0) {
         const pricePerHour = config.pricePerHour || 0;
-        const billableMinutes = Math.max(0, elapsedMinutes - (hoursOffset * 60));
-        const billableHours = billableMinutes / 60;
+        const billedMinutes = getRoundedLibreMinutes(elapsedMinutes, hoursOffset);
+        const billableHours = billedMinutes / 60;
         const taxed = computeItemTax(pricePerHour, config.tableTaxType || 'exento', config.tableTaxMode || 'inclusive');
         libreCost = round2(billableHours * taxed.total);
         taxAmount += round2(taxed.tax * billableHours);
@@ -389,11 +409,11 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 });
             }
             if (seatTimeCost.libreCost > 0) {
-                const billableMinutes = Math.max(0, tableCheckoutData.elapsed - (hoursOff * 60));
-                const billableHours = billableMinutes / 60;
+                const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff);
+                const billableHours = billedMinutes / 60;
                 syntheticCart.push({
                     id: crypto.randomUUID(),
-                    name: `Tiempo libre ${seatLabel} (${formatElapsedTime(Math.round(billableMinutes))})`,
+                    name: `Tiempo libre ${seatLabel} (${formatElapsedTime(Math.round(billedMinutes))})`,
                     priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
                     qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
                     taxType: config.tableTaxType || 'exento',
@@ -463,11 +483,11 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                     });
                 }
                 if (seatBd.timeCost.libreCost > 0) {
-                    const billableMinutes = Math.max(0, tableCheckoutData.elapsed - (hoursOff * 60));
-                    const billableHours = billableMinutes / 60;
+                    const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff);
+                    const billableHours = billedMinutes / 60;
                     syntheticCart.push({
                         id: crypto.randomUUID(),
-                        name: `Tiempo libre ${seatLabel} (${formatElapsedTime(Math.round(billableMinutes))})`,
+                        name: `Tiempo libre ${seatLabel} (${formatElapsedTime(Math.round(billedMinutes))})`,
                         priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
                         qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
                         taxType: config.tableTaxType || 'exento',
@@ -518,11 +538,11 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
             });
         }
         if (!isPartial && breakdown.libreCost > 0) {
-            const billableMinutes = Math.max(0, tableCheckoutData.elapsed - (hoursOff * 60));
-            const billableHours = billableMinutes / 60;
+            const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff);
+            const billableHours = billedMinutes / 60;
             syntheticCart.push({
                 id: crypto.randomUUID(),
-                name: `Tiempo libre ${tableName} (${formatElapsedTime(Math.round(billableMinutes))})`,
+                name: `Tiempo libre ${tableName} (${formatElapsedTime(Math.round(billedMinutes))})`,
                 priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
                 qty: round2(billableHours), costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
                 taxType: config.tableTaxType || 'exento',
