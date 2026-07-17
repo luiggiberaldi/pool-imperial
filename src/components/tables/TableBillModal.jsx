@@ -170,7 +170,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
 
 
     const priorAbonoNetTotal = (() => {
-        if (isPartial) return 0; // En abonos parciales no hay previos que descontar
+        if (isPartial || data?.seatId) return 0; // En abonos parciales o cobros por asiento no hay previos que descontar
         if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
         try {
             const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();

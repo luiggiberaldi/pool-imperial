@@ -176,7 +176,7 @@ export function TableQueuePanel({ onCheckoutTable }) {
                     };
 
                     let priorAbonoNetTotal = 0;
-                    if (session.notes && session.notes.includes('|||HISTORIAL_ABONOS:')) {
+                    if (!isAnyAbono && session.notes && session.notes.includes('|||HISTORIAL_ABONOS:')) {
                         try {
                             const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
                             const list = JSON.parse(histStr);

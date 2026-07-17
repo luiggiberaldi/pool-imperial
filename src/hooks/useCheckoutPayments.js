@@ -44,7 +44,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
 
     // ── Detectar abonos previos de la sesión de mesa ──
     const priorAbonoTotal = useMemo(() => {
-        if (!tableContext || tableContext.isPartial) return 0; // En abonos parciales no hay previos
+        if (!tableContext || tableContext.isPartial || tableContext.seatId) return 0; // En abonos parciales o cobros por asiento no hay previos
         const notes = tableContext.session?.notes || '';
         if (!notes.includes('|||HISTORIAL_ABONOS:')) return 0;
         try {
