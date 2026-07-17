@@ -24,6 +24,8 @@ export function BillClassicBreakdown({
     discountPopoverItem, setDiscountPopoverItem,
     discountCustomValue, setDiscountCustomValue,
     products,
+    isPartial = false,
+    grandTotal = 0,
 }) {
     const taxRate = config?.tableTaxType === 'iva_19'
         ? (config?.taxRateIva ?? 19) / 100
@@ -36,6 +38,31 @@ export function BillClassicBreakdown({
 
     return (
         <>
+        {/* Abono Parcial Solicitado */}
+        {isPartial && (
+            <div className="bg-sky-50 dark:bg-sky-955/20 border border-sky-100 dark:border-sky-900/40 rounded-2xl overflow-hidden mt-1 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-sky-100 dark:border-sky-900/30">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-sky-600 dark:text-sky-400">
+                        <circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>
+                    </svg>
+                    <p className="text-[10px] font-black text-sky-600 dark:text-sky-400 uppercase tracking-wider">
+                        Abono Solicitado
+                    </p>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                    <div>
+                        <p className="text-sm font-bold text-slate-700 dark:text-white">
+                            Abono por Monto Libre
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Se abonará al saldo pendiente de la mesa</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-base font-black text-sky-600 dark:text-sky-450">{formatCOP(grandTotal)}</p>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Piñas — visible si la sesión tiene piñas */}
         {fullBreakdown.hasPinas && (
             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-2xl overflow-hidden">
@@ -317,7 +344,7 @@ export function BillClassicBreakdown({
         })()}
 
         {/* Sin consumos */}
-        {(!currentItems || currentItems.length === 0) && timeCost === 0 && (
+        {!isPartial && (!currentItems || currentItems.length === 0) && timeCost === 0 && (
             <div className="py-8 text-center text-slate-400">
                 <Coffee size={28} className="mx-auto mb-2 opacity-40" />
                 <p className="text-sm">Sin consumos registrados</p>

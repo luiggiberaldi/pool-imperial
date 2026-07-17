@@ -170,6 +170,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
 
 
     const priorAbonoNetTotal = (() => {
+        if (isPartial) return 0; // En abonos parciales no hay previos que descontar
         if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
         try {
             const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
@@ -274,6 +275,8 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             discountPopoverItem={discountPopoverItem} setDiscountPopoverItem={setDiscountPopoverItem}
                             discountCustomValue={discountCustomValue} setDiscountCustomValue={setDiscountCustomValue}
                             products={allProducts}
+                            isPartial={isPartial}
+                            grandTotal={grandTotal}
                         />
                     )}
                     {/* ═══ END CLASSIC MODE ═══ */}
@@ -426,7 +429,14 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                                     {priorAbonoNetTotal > 0 ? ` − Abonos ${formatCOP(priorAbonoNetTotal)}` : ''}
                                 </p>
                             )}
-                            {!hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0 || includeServiceCharge || includeTip || priorAbonoNetTotal > 0) && (
+                            {isPartial && (
+                                <p className="text-[10px] text-white/60 mt-0.5">
+                                    Abono Solicitado {formatCOP(grandTotal)}
+                                    {includeServiceCharge ? ` + Servicio (${serviceChargePercent}%) ${formatCOP(serviceChargeAmount)}` : ''}
+                                    {includeTip ? ` + Propina (${tipPercent}%) ${formatCOP(tipAmount)}` : ''}
+                                </p>
+                            )}
+                            {!isPartial && !hasSeats && !isMixed && (timeCost > 0 || adjustedConsumption > 0 || discountAmountUsd > 0 || includeServiceCharge || includeTip || priorAbonoNetTotal > 0) && (
                                 <p className="text-[10px] text-white/60 mt-0.5">
                                     {timeCost > 0 ? `Tiempo ${formatCOP(timeCost)}` : ''}
                                     {timeCost > 0 && adjustedConsumption > 0 ? ' + ' : ''}
@@ -527,10 +537,10 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
                             )}
                             <button
                                 onClick={() => onProceedToPayment(discount, itemDiscounts, null, null, includeServiceCharge ? serviceChargePercent : 0, includeTip ? tipPercent : 0)}
-                                className={`flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg ${remainingToPay === 0 ? 'shadow-emerald-500/25' : 'shadow-orange-500/25'}`}
-                                style={{ background: remainingToPay === 0 ? 'linear-gradient(135deg, #10B981, #059669)' : 'linear-gradient(135deg, #F97316, #EA580C)' }}
+                                className={`flex-[2] py-3.5 rounded-xl text-sm font-black text-white flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg ${isPartial ? 'shadow-sky-500/25' : (remainingToPay === 0 ? 'shadow-emerald-500/25' : 'shadow-orange-500/25')}`}
+                                style={{ background: isPartial ? 'linear-gradient(135deg, #0EA5E9, #0284C7)' : (remainingToPay === 0 ? 'linear-gradient(135deg, #10B981, #059669)' : 'linear-gradient(135deg, #F97316, #EA580C)') }}
                             >
-                                {remainingToPay === 0 ? 'Liberar Mesa (Saldo $0)' : `Cobrar ${formatCOP(remainingToPay)}`}
+                                {isPartial ? `Cobrar Abono ${formatCOP(remainingToPay)}` : (remainingToPay === 0 ? 'Liberar Mesa (Saldo $0)' : `Cobrar ${formatCOP(remainingToPay)}`)}
                                 <ChevronRight size={16} />
                             </button>
                         </div>
