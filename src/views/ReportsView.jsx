@@ -95,6 +95,37 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         };
     }, [salesForStats]);
 
+    const gameStats = useMemo(() => {
+        let totalHours = 0;
+        let hoursRevenue = 0;
+        let totalRounds = 0;
+        let roundsRevenue = 0;
+
+        salesForStats.forEach(s => {
+            (s.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                const qty = Number(item.qty) || 0;
+                const revenue = (Number(item.priceUsd) || 0) * qty;
+
+                if (nameLower.startsWith('tiempo')) {
+                    totalHours += qty;
+                    hoursRevenue += revenue;
+                } else if (nameLower.startsWith('jugada')) {
+                    totalRounds += qty;
+                    roundsRevenue += revenue;
+                }
+            });
+        });
+
+        return {
+            totalHours,
+            hoursRevenue,
+            totalRounds,
+            roundsRevenue,
+            totalRevenue: hoursRevenue + roundsRevenue
+        };
+    }, [salesForStats]);
+
     // ── Aggregated product sales for "Por Artículo" tab ──
     const allProductsSold = useMemo(() => {
         const map = {};
@@ -439,6 +470,35 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                         <StatCard icon={TrendingUp} label="Ganancia" value={formatCop(profit)} sub={`≈ ${formatUsd(profitUsdReal)}`} color="indigo" />
                         <StatCard icon={Package} label="Artículos" value={totalItems} color="amber" />
                     </div>
+
+                    {/* Game Metrics */}
+                    {(gameStats.totalHours > 0 || gameStats.totalRounds > 0) && (
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm mt-4">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1.5">
+                                <Clock size={14} className="text-indigo-500" /> Actividad de Juego (Mesas y Partidas)
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="bg-emerald-50/40 dark:bg-emerald-950/10 rounded-xl p-3 border border-emerald-100/30 dark:border-emerald-900/20 flex flex-col">
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">Tiempo de Juego Facturado</span>
+                                    <span className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                                        {gameStats.totalHours.toFixed(1)} h <span className="text-xs font-medium text-slate-400">({formatCop(gameStats.hoursRevenue)})</span>
+                                    </span>
+                                </div>
+                                <div className="bg-amber-50/40 dark:bg-amber-950/10 rounded-xl p-3 border border-amber-100/30 dark:border-amber-900/20 flex flex-col">
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">Partidas Jugadas (Piñas)</span>
+                                    <span className="text-base font-black text-amber-600 dark:text-amber-400 mt-1">
+                                        {gameStats.totalRounds} u <span className="text-xs font-medium text-slate-400">({formatCop(gameStats.roundsRevenue)})</span>
+                                    </span>
+                                </div>
+                                <div className="bg-indigo-50/40 dark:bg-indigo-950/10 rounded-xl p-3 border border-indigo-100/30 dark:border-indigo-900/20 flex flex-col">
+                                    <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400 dark:text-slate-500">Total Recaudo de Mesas</span>
+                                    <span className="text-base font-black text-indigo-600 dark:text-indigo-400 mt-1">
+                                        {formatCop(gameStats.totalRevenue)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Tax Breakdown */}
                     {totalTax > 0 && (

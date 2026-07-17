@@ -627,7 +627,137 @@ export async function generateDailyClosePDF({
     y = Math.max(y, startY3 + section3Height);
     y += 4;
     drawDivider(y);
-    y += 8;
+    // --- Sección: Actividad de Juego (Horas y Partidas) ---
+    const gameStats = (() => {
+        let totalHours = 0;
+        let hoursRevenue = 0;
+        let totalRounds = 0;
+        let roundsRevenue = 0;
+
+        visibleSales.forEach(s => {
+            (s.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                const qty = Number(item.qty) || 0;
+                const revenue = (Number(item.priceUsd) || 0) * qty;
+
+                if (nameLower.startsWith('tiempo')) {
+                    totalHours += qty;
+                    hoursRevenue += revenue;
+                } else if (nameLower.startsWith('jugada')) {
+                    totalRounds += qty;
+                    roundsRevenue += revenue;
+                }
+            });
+        });
+
+        return {
+            totalHours,
+            hoursRevenue,
+            totalRounds,
+            roundsRevenue,
+            totalRevenue: hoursRevenue + roundsRevenue
+        };
+    })();
+
+    if (gameStats.totalHours > 0 || gameStats.totalRounds > 0) {
+        const sectionGameHeight = 25;
+        checkPageBreak(sectionGameHeight);
+        const startYGame = y;
+
+        // --- Columna Izquierda: Tiempo de Juego ---
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...BLUE);
+        doc.text('ACTIVIDAD DE TIEMPO (MESAS)', M, y);
+        y += 5;
+
+        doc.setFillColor(...BG_LIGHT);
+        doc.rect(M, y, halfWidth, 6, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...INK);
+        doc.text('Concepto', M + 2, y + 4.2);
+        doc.text('Valor', M + halfWidth - 2, y + 4.2, { align: 'right' });
+        y += 6;
+
+        // Fila 1: Horas facturadas
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...BODY);
+        doc.text('Horas Facturadas (Cobro)', M + 2, y + 4.2);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...INK);
+        doc.text(`${gameStats.totalHours.toFixed(1)} h`, M + halfWidth - 2, y + 4.2, { align: 'right' });
+        
+        doc.setDrawColor(...RULE);
+        doc.setLineWidth(0.2);
+        doc.line(M, y + 6, M + halfWidth, y + 6);
+        y += 6;
+
+        // Fila 2: Recaudo por tiempo
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...BODY);
+        doc.text('Recaudo por Tiempo', M + 2, y + 4.2);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...GREEN);
+        doc.text(formatCOP(gameStats.hoursRevenue), M + halfWidth - 2, y + 4.2, { align: 'right' });
+        
+        doc.setDrawColor(...RULE);
+        doc.setLineWidth(0.2);
+        doc.line(M, y + 6, M + halfWidth, y + 6);
+        y += 6;
+
+        // --- Columna Derecha: Partidas (Piñas) ---
+        y = startYGame;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(...BLUE);
+        doc.text('ACTIVIDAD DE PARTIDAS (PIÑAS)', M + halfWidth + 10, y);
+        y += 5;
+
+        doc.setFillColor(...BG_LIGHT);
+        doc.rect(M + halfWidth + 10, y, halfWidth, 6, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.5);
+        doc.setTextColor(...INK);
+        doc.text('Concepto', M + halfWidth + 12, y + 4.2);
+        doc.text('Valor', M + halfWidth * 2 + 7, y + 4.2, { align: 'right' });
+        y += 6;
+
+        // Fila 1: Partidas facturadas
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...BODY);
+        doc.text('Jugadas (Piñas) Facturadas', M + halfWidth + 12, y + 4.2);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...INK);
+        doc.text(`${gameStats.totalRounds} u`, M + halfWidth * 2 + 7, y + 4.2, { align: 'right' });
+        
+        doc.setDrawColor(...RULE);
+        doc.setLineWidth(0.2);
+        doc.line(M + halfWidth + 10, y + 6, M + halfWidth * 2 + 10, y + 6);
+        y += 6;
+
+        // Fila 2: Recaudo por partidas
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(...BODY);
+        doc.text('Recaudo por Partidas', M + halfWidth + 12, y + 4.2);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...GREEN);
+        doc.text(formatCOP(gameStats.roundsRevenue), M + halfWidth * 2 + 7, y + 4.2, { align: 'right' });
+        
+        doc.setDrawColor(...RULE);
+        doc.setLineWidth(0.2);
+        doc.line(M + halfWidth + 10, y + 6, M + halfWidth * 2 + 10, y + 6);
+        y += 6;
+
+        y = Math.max(y, startYGame + sectionGameHeight);
+        y += 4;
+        drawDivider(y);
+        y += 8;
+    }
 
     // --- Sección: Propinas del Personal ---
     const detailedTips = [];

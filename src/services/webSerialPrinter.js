@@ -789,6 +789,37 @@ export async function printDailyCloseEscPos({
 
     const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
 
+    const gameStats = (() => {
+        let totalHours = 0;
+        let hoursRevenue = 0;
+        let totalRounds = 0;
+        let roundsRevenue = 0;
+
+        visibleSales.forEach(s => {
+            (s.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                const qty = Number(item.qty) || 0;
+                const revenue = (Number(item.priceUsd) || 0) * qty;
+
+                if (nameLower.startsWith('tiempo')) {
+                    totalHours += qty;
+                    hoursRevenue += revenue;
+                } else if (nameLower.startsWith('jugada')) {
+                    totalRounds += qty;
+                    roundsRevenue += revenue;
+                }
+            });
+        });
+
+        return {
+            totalHours,
+            hoursRevenue,
+            totalRounds,
+            roundsRevenue,
+            totalRevenue: hoursRevenue + roundsRevenue
+        };
+    })();
+
     let totalServicioVoluntario = 0;
     allSales.forEach(s => {
         if (s.status === 'ANULADA') return;
@@ -942,6 +973,21 @@ export async function printDailyCloseEscPos({
             const val = isUsd ? `$ ${d.total.toFixed(2)}` : formatCOP(d.total);
             p.row(labelWithCount, val, W);
         });
+        p.line('-', W);
+    }
+
+    // ── Actividad de Juego ──
+    if (gameStats.totalHours > 0 || gameStats.totalRounds > 0) {
+        p.align(1).bold(true).text('ACTIVIDAD DE JUEGO').newline().bold(false).align(0);
+        if (gameStats.totalHours > 0) {
+            p.row('Horas de Juego:', `${gameStats.totalHours.toFixed(1)} h`, W);
+            p.row('Recaudo por Tiempo:', formatCOP(gameStats.hoursRevenue), W);
+        }
+        if (gameStats.totalRounds > 0) {
+            p.row('Partidas (Pinas):', `${gameStats.totalRounds} u`, W);
+            p.row('Recaudo por Partidas:', formatCOP(gameStats.roundsRevenue), W);
+        }
+        p.bold(true).row('Total Recaudo Mesas:', formatCOP(gameStats.totalRevenue), W).bold(false);
         p.line('-', W);
     }
 
