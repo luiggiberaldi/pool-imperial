@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Clock, Coffee, Layers, ChevronRight, Timer, MessageSquare, Percent, Tag, Trash2, Users, Target } from 'lucide-react';
-import { formatElapsedTime, calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, calculateSessionCostBreakdown, formatHoursPaid, calculateFullTableBreakdown, buildTableSyntheticCart, getAbonoBreakdown, getDeductibleAbonoTotal } from '../../utils/tableBillingEngine';
 import { FinancialEngine } from '../../core/FinancialEngine';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useAuthStore } from '../../hooks/store/authStore';
@@ -167,31 +167,14 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const tipAmount = includeTip ? Math.round(baseTotal * (tipPercent / 100)) : 0;
     const finalTotalWithService = baseTotal + serviceChargeAmount + tipAmount;
 
-    // Helper to extract net abonos
-    const getAbonoBreakdown = (item) => {
-        if (item.netAmount !== undefined) {
-            return {
-                net: Number(item.netAmount) || 0,
-                service: Number(item.serviceAmount) || 0
-            };
-        }
-        const amt = Number(item.amount) || 0;
-        const commonFactors = [1.10, 1.08, 1.05];
-        for (const factor of commonFactors) {
-            const net = Math.round(amt / factor);
-            if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
-                return { net, service: amt - net };
-            }
-        }
-        return { net: amt, service: 0 };
-    };
+
 
     const priorAbonoNetTotal = (() => {
         if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
         try {
             const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
             const list = JSON.parse(histStr);
-            return list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+            return getDeductibleAbonoTotal(list);
         } catch (_) {
             return 0;
         }

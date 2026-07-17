@@ -1,6 +1,6 @@
 import { printPreCuentaEscPos, getWebSerialConfig } from '../services/webSerialPrinter';
 import { useTablesStore } from '../hooks/store/useTablesStore';
-import { calculateSessionCostBreakdown, formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart } from './tableBillingEngine';
+import { calculateSessionCostBreakdown, formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart, getDeductibleAbonoTotal } from './tableBillingEngine';
 import { round2 } from './dinero';
 import { FinancialEngine } from '../core/FinancialEngine';
 
@@ -269,8 +269,11 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
     }
     push(`<hr>`);
 
+    const deductibleAbonoTotal = getDeductibleAbonoTotal(historialAbonos);
+    const finalPendingToPay = Math.max(0, (untippedTotal + tipAmt) - deductibleAbonoTotal);
+
     const totalLabel = isAbono ? 'TOTAL ABONO:' : (hasPaidBefore ? 'TOTAL PENDIENTE:' : 'TOTAL ESTIMADO:');
-    push(`<table class="total-table"><tr><td class="total-label">${totalLabel}</td><td class="total-price">${formatCOP(isAbono ? finalGrandTotal : (untippedTotal + tipAmt))}</td></tr></table>`);
+    push(`<table class="total-table"><tr><td class="total-label">${totalLabel}</td><td class="total-price">${formatCOP(isAbono ? finalGrandTotal : finalPendingToPay)}</td></tr></table>`);
 
     if (historialAbonos.length > 0) {
         push(`<hr>`);

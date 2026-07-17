@@ -118,7 +118,10 @@ export default function CheckoutModal({
         try {
             const histStr = tableContext.session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
             const list = JSON.parse(histStr);
-            return list.reduce((sum, item) => sum + (Number(item.serviceAmount || 0) || 0), 0);
+            if (!Array.isArray(list)) return 0;
+            return list
+                .filter(item => item.itemsRemoved === false)
+                .reduce((sum, item) => sum + (Number(item.serviceAmount || 0) || 0), 0);
         } catch (_) {
             return 0;
         }

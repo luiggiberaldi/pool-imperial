@@ -4,7 +4,7 @@ import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useOrdersStore } from '../../hooks/store/useOrdersStore';
 import { useAuthStore } from '../../hooks/store/authStore';
 import { useCashStore } from '../../hooks/store/cashStore';
-import { formatElapsedTime, calculateSessionCost, buildTableSyntheticCart, calculateFullTableBreakdown, getSessionElapsedMinutes } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, calculateSessionCost, buildTableSyntheticCart, calculateFullTableBreakdown, getSessionElapsedMinutes, getDeductibleAbonoTotal } from '../../utils/tableBillingEngine';
 import { round2 } from '../../utils/dinero';
 import { showToast } from '../Toast';
 import { useProductContext } from '../../context/ProductContext';
@@ -180,7 +180,9 @@ export function TableQueuePanel({ onCheckoutTable }) {
                         try {
                             const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
                             const list = JSON.parse(histStr);
-                            priorAbonoNetTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+                            // Solo descontar abonos por monto-libre (itemsRemoved === false).
+                            // Abonos por items ya fueron eliminados de la comanda → grandTotal ya los excluye.
+                            priorAbonoNetTotal = getDeductibleAbonoTotal(list);
                         } catch (_) {}
                     }
 

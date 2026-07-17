@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { round2, sumR, subR } from '../utils/dinero';
+import { getDeductibleAbonoTotal } from '../utils/tableBillingEngine';
 
 const EPSILON_COP = 1; // Tolerancia base cuando se paga solo en COP
 // Cuando hay pagos en USD, la tolerancia sube a 1 centavo USD = tasaCop/100 COP
@@ -48,8 +49,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         if (!notes.includes('|||HISTORIAL_ABONOS:')) return 0;
         try {
             const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
-            if (!Array.isArray(hist) || hist.length === 0) return 0;
-            return hist.reduce((sum, h) => sum + (Number(h.netAmount ?? h.amount) || 0), 0);
+            return getDeductibleAbonoTotal(hist);
         } catch (_) { return 0; }
     }, [tableContext]);
 
@@ -59,7 +59,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
         const notes = tableContext?.session?.notes || '';
         try {
             const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
-            return Array.isArray(hist) ? hist : [];
+            return Array.isArray(hist) ? hist.filter(h => h.itemsRemoved === false) : [];
         } catch (_) { return []; }
     }, [priorAbonoTotal, tableContext]);
 
@@ -222,19 +222,36 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
                 });
 
             // Inyectar abonos previos con flag isAbonoPrevio antes de confirmar
-            const priorPayments = priorAbonoHistory.map(h => ({
-                id: crypto.randomUUID(),
-                methodId: (h.method || 'efectivo').toLowerCase(),
-                methodLabel: `${(h.method || 'Efectivo')} (Abono)`,
-                currency: 'COP',
-                amountInput: Number(h.amount),
-                amountInputCurrency: 'COP',
-                amountUsd: Number(h.amount),
-                amountOriginal: Number(h.amount),
-                amountOriginalCurrency: 'COP',
-                amountBs: 0,
-                isAbonoPrevio: true,
-            }));
+            const priorPayments = priorAbonoHistory.map(h => {
+                if (h.methods && Array.isArray(h.methods) && h.methods.length > 0) {
+                    return h.methods.map(m => ({
+                        id: crypto.randomUUID(),
+                        methodId: m.methodId,
+                        methodLabel: `${m.methodId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} (Abono)`,
+                        currency: 'COP',
+                        amountInput: Number(m.amountUsd),
+                        amountInputCurrency: 'COP',
+                        amountUsd: Number(m.amountUsd),
+                        amountOriginal: Number(m.amountUsd),
+                        amountOriginalCurrency: 'COP',
+                        amountBs: 0,
+                        isAbonoPrevio: true,
+                    }));
+                }
+                return [{
+                    id: crypto.randomUUID(),
+                    methodId: (h.method || 'efectivo').toLowerCase(),
+                    methodLabel: `${(h.method || 'Efectivo')} (Abono)`,
+                    currency: 'COP',
+                    amountInput: Number(h.amount),
+                    amountInputCurrency: 'COP',
+                    amountUsd: Number(h.amount),
+                    amountOriginal: Number(h.amount),
+                    amountOriginalCurrency: 'COP',
+                    amountBs: 0,
+                    isAbonoPrevio: true,
+                }];
+            }).flat();
 
             const allPayments = [...priorPayments, ...payments];
 

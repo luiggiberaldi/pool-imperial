@@ -4,7 +4,7 @@ import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useOrdersStore } from '../hooks/store/useOrdersStore';
 import { useAuthStore } from '../hooks/store/authStore';
 import { useCustomersStore } from '../hooks/store/useCustomersStore';
-import { calculateSessionCost, calculateSessionCostBreakdown, formatHoursPaid, buildTableSyntheticCart, getSessionElapsedMinutes } from '../utils/tableBillingEngine';
+import { calculateSessionCost, calculateSessionCostBreakdown, formatHoursPaid, buildTableSyntheticCart, getSessionElapsedMinutes, parseSessionNotes, serializeSessionNotes, getDeductibleAbonoTotal } from '../utils/tableBillingEngine';
 import { Modal } from '../components/Modal';
 import { processSaleTransaction } from '../utils/checkoutProcessor';
 import { useProductContext } from '../context/ProductContext';
@@ -138,7 +138,7 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
     const seatTimeCost = !isAnyAbono && !isTimeFree ? (session?.seats || []).filter(s => !s.paid && (!seatId || s.id === seatId)).reduce((sum, s) => {
         const tc = (s.timeCharges || []);
         const h = tc.filter(t => t.type === 'hora').reduce((a, t) => a + (Number(t.amount) || 0), 0);
-        const p = tc.filter(t => tc.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+        const p = tc.filter(t => t.type === 'pina').reduce((a, t) => a + (Number(t.amount) || 0), 0);
         return sum + (h * finalHora) + (p * finalPina);
     }, 0) : 0;
 
@@ -183,7 +183,7 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
             return Array.isArray(hist) ? hist : [];
         } catch (_) { return []; }
     })();
-    const priorAbonoTotal = priorAbonoHistory.reduce((s, h) => s + (Number(h.amount) || 0), 0);
+    const priorAbonoTotal = getDeductibleAbonoTotal(priorAbonoHistory);
     const netToPay = Math.max(0, grandTotal - priorAbonoTotal);
 
     // Auto-fill received COP for electronic payment methods
@@ -272,7 +272,7 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
             const paymentPayload = [];
 
             // Inyectar abonos previos (solo en cierre definitivo)
-            priorAbonoHistory.forEach(h => {
+            priorAbonoHistory.filter(h => h.itemsRemoved === false).forEach(h => {
                 paymentPayload.push({
                     id: crypto.randomUUID(),
                     methodId: (h.method || 'efectivo').toLowerCase(),
@@ -413,46 +413,14 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                         }
                     }
 
-                    // Parse, append to historial, and serialize new notes
-                    const parseSessionNotes = (notesStr) => {
-                        if (!notesStr) return { cleanNotes: '', abono: null, abonoMonto: null, historial: [] };
-                        let clean = notesStr;
-                        let ab = null;
-                        let abM = null;
-                        let hist = [];
-                        if (notesStr.includes('|||ABONO:')) {
-                            try { ab = JSON.parse(notesStr.split('|||ABONO:')[1].split('|||')[0].trim()); } catch (_) {}
-                        }
-                        if (notesStr.includes('|||ABONO_MONTO:')) {
-                            try { abM = JSON.parse(notesStr.split('|||ABONO_MONTO:')[1].split('|||')[0].trim()); } catch (_) {}
-                        }
-                        if (notesStr.includes('|||HISTORIAL_ABONOS:')) {
-                            try { hist = JSON.parse(notesStr.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim()); } catch (_) {}
-                        }
-                        clean = notesStr.split('|||')[0].trim();
-                        return { cleanNotes: clean, abono: ab, abonoMonto: abM, historial: hist };
-                    };
-
-                    const serializeSessionNotes = (clean, ab, abM, hist) => {
-                        let res = clean ? clean.trim() : '';
-                        if (ab && ab.length > 0) {
-                            res += ` |||ABONO:${JSON.stringify(ab)}`;
-                        }
-                        if (abM) {
-                            res += ` |||ABONO_MONTO:${JSON.stringify(abM)}`;
-                        }
-                        if (hist && hist.length > 0) {
-                            res += ` |||HISTORIAL_ABONOS:${JSON.stringify(hist)}`;
-                        }
-                        return res.trim() || null;
-                    };
-
                     const { cleanNotes, historial } = parseSessionNotes(session.notes);
                     const newHistorial = [...historial, {
                         amount: Number(grandTotal),
                         netAmount: Number(baseGrandTotalBuilt),
                         serviceAmount: Number(serviceChargeAmt + tipAmt),
                         method: isFiado ? 'FIADO' : method,
+                        methods: [{ methodId: isFiado ? 'fiado' : method.toLowerCase(), amountUsd: Number(grandTotal) }],
+                        itemsRemoved: !!isAbono,
                         date: new Date().toISOString()
                     }];
                     const newNotes = serializeSessionNotes(cleanNotes, null, null, newHistorial);

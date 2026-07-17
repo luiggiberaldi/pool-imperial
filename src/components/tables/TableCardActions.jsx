@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Play, ShoppingBag, CreditCard, Clock, Lock, Check, X, DollarSign } from 'lucide-react';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
 import { useCashStore } from '../../hooks/store/cashStore';
+import { getDeductibleAbonoTotal } from '../../utils/tableBillingEngine';
 import { TargetIcon } from './TargetIcon';
 import { showToast } from '../Toast';
 
@@ -49,7 +50,9 @@ export default function TableCardActions({
         try {
             const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
             const list = JSON.parse(histStr);
-            return list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+            // Solo descontar abonos por monto-libre (itemsRemoved === false).
+            // Abonos por items ya fueron eliminados de la comanda → grandTotal ya los excluye.
+            return getDeductibleAbonoTotal(list);
         } catch (_) {
             return 0;
         }

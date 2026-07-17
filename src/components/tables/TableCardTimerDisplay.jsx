@@ -1,6 +1,6 @@
 import React from 'react';
 import { Activity, Play, Pause, Check, Eye } from 'lucide-react';
-import { formatElapsedTime } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, getAbonoBreakdown, getDeductibleAbonoTotal } from '../../utils/tableBillingEngine';
 import { TargetIcon } from './TargetIcon';
 
 // Formatea un número como peso colombiano: $ 12.500
@@ -157,36 +157,22 @@ export default function TableCardTimerDisplay({
                     )}
                     {/* Total + Eye — visible for ALL occupied sessions */}
                     {(() => {
-                        const getAbonoBreakdown = (item) => {
-                            if (item.netAmount !== undefined) {
-                                return {
-                                    net: Number(item.netAmount) || 0,
-                                    service: Number(item.serviceAmount) || 0
-                                };
-                            }
-                            const amt = Number(item.amount) || 0;
-                            const commonFactors = [1.10, 1.08, 1.05];
-                            for (const factor of commonFactors) {
-                                const net = Math.round(amt / factor);
-                                if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
-                                    return { net, service: amt - net };
-                                }
-                            }
-                            return { net: amt, service: 0 };
-                        };
-
                         let priorAbonoNetTotal = 0;
                         let serviceTotal = 0;
+                        let deductibleAbonoTotal = 0;
                         if (session?.notes && session.notes.includes('|||HISTORIAL_ABONOS:')) {
                             try {
                                 const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
                                 const list = JSON.parse(histStr);
-                                priorAbonoNetTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
-                                serviceTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).service, 0);
+                                if (Array.isArray(list)) {
+                                    priorAbonoNetTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
+                                    serviceTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).service, 0);
+                                    deductibleAbonoTotal = getDeductibleAbonoTotal(list);
+                                }
                             } catch (_) {}
                         }
 
-                        const remainingToPay = Math.max(0, grandTotal - priorAbonoNetTotal);
+                        const remainingToPay = Math.max(0, grandTotal - deductibleAbonoTotal);
 
                         return (
                             <div className="flex flex-col items-center gap-1.5 mt-3 w-full">

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock, Coffee, Percent, Tag, Trash2 } from 'lucide-react';
-import { formatElapsedTime, formatHoursPaid, computeItemTax } from '../../utils/tableBillingEngine';
+import { formatElapsedTime, formatHoursPaid, computeItemTax, getAbonoBreakdown } from '../../utils/tableBillingEngine';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -267,23 +267,7 @@ export function BillClassicBreakdown({
         )}
         {/* Abonos Realizados */}
         {(() => {
-            const getAbonoBreakdown = (item) => {
-                if (item.netAmount !== undefined) {
-                    return {
-                        net: Number(item.netAmount) || 0,
-                        service: Number(item.serviceAmount) || 0
-                    };
-                }
-                const amt = Number(item.amount) || 0;
-                const commonFactors = [1.10, 1.08, 1.05];
-                for (const factor of commonFactors) {
-                    const net = Math.round(amt / factor);
-                    if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
-                        return { net, service: amt - net };
-                    }
-                }
-                return { net: amt, service: 0 };
-            };
+
 
             const abonosList = (() => {
                 if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return [];

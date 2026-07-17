@@ -6,7 +6,7 @@ import { processSaleTransaction } from '../utils/checkoutProcessor';
 import { useTablesStore } from './store/useTablesStore';
 import { useOrdersStore } from './store/useOrdersStore';
 import { useAuthStore } from './store/authStore';
-import { calculateSessionCostBreakdown, formatHoursPaid, calculateSeatCostBreakdown, calculateFullTableBreakdown, buildTableSyntheticCart } from '../utils/tableBillingEngine';
+import { calculateSessionCostBreakdown, formatHoursPaid, calculateSeatCostBreakdown, calculateFullTableBreakdown, buildTableSyntheticCart, parseSessionNotes, serializeSessionNotes } from '../utils/tableBillingEngine';
 import { FinancialEngine } from '../core/FinancialEngine';
 
 const EPSILON = 1; // 1 peso colombiano de tolerancia
@@ -296,40 +296,6 @@ export function useSalesCheckout({
                     }
                 }
 
-                // Parse, append to historial, and serialize new notes
-                const parseSessionNotes = (notesStr) => {
-                    if (!notesStr) return { cleanNotes: '', abono: null, abonoMonto: null, historial: [] };
-                    let clean = notesStr;
-                    let ab = null;
-                    let abM = null;
-                    let hist = [];
-                    if (notesStr.includes('|||ABONO:')) {
-                        try { ab = JSON.parse(notesStr.split('|||ABONO:')[1].split('|||')[0].trim()); } catch (_) {}
-                    }
-                    if (notesStr.includes('|||ABONO_MONTO:')) {
-                        try { abM = JSON.parse(notesStr.split('|||ABONO_MONTO:')[1].split('|||')[0].trim()); } catch (_) {}
-                    }
-                    if (notesStr.includes('|||HISTORIAL_ABONOS:')) {
-                        try { hist = JSON.parse(notesStr.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim()); } catch (_) {}
-                    }
-                    clean = notesStr.split('|||')[0].trim();
-                    return { cleanNotes: clean, abono: ab, abonoMonto: abM, historial: hist };
-                };
-
-                const serializeSessionNotes = (clean, ab, abM, hist) => {
-                    let res = clean ? clean.trim() : '';
-                    if (ab && ab.length > 0) {
-                        res += ` |||ABONO:${JSON.stringify(ab)}`;
-                    }
-                    if (abM) {
-                        res += ` |||ABONO_MONTO:${JSON.stringify(abM)}`;
-                    }
-                    if (hist && hist.length > 0) {
-                        res += ` |||HISTORIAL_ABONOS:${JSON.stringify(hist)}`;
-                    }
-                    return res.trim() || null;
-                };
-
                 const session = tableCheckoutData.session;
                 const { cleanNotes, historial } = parseSessionNotes(session.notes);
                 const payMethod = payments.map(p => (p.methodId || 'EFECTIVO').toUpperCase()).join('+') || 'EFECTIVO';
@@ -347,6 +313,10 @@ export function useSalesCheckout({
                     netAmount: netAmount,
                     serviceAmount: serviceAmount,
                     method: payMethod,
+                    methods: payments
+                        .filter(p => !p.isAbonoPrevio)
+                        .map(p => ({ methodId: p.methodId, amountUsd: p.amountUsd })),
+                    itemsRemoved: !!(tableCheckoutData.currentItems && tableCheckoutData.currentItems.length > 0),
                     date: new Date().toISOString()
                 }];
                 const newNotes = serializeSessionNotes(cleanNotes, null, null, newHistorial);

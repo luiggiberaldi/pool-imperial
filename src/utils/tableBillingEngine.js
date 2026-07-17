@@ -631,3 +631,72 @@ export function buildFrozenTimeCharge(session, elapsedMinutes, config, tableType
         },
     };
 }
+
+/**
+ * Desglosa un item del HISTORIAL_ABONOS en { net, service }.
+ * Soporta el formato nuevo (netAmount/serviceAmount) y el legacy
+ * (solo amount, con inferencia por factores de servicio comunes).
+ */
+export function getAbonoBreakdown(item) {
+    if (item.netAmount !== undefined) {
+        return {
+            net: Number(item.netAmount) || 0,
+            service: Number(item.serviceAmount) || 0
+        };
+    }
+    const amt = Number(item.amount) || 0;
+    const commonFactors = [1.10, 1.08, 1.05];
+    for (const factor of commonFactors) {
+        const net = Math.round(amt / factor);
+        if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
+            return { net, service: amt - net };
+        }
+    }
+    return { net: amt, service: 0 };
+}
+
+/**
+ * Descompone el string `session.notes` en sus partes estructuradas.
+ */
+export function parseSessionNotes(notesStr) {
+    if (!notesStr) return { cleanNotes: '', abono: null, abonoMonto: null, historial: [] };
+    let ab = null, abM = null, hist = [];
+    if (notesStr.includes('|||ABONO:'))
+        try { ab = JSON.parse(notesStr.split('|||ABONO:')[1].split('|||')[0].trim()); } catch (_) {}
+    if (notesStr.includes('|||ABONO_MONTO:'))
+        try { abM = JSON.parse(notesStr.split('|||ABONO_MONTO:')[1].split('|||')[0].trim()); } catch (_) {}
+    if (notesStr.includes('|||HISTORIAL_ABONOS:'))
+        try { hist = JSON.parse(notesStr.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim()); } catch (_) {}
+    const cleanNotes = notesStr.split('|||')[0].trim();
+    return { cleanNotes, abono: ab, abonoMonto: abM, historial: Array.isArray(hist) ? hist : [] };
+}
+
+/**
+ * Reensambla el string `session.notes` desde sus partes.
+ * Pasar null/[] en ab/abM/hist para eliminar ese tag del resultado.
+ */
+export function serializeSessionNotes(clean, ab, abM, hist) {
+    let res = clean ? clean.trim() : '';
+    if (ab && ab.length > 0) res += ` |||ABONO:${JSON.stringify(ab)}`;
+    if (abM) res += ` |||ABONO_MONTO:${JSON.stringify(abM)}`;
+    if (hist && hist.length > 0) res += ` |||HISTORIAL_ABONOS:${JSON.stringify(hist)}`;
+    return res.trim() || null;
+}
+
+/**
+ * Retorna el total de abonos que SÍ deben descontarse del grandTotal.
+ *
+ * Regla semántica:
+ *   - itemsRemoved === false  → Abono por monto (artículos PERMANECEN en la comanda).
+ *                               El pago fue un adelanto → SÍ restar del grandTotal.
+ *   - itemsRemoved === true   → Abono por items (artículos ELIMINADOS de la comanda).
+ *                               El grandTotal ya los excluyó → NO restar (doble deducción).
+ *   - itemsRemoved === undefined (entradas legacy sin el campo) → Tratar como item-removed
+ *                               para ser conservadores con las finanzas → NO restar.
+ */
+export function getDeductibleAbonoTotal(historial) {
+    if (!Array.isArray(historial)) return 0;
+    return historial
+        .filter(h => h.itemsRemoved === false)
+        .reduce((sum, h) => sum + (Number(h.netAmount ?? h.amount) || 0), 0);
+}

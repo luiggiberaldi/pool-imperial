@@ -3,6 +3,7 @@ import { Plus, Minus, Check, X, DollarSign, ShoppingBag, Send } from 'lucide-rea
 import { Modal } from '../Modal';
 import { showToast } from '../Toast';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
+import { getAbonoBreakdown, getDeductibleAbonoTotal } from '../../utils/tableBillingEngine';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -25,46 +26,28 @@ export default function AbonoSelectorModal({
     const { updateSessionMetadata } = useTablesStore();
     const wasOpenRef = useRef(false);
 
-    // Helper para inferir netAmount y serviceAmount de sesiones antiguas
-    const getAbonoBreakdown = (item) => {
-        if (item.netAmount !== undefined) {
+
+
+    // ── Historial de abonos previos ──────────────────────────────────────────
+    // abonoTotal:            total de TODOS los abonos cobrados (para mostrar en badge)
+    // abonoDeductibleTotal:  solo abonos donde los items PERMANECEN en la comanda
+    //                        (itemsRemoved === false). Abonos por items ya los eliminó
+    //                        de la comanda, por lo que el grandTotal no los incluye y
+    //                        NO deben restarse de nuevo para calcular el límite máximo.
+    const { abonoTotal, abonoServiceTotal, abonoDeductibleTotal } = (() => {
+        const empty = { abonoTotal: 0, abonoServiceTotal: 0, abonoDeductibleTotal: 0 };
+        if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return empty;
+        try {
+            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
+            const list = JSON.parse(histStr);
+            if (!Array.isArray(list)) return empty;
             return {
-                net: Number(item.netAmount) || 0,
-                service: Number(item.serviceAmount) || 0
+                abonoTotal: list.reduce((s, h) => s + getAbonoBreakdown(h).net, 0),
+                abonoServiceTotal: list.reduce((s, h) => s + getAbonoBreakdown(h).service, 0),
+                abonoDeductibleTotal: getDeductibleAbonoTotal(list),
             };
-        }
-        const amt = Number(item.amount) || 0;
-        const commonFactors = [1.10, 1.08, 1.05];
-        for (const factor of commonFactors) {
-            const net = Math.round(amt / factor);
-            if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
-                return { net, service: amt - net };
-            }
-        }
-        return { net: amt, service: 0 };
-    };
-
-    // Calcular el total de abonos de consumo previos (neto) ya registrados en la sesión
-    const abonoTotal = (() => {
-        if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
-        try {
-            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
-            const list = JSON.parse(histStr);
-            return list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
         } catch (_) {
-            return 0;
-        }
-    })();
-
-    // Calcular el total de recargos/servicio pagados en abonos previos
-    const abonoServiceTotal = (() => {
-        if (!session?.notes || !session.notes.includes('|||HISTORIAL_ABONOS:')) return 0;
-        try {
-            const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
-            const list = JSON.parse(histStr);
-            return list.reduce((sum, item) => sum + getAbonoBreakdown(item).service, 0);
-        } catch (_) {
-            return 0;
+            return empty;
         }
     })();
 
@@ -78,8 +61,9 @@ export default function AbonoSelectorModal({
         !item.seat_id || !paidSeatIds.has(item.seat_id)
     );
 
-    // Límite máximo de abono permitido en esta operación
-    const maxAllowedAbono = Math.max(0, grandTotal - abonoTotal);
+    // Límite máximo de abono permitido en esta operación:
+    // solo se resta el deductible (monto-libre sin remoción de items).
+    const maxAllowedAbono = Math.max(0, grandTotal - abonoDeductibleTotal);
  
     // Reset selected quantities ONLY when modal transitions from closed to open
     useEffect(() => {

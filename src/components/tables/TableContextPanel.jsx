@@ -11,7 +11,8 @@ import {
     calculateSessionCost,
     calculateSessionCostBreakdown, 
     calculateConsumptionBs,
-    buildTableSyntheticCart
+    buildTableSyntheticCart,
+    getAbonoBreakdown
 } from '../../utils/tableBillingEngine';
 import { round2 } from '../../utils/dinero';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
@@ -761,23 +762,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                                 const histStr = session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim();
                                 const list = JSON.parse(histStr);
                                 
-                                const getAbonoBreakdown = (item) => {
-                                    if (item.netAmount !== undefined) {
-                                        return {
-                                            net: Number(item.netAmount) || 0,
-                                            service: Number(item.serviceAmount) || 0
-                                        };
-                                    }
-                                    const amt = Number(item.amount) || 0;
-                                    const commonFactors = [1.10, 1.08, 1.05];
-                                    for (const factor of commonFactors) {
-                                        const net = Math.round(amt / factor);
-                                        if (net > 0 && Math.abs(net * factor - amt) < 2 && net % 100 === 0) {
-                                            return { net, service: amt - net };
-                                        }
-                                    }
-                                    return { net: amt, service: 0 };
-                                };
+
 
                                 const netTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).net, 0);
                                 const serviceTotal = list.reduce((sum, item) => sum + getAbonoBreakdown(item).service, 0);
