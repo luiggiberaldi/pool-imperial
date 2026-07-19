@@ -529,8 +529,7 @@ export async function generateDailyClosePDF({
         return Object.entries(movements)
             .map(([id, data]) => ({ id, ...data }))
             .filter(m => m.entrada > 0 || m.salida > 0)
-            .sort((a, b) => (b.salida + b.entrada) - (a.salida + a.entrada))
-            .slice(0, 10); // Límite de 10 en reporte
+            .sort((a, b) => (b.salida + b.entrada) - (a.salida + a.entrada));
     })();
 
     const prodMovementRows = prodMovements.length;
