@@ -666,6 +666,60 @@ export async function printThermalDailyClose({
             .sort((a, b) => (b.salida + b.entrada) - (a.salida + a.entrada));
     })();
 
+    // Desglose de Ingresos HTML
+    let productosFisicosHtmlVal = 0;
+    let tiempoMesaHtmlVal = 0;
+    let propinasTotalHtmlVal = 0;
+    let abonosServiciosHtmlVal = 0;
+
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            const qty = Number(item.qty) || 0;
+            const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
+
+            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
+                propinasTotalHtmlVal += itemTotal;
+            } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada') || nameLower.startsWith('compartido')) {
+                tiempoMesaHtmlVal += itemTotal;
+            } else if (nameLower.startsWith('abono') || item.id === 'abono-monto-libre') {
+                abonosServiciosHtmlVal += itemTotal;
+            } else {
+                productosFisicosHtmlVal += itemTotal;
+            }
+        });
+    });
+
+    const incomeBreakdownHtml = `
+        <div class="section-title">Desglose de Ingresos</div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 4px;">
+            <tr>
+                <td style="padding: 1px 0;">Productos Físicos</td>
+                <td style="text-align:right; font-weight:bold;">${formatCOP(productosFisicosHtmlVal)}</td>
+            </tr>
+            ${tiempoMesaHtmlVal > 0 ? `
+            <tr>
+                <td style="padding: 1px 0;">Tiempo de Mesas</td>
+                <td style="text-align:right; font-weight:bold; color:#1d4ed8;">+${formatCOP(tiempoMesaHtmlVal)}</td>
+            </tr>` : ''}
+            ${propinasTotalHtmlVal > 0 ? `
+            <tr>
+                <td style="padding: 1px 0;">Servicio Voluntario</td>
+                <td style="text-align:right; font-weight:bold; color:#107c41;">+${formatCOP(propinasTotalHtmlVal)}</td>
+            </tr>` : ''}
+            ${abonosServiciosHtmlVal > 0 ? `
+            <tr>
+                <td style="padding: 1px 0;">Abonos / Servicios</td>
+                <td style="text-align:right; font-weight:bold;">+${formatCOP(abonosServiciosHtmlVal)}</td>
+            </tr>` : ''}
+            <tr style="border-top: 1px dashed #555;">
+                <td style="padding-top: 3px; font-weight:bold;">TOTAL INGRESOS</td>
+                <td style="text-align:right; padding-top: 3px; font-weight:bold; font-size:10.5px;">${formatCOP(todayTotalCOP)}</td>
+            </tr>
+        </table>
+    `;
+
     // Movimientos de Productos HTML
     let prodMovementsHtml = '';
     if (prodMovements.length > 0) {
@@ -845,6 +899,9 @@ export async function printThermalDailyClose({
 
     ${cuadreHtml}
     ${cuadreHtml ? '<hr class="dash">' : ''}
+
+    ${incomeBreakdownHtml}
+    <hr class="dash">
 
     ${prodMovementsHtml}
     ${prodMovementsHtml ? '<hr class="dash">' : ''}

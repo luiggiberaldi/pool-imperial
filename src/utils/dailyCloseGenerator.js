@@ -471,6 +471,119 @@ export async function generateDailyClosePDF({
     y += 8;
 
     // ════════════════════════════════════
+    //  2.5. DESGLOSE GENERAL DE INGRESOS (COMPOSICIÓN DEL TOTAL)
+    // ════════════════════════════════════
+    let productosFisicos = 0;
+    let tiempoMesa = 0;
+    let propinasTotal = 0;
+    let abonosServicios = 0;
+
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            const qty = Number(item.qty) || 0;
+            const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
+
+            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
+                propinasTotal += itemTotal;
+            } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada') || nameLower.startsWith('compartido')) {
+                tiempoMesa += itemTotal;
+            } else if (nameLower.startsWith('abono') || item.id === 'abono-monto-libre') {
+                abonosServicios += itemTotal;
+            } else {
+                productosFisicos += itemTotal;
+            }
+        });
+    });
+
+    const incomeBreakdownHeight = 36;
+    checkPageBreak(incomeBreakdownHeight);
+
+    drawSectionTitle('Desglose General de Ingresos (Composición del Total)');
+
+    doc.setFillColor(...BG_LIGHT);
+    doc.roundedRect(M, y, WIDTH - M * 2, 28, 2, 2, 'F');
+    doc.setDrawColor(...RULE);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(M, y, WIDTH - M * 2, 28, 2, 2, 'D');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...INK);
+    doc.text('Concepto / Categoría', M + 4, y + 5);
+    doc.text('Explicación / Detalle', M + 65, y + 5);
+    doc.text('Monto COP', RIGHT - 4, y + 5, { align: 'right' });
+
+    doc.setDrawColor(...RULE);
+    doc.line(M + 2, y + 7, RIGHT - 2, y + 7);
+
+    let rowY = y + 11;
+
+    // Fila 1: Productos Fisicos
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...BODY);
+    doc.text('Productos Físicos', M + 4, rowY);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Bebidas, pasabocas, cigarrillos y productos de catálogo', M + 65, rowY);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...INK);
+    doc.text(formatCOP(productosFisicos), RIGHT - 4, rowY, { align: 'right' });
+    rowY += 4.5;
+
+    // Fila 2: Tiempo de Mesa
+    if (tiempoMesa > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...BODY);
+        doc.text('Tiempo de Mesa / Juego', M + 4, rowY);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Alquiler de mesas de pool, horas y partidas cobradas', M + 65, rowY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...BLUE);
+        doc.text(`+${formatCOP(tiempoMesa)}`, RIGHT - 4, rowY, { align: 'right' });
+        rowY += 4.5;
+    }
+
+    // Fila 3: Servicio Voluntario
+    if (propinasTotal > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...BODY);
+        doc.text('Servicio Voluntario (Propina)', M + 4, rowY);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Propinas registradas para el personal de servicio', M + 65, rowY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...GREEN);
+        doc.text(`+${formatCOP(propinasTotal)}`, RIGHT - 4, rowY, { align: 'right' });
+        rowY += 4.5;
+    }
+
+    // Fila 4: Abonos / Servicios
+    if (abonosServicios > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...BODY);
+        doc.text('Abonos / Servicios de Mesa', M + 4, rowY);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Abonos parciales y cobros de servicio sin producto físico', M + 65, rowY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...INK);
+        doc.text(`+${formatCOP(abonosServicios)}`, RIGHT - 4, rowY, { align: 'right' });
+        rowY += 4.5;
+    }
+
+    doc.setDrawColor(...RULE);
+    doc.line(M + 2, rowY - 1.5, RIGHT - 2, rowY - 1.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...BLUE);
+    doc.text('TOTAL INGRESO BRUTO CIERRE', M + 4, rowY + 2);
+    doc.text(formatCOP(totalCOP), RIGHT - 4, rowY + 2, { align: 'right' });
+
+    y += 34;
+    drawDivider(y);
+    y += 8;
+
+    // ════════════════════════════════════
     //  3. MOVIMIENTOS E INVENTARIO (LADO A LADO)
     // ════════════════════════════════════
     const topProdRows = topProducts.length;

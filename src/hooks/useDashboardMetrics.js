@@ -265,7 +265,6 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
             s.items?.forEach(item => {
                 const nameLower = (item.name || '').toLowerCase();
                 if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
-                if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
                 if (!map[item.name]) map[item.name] = { name: item.name, qty: 0, revenue: 0 };
                 map[item.name].qty += item.qty;
                 map[item.name].revenue += item.priceUsd * item.qty;

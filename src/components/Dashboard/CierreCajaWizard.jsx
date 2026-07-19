@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, CheckCircle2, AlertTriangle, TrendingUp, ShoppingBag, Package, ArrowRight, Coins, Wallet, Printer, Download } from 'lucide-react';
 import { getPaymentLabel, getPaymentIcon, toTitleCase } from '../../config/paymentMethods';
 import { round2 } from '../../utils/dinero';
@@ -163,6 +163,34 @@ export default function CierreCajaWizard({
             .filter(m => m.entrada > 0 || m.salida > 0)
             .sort((a, b) => (b.salida + b.entrada) - (a.salida + a.entrada));
     }, [todayAdjustments, allSales, todaySales, reportSnapshot]);
+
+    const incomeBreakdown = useMemo(() => {
+        let productosFisicos = 0;
+        let tiempoMesa = 0;
+        let propinasTotal = 0;
+        let abonosServicios = 0;
+
+        (allSales || []).forEach(s => {
+            if (s.status === 'ANULADA') return;
+            (s.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                const qty = Number(item.qty) || 0;
+                const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
+
+                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
+                    propinasTotal += itemTotal;
+                } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada') || nameLower.startsWith('compartido')) {
+                    tiempoMesa += itemTotal;
+                } else if (nameLower.startsWith('abono') || item.id === 'abono-monto-libre') {
+                    abonosServicios += itemTotal;
+                } else {
+                    productosFisicos += itemTotal;
+                }
+            });
+        });
+
+        return { productosFisicos, tiempoMesa, propinasTotal, abonosServicios };
+    }, [allSales]);
 
     if (!isOpen) return null;
 
@@ -372,6 +400,39 @@ export default function CierreCajaWizard({
                                 </div>
                             </div>
                             )}
+
+                            {/* Desglose General de Ingresos */}
+                            <div>
+                                <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 pl-1">Desglose General de Ingresos</h4>
+                                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 p-3.5 space-y-2">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="font-bold text-slate-600 dark:text-slate-300">🛒 Productos Físicos</span>
+                                        <span className="font-black text-slate-800 dark:text-slate-100 font-mono">{fmtCop(incomeBreakdown.productosFisicos)}</span>
+                                    </div>
+                                    {incomeBreakdown.tiempoMesa > 0 && (
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="font-bold text-slate-600 dark:text-slate-300">🎱 Tiempo de Mesa / Juegos</span>
+                                            <span className="font-black text-indigo-600 dark:text-indigo-400 font-mono">+{fmtCop(incomeBreakdown.tiempoMesa)}</span>
+                                        </div>
+                                    )}
+                                    {incomeBreakdown.propinasTotal > 0 && (
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="font-bold text-slate-600 dark:text-slate-300">🤝 Servicio Voluntario (Propina)</span>
+                                            <span className="font-black text-emerald-600 dark:text-emerald-400 font-mono">+{fmtCop(incomeBreakdown.propinasTotal)}</span>
+                                        </div>
+                                    )}
+                                    {incomeBreakdown.abonosServicios > 0 && (
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="font-bold text-slate-600 dark:text-slate-300">💳 Abonos / Servicios de Mesa</span>
+                                            <span className="font-black text-slate-800 dark:text-slate-100 font-mono">+{fmtCop(incomeBreakdown.abonosServicios)}</span>
+                                        </div>
+                                    )}
+                                    <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
+                                        <span className="font-black text-slate-800 dark:text-white uppercase">Total Ingreso Bruto</span>
+                                        <span className="font-black text-blue-600 dark:text-blue-400 font-mono text-sm">{fmtCop(todayTotalCop)}</span>
+                                    </div>
+                                </div>
+                            </div>
 
                             {/* Desglose por metodo de pago — solo admin */}
                             {isAdmin && paymentEntries.length > 0 && (

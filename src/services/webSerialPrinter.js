@@ -1042,6 +1042,41 @@ export async function printDailyCloseEscPos({
         p.line('-', W);
     }
 
+    // ── Desglose de Ingresos ──
+    let productosFisicosPrinter = 0;
+    let tiempoMesaPrinter = 0;
+    let propinasTotalPrinter = 0;
+    let abonosServiciosPrinter = 0;
+
+    allSales.forEach(s => {
+        if (s.status === 'ANULADA') return;
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            const qty = Number(item.qty) || 0;
+            const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
+
+            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
+                propinasTotalPrinter += itemTotal;
+            } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada') || nameLower.startsWith('compartido')) {
+                tiempoMesaPrinter += itemTotal;
+            } else if (nameLower.startsWith('abono') || item.id === 'abono-monto-libre') {
+                abonosServiciosPrinter += itemTotal;
+            } else {
+                productosFisicosPrinter += itemTotal;
+            }
+        });
+    });
+
+    p.align(1).bold(true).text('DESGLOSE DE INGRESOS').newline().bold(false).align(0);
+    p.smallFont(true);
+    p.row('Productos Físicos:', formatCOP(productosFisicosPrinter), WS);
+    if (tiempoMesaPrinter > 0) p.row('Tiempo de Mesas:', formatCOP(tiempoMesaPrinter), WS);
+    if (propinasTotalPrinter > 0) p.row('Servicio Voluntario:', formatCOP(propinasTotalPrinter), WS);
+    if (abonosServiciosPrinter > 0) p.row('Abonos / Servicios:', formatCOP(abonosServiciosPrinter), WS);
+    p.bold(true).row('TOTAL INGRESOS:', formatCOP(totalCOP), WS).bold(false);
+    p.smallFont(false);
+    p.line('-', W);
+
     // ── Movimientos de Productos ──
     if (prodMovements && prodMovements.length > 0) {
         p.align(1).bold(true).text('MOVIMIENTOS DE PRODUCTOS').newline().bold(false).align(0);

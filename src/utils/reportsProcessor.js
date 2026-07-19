@@ -84,7 +84,6 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
         s.items?.forEach(item => {
             const nameLower = (item.name || '').toLowerCase();
             if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
-            if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
             if (!productMap[item.name]) productMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
             productMap[item.name].qty += item.qty;
             productMap[item.name].revenue += (item.priceUsd || 0) * item.qty; // priceUsd ahora = COP
