@@ -1,4 +1,4 @@
-import { capitalizeName } from './calculatorUtils';
+import { capitalizeName, formatGameHours, computeGameStats } from './calculatorUtils';
 import { printReceiptEscPos, getWebSerialConfig, printDailyCloseEscPos } from '../services/webSerialPrinter';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { showToast } from '../components/Toast';
@@ -488,6 +488,26 @@ export async function printThermalDailyClose({
         </table>
     `;
 
+    // Actividad de Juego HTML (horas de mesa + jugadas/piñas)
+    const gameStats = computeGameStats(visibleSales);
+    let actividadJuegoHtml = '';
+    if (gameStats.totalHours > 0 || gameStats.totalRounds > 0 || gameStats.hoursRevenue > 0 || gameStats.roundsRevenue > 0 || gameStats.totalRevenue > 0) {
+        actividadJuegoHtml = `
+            <div class="section-title">Actividad de Juego</div>
+            <table>
+                ${(gameStats.totalHours > 0 || gameStats.hoursRevenue > 0) ? `
+                    <tr><td>Horas de Juego:</td><td style="text-align:right;font-weight:bold;">${formatGameHours(gameStats.totalHours)}</td></tr>
+                    <tr><td>Recaudo por Tiempo:</td><td style="text-align:right;font-weight:bold;">${formatCOP(gameStats.hoursRevenue)}</td></tr>
+                ` : ''}
+                ${gameStats.totalRounds > 0 ? `
+                    <tr><td>Jugadas Facturadas:</td><td style="text-align:right;font-weight:bold;">${gameStats.totalRounds} u</td></tr>
+                    <tr><td>Recaudo por Jugadas:</td><td style="text-align:right;font-weight:bold;">${formatCOP(gameStats.roundsRevenue)}</td></tr>
+                ` : ''}
+                <tr style="border-top:1px dashed #555;font-weight:bold;"><td>Total Recaudo Mesas:</td><td style="text-align:right;color:#2563eb;">${formatCOP(gameStats.totalRevenue)}</td></tr>
+            </table>
+        `;
+    }
+
     // Pagos por Método HTML
     let pagosMetodoHtml = '';
     const paymentEntries = Object.entries(paymentBreakdown || {}).filter(([, d]) => d.total > 0);
@@ -887,7 +907,10 @@ export async function printThermalDailyClose({
 
     ${resumenGeneralHtml}
     <hr class="dash">
-    
+
+    ${actividadJuegoHtml}
+    ${actividadJuegoHtml ? '<hr class="dash">' : ''}
+
     ${pagosMetodoHtml}
     ${pagosMetodoHtml ? '<hr class="dash">' : ''}
 

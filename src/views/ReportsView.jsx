@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent, Trash2, AlertTriangle } from 'lucide-react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
-import { formatCop, formatUsd, formatGameHours } from '../utils/calculatorUtils';
+import { formatCop, formatUsd, formatGameHours, computeGameStats } from '../utils/calculatorUtils';
 import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
 import { generateSalesReportPDF, generateArticlesReportPDF, generateCierresListReportPDF } from '../utils/salesReportGenerator';
@@ -97,36 +97,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         };
     }, [salesForStats]);
 
-    const gameStats = useMemo(() => {
-        let totalHours = 0;
-        let hoursRevenue = 0;
-        let totalRounds = 0;
-        let roundsRevenue = 0;
-
-        salesForStats.forEach(s => {
-            (s.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                const qty = Number(item.qty) || 0;
-                const revenue = (Number(item.priceUsd) || 0) * qty;
-
-                if (nameLower.startsWith('tiempo') || nameLower.startsWith('compartido')) {
-                    totalHours += qty;
-                    hoursRevenue += revenue;
-                } else if (nameLower.startsWith('jugada')) {
-                    totalRounds += qty;
-                    roundsRevenue += revenue;
-                }
-            });
-        });
-
-        return {
-            totalHours,
-            hoursRevenue,
-            totalRounds,
-            roundsRevenue,
-            totalRevenue: hoursRevenue + roundsRevenue
-        };
-    }, [salesForStats]);
+    const gameStats = useMemo(() => computeGameStats(salesForStats), [salesForStats]);
 
     // ── Aggregated product sales for "Por Artículo" tab ──
     const allProductsSold = useMemo(() => {
@@ -485,7 +456,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                     </div>
 
                     {/* Game Metrics */}
-                    {(gameStats.totalHours > 0 || gameStats.totalRounds > 0) && (
+                    {(gameStats.totalHours > 0 || gameStats.totalRounds > 0 || gameStats.hoursRevenue > 0 || gameStats.roundsRevenue > 0 || gameStats.totalRevenue > 0) && (
                         <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 shadow-sm mt-4">
                             <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1.5">
                                 <Clock size={14} className="text-indigo-500" /> Actividad de Juego (Mesas y Partidas)

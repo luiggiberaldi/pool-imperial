@@ -245,7 +245,7 @@ export async function processSaleTransaction({
         tableSessionId: tableSessionId || null,
         seatId: seatId || null,
         // Campos de items — priceUsd almacena precio COP (campo heredado)
-        items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costUsd: i.costUsd || 0, isWeight: i.isWeight, taxType: i.taxType || 'exento', taxMode: i.taxMode || 'inclusive', isTip: i.isTip || false, isServiceCharge: i.isServiceCharge || false })),
+        items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costUsd: i.costUsd || 0, isWeight: i.isWeight, taxType: i.taxType || 'exento', taxMode: i.taxMode || 'inclusive', isTip: i.isTip || false, isServiceCharge: i.isServiceCharge || false, ...(i.gameMeta ? { gameMeta: i.gameMeta } : {}) })),
         cartSubtotalUsd: subtotalCOP,   // heredado — ahora COP
         discountType: discountData?.type || null,
         discountValue: discountData?.value || 0,

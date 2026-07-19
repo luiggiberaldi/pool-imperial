@@ -8,7 +8,7 @@
  * Open Drawer: [27, 112, 0, 50, 250]
  */
 
-import { capitalizeName, formatGameHours } from '../utils/calculatorUtils';
+import { capitalizeName, formatGameHours, computeGameStats } from '../utils/calculatorUtils';
 import { lookupPrinter } from './printerDatabase';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart, getRoundedLibreMinutes } from '../utils/tableBillingEngine';
@@ -789,36 +789,7 @@ export async function printDailyCloseEscPos({
 
     const visibleSales = allSales.filter(s => s.status !== 'ANULADA');
 
-    const gameStats = (() => {
-        let totalHours = 0;
-        let hoursRevenue = 0;
-        let totalRounds = 0;
-        let roundsRevenue = 0;
-
-        visibleSales.forEach(s => {
-            (s.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                const qty = Number(item.qty) || 0;
-                const revenue = (Number(item.priceUsd) || 0) * qty;
-
-                if (nameLower.startsWith('tiempo') || nameLower.startsWith('compartido')) {
-                    totalHours += qty;
-                    hoursRevenue += revenue;
-                } else if (nameLower.startsWith('jugada')) {
-                    totalRounds += qty;
-                    roundsRevenue += revenue;
-                }
-            });
-        });
-
-        return {
-            totalHours,
-            hoursRevenue,
-            totalRounds,
-            roundsRevenue,
-            totalRevenue: hoursRevenue + roundsRevenue
-        };
-    })();
+    const gameStats = computeGameStats(visibleSales);
 
     let totalServicioVoluntario = 0;
     allSales.forEach(s => {
@@ -977,9 +948,9 @@ export async function printDailyCloseEscPos({
     }
 
     // ── Actividad de Juego ──
-    if (gameStats.totalHours > 0 || gameStats.totalRounds > 0) {
+    if (gameStats.totalHours > 0 || gameStats.totalRounds > 0 || gameStats.hoursRevenue > 0 || gameStats.roundsRevenue > 0 || gameStats.totalRevenue > 0) {
         p.align(1).bold(true).text('ACTIVIDAD DE JUEGO').newline().bold(false).align(0);
-        if (gameStats.totalHours > 0) {
+        if (gameStats.totalHours > 0 || gameStats.hoursRevenue > 0) {
             p.row('Horas de Juego:', formatGameHours(gameStats.totalHours), W);
             p.row('Recaudo por Tiempo:', formatCOP(gameStats.hoursRevenue), W);
         }

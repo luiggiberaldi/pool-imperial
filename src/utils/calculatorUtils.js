@@ -82,3 +82,62 @@ export function formatGameHours(hours) {
     }
     return `${m} min`;
 }
+
+/**
+ * Calcula las estadísticas de actividad de juego (horas de mesa + jugadas/piñas)
+ * a partir de una lista de ventas ya filtradas (sin ANULADAS).
+ *
+ * Clasificación por nombre de item:
+ * - "tiempo…"     → horas (qty en horas decimales) + recaudo por tiempo
+ * - "jugada…"     → jugadas (qty en unidades) + recaudo por jugadas
+ * - "compartido…" → usa item.gameMeta (porción exacta de horas/piñas/recaudo de
+ *   esa línea); ventas viejas sin gameMeta suman solo el monto al recaudo por
+ *   tiempo, sin inflar el conteo de horas.
+ */
+export function computeGameStats(visibleSales) {
+    let totalHours = 0;
+    let hoursRevenue = 0;
+    let totalRounds = 0;
+    let roundsRevenue = 0;
+
+    (visibleSales || []).forEach(s => {
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            const qty = Number(item.qty) || 0;
+            const revenue = (Number(item.priceUsd) || 0) * qty;
+
+            if (nameLower.startsWith('tiempo')) {
+                totalHours += qty;
+                hoursRevenue += revenue;
+            } else if (nameLower.startsWith('jugada')) {
+                totalRounds += qty;
+                roundsRevenue += revenue;
+            } else if (nameLower.startsWith('compartido')) {
+                const meta = item.gameMeta;
+                if (meta) {
+                    totalHours += Number(meta.hoursQty) || 0;
+                    hoursRevenue += Number(meta.hoursRevenue) || 0;
+                    totalRounds += Number(meta.roundsQty) || 0;
+                    roundsRevenue += Number(meta.roundsRevenue) || 0;
+                } else {
+                    // Venta previa a gameMeta: contar recaudo por tiempo
+                    hoursRevenue += revenue;
+                }
+            }
+        });
+    });
+
+    // Si hubo recaudo por tiempo (ej. ventas compartidas previo a gameMeta) y totalHours es 0:
+    // calcular las horas reales equivalentes ($10.000 COP/h)
+    if (hoursRevenue > 0 && totalHours === 0) {
+        totalHours = hoursRevenue / 10000;
+    }
+
+    return {
+        totalHours,
+        hoursRevenue,
+        totalRounds,
+        roundsRevenue,
+        totalRevenue: hoursRevenue + roundsRevenue
+    };
+}

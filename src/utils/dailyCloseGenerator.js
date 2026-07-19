@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { FinancialEngine } from '../core/FinancialEngine';
-import { formatGameHours } from './calculatorUtils';
+import { formatGameHours, computeGameStats } from './calculatorUtils';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -741,38 +741,9 @@ export async function generateDailyClosePDF({
     y += 4;
     drawDivider(y);
     // --- Sección: Actividad de Juego (Horas y Partidas) ---
-    const gameStats = (() => {
-        let totalHours = 0;
-        let hoursRevenue = 0;
-        let totalRounds = 0;
-        let roundsRevenue = 0;
+    const gameStats = computeGameStats(visibleSales);
 
-        visibleSales.forEach(s => {
-            (s.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                const qty = Number(item.qty) || 0;
-                const revenue = (Number(item.priceUsd) || 0) * qty;
-
-                if (nameLower.startsWith('tiempo') || nameLower.startsWith('compartido')) {
-                    totalHours += qty;
-                    hoursRevenue += revenue;
-                } else if (nameLower.startsWith('jugada')) {
-                    totalRounds += qty;
-                    roundsRevenue += revenue;
-                }
-            });
-        });
-
-        return {
-            totalHours,
-            hoursRevenue,
-            totalRounds,
-            roundsRevenue,
-            totalRevenue: hoursRevenue + roundsRevenue
-        };
-    })();
-
-    if (gameStats.totalHours > 0 || gameStats.totalRounds > 0) {
+    if (gameStats.totalHours > 0 || gameStats.totalRounds > 0 || gameStats.hoursRevenue > 0 || gameStats.roundsRevenue > 0 || gameStats.totalRevenue > 0) {
         const sectionGameHeight = 25;
         checkPageBreak(sectionGameHeight);
         const startYGame = y;
@@ -999,11 +970,11 @@ export async function generateDailyClosePDF({
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(...INK);
-    doc.text('Hora / Ref', M + 3, y + 5.5);
-    doc.text('Cliente', M + 32, y + 5.5);
-    doc.text('Artículos Detalle', M + 75, y + 5.5);
-    doc.text('Transacción / Pago', M + 140, y + 5.5);
-    doc.text('Total Venta', RIGHT - 3, y + 5.5, { align: 'right' });
+    doc.text('Hora / Ref', M + 2, y + 5.5);
+    doc.text('Cliente', M + 26, y + 5.5);
+    doc.text('Artículos Detalle', M + 58, y + 5.5);
+    doc.text('Transacción / Pago', M + 115, y + 5.5);
+    doc.text('Total Venta', RIGHT - 2, y + 5.5, { align: 'right' });
     
     y += 8;
 
@@ -1014,11 +985,24 @@ export async function generateDailyClosePDF({
         const isCanceled = s.status === 'ANULADA';
         const cliente = s.customerName || 'Consumidor Final';
 
-        const numItems = (s.items || []).length;
-        const numPayments = (s.payments || []).length;
+        const grossItemsTotal = (s.items || []).reduce((sum, item) => sum + (Number(item.priceUsd) || Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+        const netSaleTotal = isCanceled ? 0 : FinancialEngine.calculateSaleNetTotal(s);
+        const isFiadoSale = s.tipo === 'VENTA_FIADA' || (s.fiadoUsd && s.fiadoUsd > 0);
+        const fiadoAmount = s.fiadoUsd || (s.tipo === 'VENTA_FIADA' ? netSaleTotal : 0);
+
+        // Estimar líneas totales de ítems de forma dinámica
+        let dynamicItemsLines = 0;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.5);
+        (s.items || []).forEach(item => {
+            const lines = doc.splitTextToSize(item.name || '', 54);
+            dynamicItemsLines += Math.max(lines.length, 1);
+        });
+
+        const numPayments = (s.payments || []).length + (isFiadoSale ? 2 : 0);
         
         // Estimar altura necesaria para esta fila
-        const itemsHeight = Math.max(numItems, 1) * 4.2;
+        const itemsHeight = Math.max(dynamicItemsLines, 1) * 4;
         const payHeight = Math.max(numPayments, 1) * 4.2;
         const rowHeight = Math.max(itemsHeight, payHeight) + 8;
 
@@ -1030,86 +1014,104 @@ export async function generateDailyClosePDF({
 
         // Hora y Ref
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(7.5);
         doc.setTextColor(...INK);
-        doc.text(hora, M + 3, y + 5.5);
+        doc.text(hora, M + 2, y + 5.5);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(7.5);
         doc.setTextColor(...BLUE);
-        doc.text(ref, M + 3, y + 9.5);
+        doc.text(ref, M + 2, y + 9.5);
 
         // Cliente
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
+        doc.setFontSize(7.5);
         doc.setTextColor(...BODY);
-        const clienteStr = cliente.length > 20 ? cliente.substring(0, 18) + '…' : cliente;
-        doc.text(clienteStr, M + 32, y + 5.5);
+        const clienteStr = cliente.length > 18 ? cliente.substring(0, 16) + '…' : cliente;
+        doc.text(clienteStr, M + 26, y + 5.5);
 
-        // Lista de Artículos (Detalle)
+        // Lista de Artículos (Detalle completo dinámico sin cortar)
         let itemY = y + 5.5;
         if (s.items && s.items.length > 0) {
             s.items.forEach(item => {
                 const qty = item.isWeight ? `${item.qty.toFixed(2)}kg` : `${item.qty}u`;
-                const name = item.name.length > 26 ? item.name.substring(0, 24) + '…' : item.name;
                 
                 doc.setFont('helvetica', 'bold');
-                doc.setFontSize(7);
+                doc.setFontSize(6.5);
                 doc.setTextColor(...INK);
-                doc.text(qty, M + 75, itemY);
+                doc.text(qty, M + 56, itemY);
                 
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(...BODY);
-                doc.text(name, M + 84, itemY);
+                const nameLines = doc.splitTextToSize(item.name || '', 54);
+                nameLines.forEach((lineText, idx) => {
+                    doc.text(lineText, M + 64, itemY + (idx * 3.5));
+                });
                 
-                itemY += 4;
+                itemY += nameLines.length * 3.5 + 0.8;
             });
         } else {
             doc.setFont('helvetica', 'italic');
-            doc.setFontSize(7);
-            doc.text('Sin productos', M + 75, itemY);
+            doc.setFontSize(6.5);
+            doc.text('Sin productos', M + 56, itemY);
         }
 
-        // Métodos de Pago
+        // Métodos de Pago y Desglose de Transacción
         let payY = y + 5.5;
+
+        if (isFiadoSale && grossItemsTotal > 0) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(6.5);
+            doc.setTextColor(...BODY);
+            doc.text(`Cuenta Total: ${formatCOP(grossItemsTotal)}`, M + 120, payY);
+            payY += 4;
+        }
+
         if (s.payments && s.payments.length > 0) {
             s.payments.forEach(p => {
                 const label = toTitleCase(p.methodLabel || getPaymentLabel(p.methodId) || 'Pago');
                 const isUsd = p.amountOriginalCurrency === 'USD';
                 const val = isUsd 
-                    ? `${formatUsd(p.amountOriginal)} USD` 
-                    : `${formatCOP(p.amountUsd !== undefined ? p.amountUsd : p.amount)} COP`;
+                    ? `$ ${formatUsd(p.amountOriginal)} USD` 
+                    : formatCOP(p.amountUsd !== undefined ? p.amountUsd : p.amount);
                 
                 doc.setFont('helvetica', 'normal');
-                doc.setFontSize(7);
+                doc.setFontSize(6.5);
                 doc.setTextColor(...BODY);
-                const refSuffix = p.reference ? ` (${p.reference.length > 12 ? p.reference.substring(0, 10) + '..' : p.reference})` : '';
-                doc.text(`${label}${refSuffix}: ${val}`, M + 140, payY);
+                const prefix = isFiadoSale ? 'Abono ' : '';
+                doc.text(`${prefix}${label}: ${val}`, M + 120, payY);
                 payY += 4;
             });
         } else if (s.paymentMethod) {
             doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7);
+            doc.setFontSize(6.5);
             doc.setTextColor(...BODY);
-            doc.text(`Pago: ${getPaymentLabel(s.paymentMethod)}`, M + 140, payY);
+            doc.text(`Pago: ${getPaymentLabel(s.paymentMethod)}`, M + 120, payY);
             payY += 4;
         }
 
-        // Descuentos y Vuelto
+        if (isFiadoSale && fiadoAmount > 0) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.setTextColor(...RED);
+            doc.text(`Saldo Fiado: ${formatCOP(fiadoAmount)}`, M + 120, payY);
+            payY += 4;
+        }
+
+        // Vuelto si aplica
         if (s.changeUsd && s.changeUsd > 0) {
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(6.5);
             doc.setTextColor(...RED);
-            doc.text(`Vuelto: ${formatCOP(s.changeUsd)}`, M + 140, payY);
+            doc.text(`Vuelto: ${formatCOP(s.changeUsd)}`, M + 120, payY);
             payY += 4;
         }
 
-        // Monto Total Venta (Extremo Derecho) — use net total to avoid double-counting abonos
+        // Monto Total Venta (Extremo Derecho): Verde si es cobro real ingresado a caja; Rojo si es Saldo Fiado o Anulada
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.setTextColor(...(isCanceled ? RED : GREEN));
-        const netSaleTotal = isCanceled ? 0 : FinancialEngine.calculateSaleNetTotal(s);
+        doc.setFontSize(8.5);
+        doc.setTextColor(...((isCanceled || isFiadoSale) ? RED : GREEN));
         const totalStr = isCanceled ? 'ANULADA' : formatCOP(netSaleTotal);
-        doc.text(totalStr, RIGHT - 3, y + 6.5, { align: 'right' });
+        doc.text(totalStr, RIGHT - 2, y + 6.5, { align: 'right' });
 
         y += rowHeight;
 

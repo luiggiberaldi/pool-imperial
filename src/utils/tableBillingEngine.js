@@ -370,6 +370,49 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
     const hoursOff = paidHoursOffsets[session?.id] || 0;
     const roundsOff = paidRoundsOffsets[session?.id] || 0;
 
+    // Metadata de juego para una línea "Compartido": porción exacta de horas,
+    // piñas y recaudo de tiempo que contiene esa línea (excluye el consumo
+    // compartido de productos). Los reportes de cierre la usan para no inflar
+    // las horas jugadas ni el recaudo por tiempo.
+    const buildSharedGameMeta = (fullBreakdown, divisor, sharedPortion) => {
+        const stc = fullBreakdown?.sessionTimeCost || {};
+        const sharedTotal = fullBreakdown?.sharedTotal || 0;
+        const sharedTimeTotal = fullBreakdown?.sharedTimeTotal || 0;
+        if (!divisor || divisor <= 0 || sharedTotal <= 0 || sharedTimeTotal <= 0) {
+            return { hoursQty: 0, hoursRevenue: 0, roundsQty: 0, roundsRevenue: 0 };
+        }
+        // Fracción de la porción compartida que corresponde a tiempo (no productos)
+        const timeRatio = Math.min(1, sharedTimeTotal / sharedTotal);
+        const lineTimeRevenue = round2((sharedPortion || 0) * timeRatio);
+
+        // Reparto del tiempo entre horas (hourCost + libreCost) y piñas (pinaCost)
+        const timeTotal = stc.total || 0;
+        const hoursShare = timeTotal > 0 ? ((stc.hourCost || 0) + (stc.libreCost || 0)) / timeTotal : 0;
+
+        // Cantidades facturables a nivel sesión (offsets de abonos ya descontados)
+        let sessionHours = 0;
+        if ((stc.hourCost || 0) > 0) {
+            sessionHours = Math.max(0, (Number(session?.hours_paid) || 0) - hoursOff);
+        } else if ((stc.libreCost || 0) > 0) {
+            sessionHours = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff) / 60;
+        }
+
+        let sessionRounds = 0;
+        if ((stc.pinaCost || 0) > 0) {
+            const rounds = session?.game_mode === 'PINA'
+                ? 1 + (Number(session?.extended_times) || 0)
+                : (Number(session?.extended_times) || 0);
+            sessionRounds = Math.max(0, rounds - roundsOff);
+        }
+
+        return {
+            hoursQty: round2(sessionHours / divisor),
+            hoursRevenue: round2(lineTimeRevenue * hoursShare),
+            roundsQty: round2(sessionRounds / divisor),
+            roundsRevenue: round2(lineTimeRevenue * (1 - hoursShare))
+        };
+    };
+
     const syntheticCart = [];
     const tableName = tableCheckoutData.table?.name || 'Mesa';
 
@@ -435,11 +478,13 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
             if (fullBreakdown) {
                 const seatBd = fullBreakdown.seats.find(s => s.seat.id === seatId);
                 if (seatBd && seatBd.sharedPortion > 0) {
+                    const sharedDivisor = fullBreakdown.seats.filter(s => !s.seat.paid).length;
                     syntheticCart.push({
                         id: crypto.randomUUID(),
-                        name: `Compartido ${tableName} (÷${fullBreakdown.seats.filter(s => !s.seat.paid).length})`,
+                        name: `Compartido ${tableName} (÷${sharedDivisor})`,
                         priceUsdt: round2(seatBd.sharedPortion), priceUsd: round2(seatBd.sharedPortion),
-                        qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999
+                        qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                        gameMeta: buildSharedGameMeta(fullBreakdown, sharedDivisor, seatBd.sharedPortion)
                     });
                 }
             }
@@ -451,6 +496,10 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
         if (fullBreakdown) {
             const unpaidSeatBds = fullBreakdown.seats.filter(sb => !sb.seat.paid);
             const divisorLabel = unpaidSeatBds.length;
+            // Los offsets de abonos son a nivel sesión: se consumen secuencialmente
+            // entre los asientos (no restarse completos a cada uno, que subfactura).
+            let remainingRoundsOff = roundsOff;
+            let remainingHoursOff = hoursOff;
             unpaidSeatBds.forEach(seatBd => {
                 const seat = seatBd.seat;
                 const seatLabel = `${tableName} (${seat.label || 'Persona'})`;
@@ -458,8 +507,11 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                     const pinaQty = seat.timeCharges
                         ? seat.timeCharges.filter(tc => tc.type === 'pina').reduce((s, tc) => s + (tc.amount || 1), 0)
                         : (seat.pinas || 1);
-                    const billablePinas = Math.max(0, pinaQty - roundsOff);
-                    syntheticCart.push({
+                    const roundsDeduct = Math.min(pinaQty, remainingRoundsOff);
+                    remainingRoundsOff -= roundsDeduct;
+                    const billablePinas = pinaQty - roundsDeduct;
+                    // Con qty 0 el subtotal la cobraría como 1 (qty || 1): no insertar
+                    if (billablePinas > 0) syntheticCart.push({
                         id: crypto.randomUUID(),
                         name: `Jugada ${seatLabel}`,
                         priceUsdt: round2(config.pricePina || 0), priceUsd: round2(config.pricePina || 0),
@@ -472,8 +524,11 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                     const horasQty = seat.timeCharges
                         ? seat.timeCharges.filter(tc => tc.type === 'hora').reduce((s, tc) => s + (tc.amount || 0), 0)
                         : (seat.hoursPaid || 0);
-                    const billableHours = Math.max(0, horasQty - hoursOff);
-                    syntheticCart.push({
+                    const hoursDeduct = Math.min(horasQty, remainingHoursOff);
+                    remainingHoursOff -= hoursDeduct;
+                    const billableHours = horasQty - hoursDeduct;
+                    // Con qty 0 el subtotal la cobraría como 1 (qty || 1): no insertar
+                    if (billableHours > 0) syntheticCart.push({
                         id: crypto.randomUUID(),
                         name: `Tiempo ${seatLabel} (${formatHoursPaid(horasQty)})`,
                         priceUsdt: round2(config.pricePerHour || 0), priceUsd: round2(config.pricePerHour || 0),
@@ -506,7 +561,8 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                         id: crypto.randomUUID(),
                         name: `Compartido ${tableName} (÷${divisorLabel})`,
                         priceUsdt: round2(seatBd.sharedPortion), priceUsd: round2(seatBd.sharedPortion),
-                        qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999
+                        qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                        gameMeta: buildSharedGameMeta(fullBreakdown, divisorLabel, seatBd.sharedPortion)
                     });
                 }
             });
