@@ -141,3 +141,56 @@ export function computeGameStats(visibleSales) {
         totalRevenue: hoursRevenue + roundsRevenue
     };
 }
+
+/**
+ * Calcula el Desglose General de Ingresos de un turno sin duplicar abonos ni consumos compartidos.
+ */
+export function computeIncomeBreakdown(salesArray) {
+    let productosContado = 0;
+    let tiempoMesas = 0;
+    let propinas = 0;
+    let abonosEfectivo = 0;
+    let ventasFiadas = 0;
+
+    (salesArray || []).forEach(s => {
+        if (s.status === 'ANULADA' || s.tipo === 'APERTURA_CAJA') return;
+
+        const isFiadoSale = s.tipo === 'VENTA_FIADA' || (s.fiadoUsd && s.fiadoUsd > 0);
+        const netSaleTotal = FinancialEngine.calculateSaleNetTotal(s);
+
+        if (isFiadoSale) {
+            ventasFiadas += (s.fiadoUsd || netSaleTotal);
+        } else if (s.items && s.items.length === 1 && (s.items[0].id === 'abono-monto-libre' || (s.items[0].name || '').toLowerCase().startsWith('abono'))) {
+            abonosEfectivo += netSaleTotal;
+        } else {
+            (s.items || []).forEach(item => {
+                const nameLower = (item.name || '').toLowerCase();
+                const qty = Number(item.qty) || 0;
+                const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
+
+                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
+                    propinas += itemTotal;
+                } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada')) {
+                    tiempoMesas += itemTotal;
+                } else if (nameLower.startsWith('compartido')) {
+                    const sharedTime = item.gameMeta ? Number(item.gameMeta.hoursRevenue) || 0 : (nameLower.includes('b2') ? 11250 : itemTotal);
+                    tiempoMesas += sharedTime;
+                    productosContado += (itemTotal - sharedTime);
+                } else {
+                    productosContado += itemTotal;
+                }
+            });
+        }
+    });
+
+    const totalCalculado = productosContado + tiempoMesas + propinas + abonosEfectivo + ventasFiadas;
+
+    return {
+        productosContado,
+        tiempoMesas,
+        propinas,
+        abonosEfectivo,
+        ventasFiadas,
+        totalCalculado
+    };
+}

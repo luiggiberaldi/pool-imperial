@@ -8,7 +8,7 @@
  * Open Drawer: [27, 112, 0, 50, 250]
  */
 
-import { capitalizeName, formatGameHours, computeGameStats } from '../utils/calculatorUtils';
+import { capitalizeName, formatGameHours, computeGameStats, computeIncomeBreakdown } from '../utils/calculatorUtils';
 import { lookupPrinter } from './printerDatabase';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart, getRoundedLibreMinutes } from '../utils/tableBillingEngine';
@@ -1014,29 +1014,7 @@ export async function printDailyCloseEscPos({
     }
 
     // ── Desglose de Ingresos ──
-    let productosFisicosPrinter = 0;
-    let tiempoMesaPrinter = 0;
-    let propinasTotalPrinter = 0;
-    let abonosServiciosPrinter = 0;
-
-    allSales.forEach(s => {
-        if (s.status === 'ANULADA') return;
-        (s.items || []).forEach(item => {
-            const nameLower = (item.name || '').toLowerCase();
-            const qty = Number(item.qty) || 0;
-            const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
-
-            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
-                propinasTotalPrinter += itemTotal;
-            } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada') || nameLower.startsWith('compartido')) {
-                tiempoMesaPrinter += itemTotal;
-            } else if (nameLower.startsWith('abono') || item.id === 'abono-monto-libre') {
-                abonosServiciosPrinter += itemTotal;
-            } else {
-                productosFisicosPrinter += itemTotal;
-            }
-        });
-    });
+    const bd = computeIncomeBreakdown(allSales);
 
     p.align(1).bold(true).text('DESGLOSE DE INGRESOS').newline().bold(false).align(0);
     p.smallFont(true);

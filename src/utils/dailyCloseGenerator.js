@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { FinancialEngine } from '../core/FinancialEngine';
-import { formatGameHours, computeGameStats } from './calculatorUtils';
+import { formatGameHours, computeGameStats, computeIncomeBreakdown } from './calculatorUtils';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -473,29 +473,7 @@ export async function generateDailyClosePDF({
     // ════════════════════════════════════
     //  2.5. DESGLOSE GENERAL DE INGRESOS (COMPOSICIÓN DEL TOTAL)
     // ════════════════════════════════════
-    let productosFisicos = 0;
-    let tiempoMesa = 0;
-    let propinasTotal = 0;
-    let abonosServicios = 0;
-
-    allSales.forEach(s => {
-        if (s.status === 'ANULADA') return;
-        (s.items || []).forEach(item => {
-            const nameLower = (item.name || '').toLowerCase();
-            const qty = Number(item.qty) || 0;
-            const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
-
-            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
-                propinasTotal += itemTotal;
-            } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada') || nameLower.startsWith('compartido')) {
-                tiempoMesa += itemTotal;
-            } else if (nameLower.startsWith('abono') || item.id === 'abono-monto-libre') {
-                abonosServicios += itemTotal;
-            } else {
-                productosFisicos += itemTotal;
-            }
-        });
-    });
+    const breakdownData = computeIncomeBreakdown(allSales);
 
     const incomeBreakdownHeight = 36;
     checkPageBreak(incomeBreakdownHeight);
@@ -503,10 +481,10 @@ export async function generateDailyClosePDF({
     drawSectionTitle('Desglose General de Ingresos (Composición del Total)');
 
     doc.setFillColor(...BG_LIGHT);
-    doc.roundedRect(M, y, WIDTH - M * 2, 28, 2, 2, 'F');
+    doc.roundedRect(M, y, WIDTH - M * 2, 30, 2, 2, 'F');
     doc.setDrawColor(...RULE);
     doc.setLineWidth(0.2);
-    doc.roundedRect(M, y, WIDTH - M * 2, 28, 2, 2, 'D');
+    doc.roundedRect(M, y, WIDTH - M * 2, 30, 2, 2, 'D');
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
@@ -520,20 +498,20 @@ export async function generateDailyClosePDF({
 
     let rowY = y + 11;
 
-    // Fila 1: Productos Fisicos
+    // Fila 1: Productos Fisicos (Contado)
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7);
     doc.setTextColor(...BODY);
-    doc.text('Productos Físicos', M + 4, rowY);
+    doc.text('Productos Físicos (Contado)', M + 4, rowY);
     doc.setFont('helvetica', 'normal');
-    doc.text('Bebidas, pasabocas, cigarrillos y productos de catálogo', M + 65, rowY);
+    doc.text('Bebidas, pasabocas y cigarrillos cobrados de contado', M + 65, rowY);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...INK);
-    doc.text(formatCOP(productosFisicos), RIGHT - 4, rowY, { align: 'right' });
+    doc.text(formatCOP(breakdownData.productosContado), RIGHT - 4, rowY, { align: 'right' });
     rowY += 4.5;
 
     // Fila 2: Tiempo de Mesa
-    if (tiempoMesa > 0) {
+    if (breakdownData.tiempoMesas > 0) {
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...BODY);
         doc.text('Tiempo de Mesa / Juego', M + 4, rowY);
@@ -541,12 +519,12 @@ export async function generateDailyClosePDF({
         doc.text('Alquiler de mesas de pool, horas y partidas cobradas', M + 65, rowY);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...BLUE);
-        doc.text(`+${formatCOP(tiempoMesa)}`, RIGHT - 4, rowY, { align: 'right' });
+        doc.text(`+${formatCOP(breakdownData.tiempoMesas)}`, RIGHT - 4, rowY, { align: 'right' });
         rowY += 4.5;
     }
 
     // Fila 3: Servicio Voluntario
-    if (propinasTotal > 0) {
+    if (breakdownData.propinas > 0) {
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...BODY);
         doc.text('Servicio Voluntario (Propina)', M + 4, rowY);
@@ -554,20 +532,33 @@ export async function generateDailyClosePDF({
         doc.text('Propinas registradas para el personal de servicio', M + 65, rowY);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...GREEN);
-        doc.text(`+${formatCOP(propinasTotal)}`, RIGHT - 4, rowY, { align: 'right' });
+        doc.text(`+${formatCOP(breakdownData.propinas)}`, RIGHT - 4, rowY, { align: 'right' });
         rowY += 4.5;
     }
 
-    // Fila 4: Abonos / Servicios
-    if (abonosServicios > 0) {
+    // Fila 4: Abonos en Efectivo
+    if (breakdownData.abonosEfectivo > 0) {
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...BODY);
-        doc.text('Abonos / Servicios de Mesa', M + 4, rowY);
+        doc.text('Abonos Recibidos en Efectivo', M + 4, rowY);
         doc.setFont('helvetica', 'normal');
-        doc.text('Abonos parciales y cobros de servicio sin producto físico', M + 65, rowY);
+        doc.text('Abonos libres ingresados a caja durante el turno', M + 65, rowY);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(...INK);
-        doc.text(`+${formatCOP(abonosServicios)}`, RIGHT - 4, rowY, { align: 'right' });
+        doc.text(`+${formatCOP(breakdownData.abonosEfectivo)}`, RIGHT - 4, rowY, { align: 'right' });
+        rowY += 4.5;
+    }
+
+    // Fila 5: Ventas Fiadas
+    if (breakdownData.ventasFiadas > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...BODY);
+        doc.text('Venta Fiada (Crédito)', M + 4, rowY);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Saldo por cobrar a clientes registrado en este turno', M + 65, rowY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...RED);
+        doc.text(`+${formatCOP(breakdownData.ventasFiadas)}`, RIGHT - 4, rowY, { align: 'right' });
         rowY += 4.5;
     }
 
@@ -579,7 +570,7 @@ export async function generateDailyClosePDF({
     doc.text('TOTAL INGRESO BRUTO CIERRE', M + 4, rowY + 2);
     doc.text(formatCOP(totalCOP), RIGHT - 4, rowY + 2, { align: 'right' });
 
-    y += 34;
+    y += 36;
     drawDivider(y);
     y += 8;
 

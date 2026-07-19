@@ -4,6 +4,7 @@ import { getPaymentLabel, getPaymentIcon, toTitleCase } from '../../config/payme
 import { round2 } from '../../utils/dinero';
 import { printThermalDailyClose } from '../../utils/ticketGenerator';
 import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
+import { computeIncomeBreakdown } from '../../utils/calculatorUtils';
 
 export default function CierreCajaWizard({
     isOpen,
@@ -165,31 +166,7 @@ export default function CierreCajaWizard({
     }, [todayAdjustments, allSales, todaySales, reportSnapshot]);
 
     const incomeBreakdown = useMemo(() => {
-        let productosFisicos = 0;
-        let tiempoMesa = 0;
-        let propinasTotal = 0;
-        let abonosServicios = 0;
-
-        (allSales || []).forEach(s => {
-            if (s.status === 'ANULADA') return;
-            (s.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                const qty = Number(item.qty) || 0;
-                const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
-
-                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
-                    propinasTotal += itemTotal;
-                } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada') || nameLower.startsWith('compartido')) {
-                    tiempoMesa += itemTotal;
-                } else if (nameLower.startsWith('abono') || item.id === 'abono-monto-libre') {
-                    abonosServicios += itemTotal;
-                } else {
-                    productosFisicos += itemTotal;
-                }
-            });
-        });
-
-        return { productosFisicos, tiempoMesa, propinasTotal, abonosServicios };
+        return computeIncomeBreakdown(allSales);
     }, [allSales]);
 
     if (!isOpen) return null;
