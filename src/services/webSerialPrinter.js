@@ -559,7 +559,7 @@ function sanitizeForEscPos(str) {
         .replace(/ /g, ' ')   // espacio no separable
         // Eliminar cualquier caracter no-ASCII que quede
         // (rango 0x00-0x7E es ASCII estándar seguro)
-        .replace(/[\u0080-\uFFFF]/g, '?');
+        .replace(/[\u0080-\uFFFF]/g, '');
 }
 const LF  = 0x0A;
 
@@ -567,7 +567,15 @@ function escposEncoder() {
     const chunks = [];
     const encoder = new TextEncoder();
     const api = {
-        init()           { chunks.push(new Uint8Array([ESC, 0x40])); return api; },
+        init() {
+            chunks.push(new Uint8Array([
+                ESC, 0x40,        // ESC @: Reset impresoras ESC/POS
+                0x1C, 0x2E,       // FS . : CANCELAR MODO CHINO/KANJI (Desactiva ideogramas chinos en Xprinter, POS-58, POS-80)
+                ESC, 0x74, 0x00,  // ESC t 0: Seleccionar Tabla de Caracteres PC437 (ASCII Estándar USA / Latina)
+                ESC, 0x37, 0x00   // ESC 7 0: Desactivar modo de caracteres extendidos asiáticos
+            ]));
+            return api;
+        },
         align(a)         { chunks.push(new Uint8Array([ESC, 0x61, a])); return api; },
         bold(on)         { chunks.push(new Uint8Array([ESC, 0x45, on ? 1 : 0])); return api; },
         smallFont(on)    { chunks.push(new Uint8Array([ESC, 0x4D, on ? 1 : 0])); return api; }, // ESC M — Font B (9x17): 42 chars/línea en 58mm
