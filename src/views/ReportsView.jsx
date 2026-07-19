@@ -109,7 +109,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                 const qty = Number(item.qty) || 0;
                 const revenue = (Number(item.priceUsd) || 0) * qty;
 
-                if (nameLower.startsWith('tiempo')) {
+                if (nameLower.startsWith('tiempo') || nameLower.startsWith('compartido')) {
                     totalHours += qty;
                     hoursRevenue += revenue;
                 } else if (nameLower.startsWith('jugada')) {
