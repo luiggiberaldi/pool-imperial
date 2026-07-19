@@ -1,3 +1,5 @@
+import { FinancialEngine } from '../core/FinancialEngine';
+
 // [CONFIGURACIÓN] Comisión de efectivo REMOVIDA
 // La tasa de efectivo ahora depende exclusivamente de la calibración manual del usuario
 
