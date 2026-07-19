@@ -116,14 +116,16 @@ export function computeGameStats(visibleSales) {
                 roundsRevenue += revenue;
             } else if (nameLower.startsWith('compartido')) {
                 const meta = item.gameMeta;
-                if (meta) {
-                    totalHours += Number(meta.hoursQty) || 0;
-                    hoursRevenue += Number(meta.hoursRevenue) || 0;
+                if (meta && (meta.hoursRevenue !== undefined || meta.hoursQty !== undefined)) {
+                    const hRev = Number(meta.hoursRevenue) || 0;
+                    totalHours += Number(meta.hoursQty) || (hRev > 0 ? hRev / 10000 : 0);
+                    hoursRevenue += hRev;
                     totalRounds += Number(meta.roundsQty) || 0;
                     roundsRevenue += Number(meta.roundsRevenue) || 0;
                 } else {
-                    // Venta previa a gameMeta: contar recaudo por tiempo
-                    hoursRevenue += revenue;
+                    // Venta previa a gameMeta: deducir la porción real de tiempo ($11.250 por seat en B2)
+                    const sharedTime = nameLower.includes('b2') ? (11250 * qty) : revenue;
+                    hoursRevenue += sharedTime;
                 }
             }
         });
