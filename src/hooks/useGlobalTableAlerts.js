@@ -144,8 +144,8 @@ export function useGlobalTableAlerts() {
                                         config,
                                         hoursOffset: hoursOff,
                                         roundsOffset: roundsOff,
-                                        paidHoursOffsets: {},
-                                        paidRoundsOffsets: {}
+                                        paidHoursOffsets: { [session.id]: hoursOff },
+                                        paidRoundsOffsets: { [session.id]: roundsOff }
                                     };
                                     const result = buildTableSyntheticCart(tableCheckoutData, config, products);
                                     if (result && result.syntheticCart) {

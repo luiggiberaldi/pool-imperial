@@ -155,8 +155,8 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
             config,
             hoursOffset,
             roundsOffset,
-            paidHoursOffsets: {},
-            paidRoundsOffsets: {},
+            paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
+            paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
             isPartial: isAnyAbono,
             seatId
         };
@@ -223,8 +223,8 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                 config,
                 hoursOffset,
                 roundsOffset,
-                paidHoursOffsets: {},
-                paidRoundsOffsets: {},
+                paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
+                paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
                 isPartial: isAnyAbono,
                 seatId
             };

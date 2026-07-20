@@ -143,8 +143,8 @@ export function TableQueuePanel({ onCheckoutTable }) {
                             config,
                             hoursOffset: (paidHoursOffsets || {})[session.id] || 0,
                             roundsOffset: (paidRoundsOffsets || {})[session.id] || 0,
-                            paidHoursOffsets: {},
-                            paidRoundsOffsets: {},
+                            paidHoursOffsets: { [session.id]: (paidHoursOffsets || {})[session.id] || 0 },
+                            paidRoundsOffsets: { [session.id]: (paidRoundsOffsets || {})[session.id] || 0 },
                             isPartial: isAnyAbono
                         };
                         const result = buildTableSyntheticCart(tableCheckoutData, config, products);
@@ -229,8 +229,8 @@ export function TableQueuePanel({ onCheckoutTable }) {
                                 config,
                                 hoursOffset: _ho,
                                 roundsOffset: _ro,
-                                paidHoursOffsets: {},
-                                paidRoundsOffsets: {},
+                                paidHoursOffsets: { [session.id]: _ho },
+                                paidRoundsOffsets: { [session.id]: _ro },
                                 isPartial: false,
                                 seatId: item.seat.id,
                                 seatDisplayInfo

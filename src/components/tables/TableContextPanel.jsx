@@ -501,8 +501,8 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                 config,
                 hoursOffset,
                 roundsOffset,
-                paidHoursOffsets: {},
-                paidRoundsOffsets: {}
+                paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
+                paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {}
             };
             const result = buildTableSyntheticCart(tableCheckoutData, config, products);
             if (result && result.syntheticCart) {

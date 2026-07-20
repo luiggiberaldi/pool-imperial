@@ -370,6 +370,17 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
     const hoursOff = paidHoursOffsets[session?.id] || 0;
     const roundsOff = paidRoundsOffsets[session?.id] || 0;
 
+    // Los offsets de abonos son a nivel sesión y primero los absorben las
+    // horas/piñas de la sesión (calculateSessionCostBreakdown ya los resta).
+    // A los cargos de asiento solo les llega el REMANENTE: aplicar el offset
+    // completo otra vez a cada asiento regalaba el tiempo nuevo (doble descuento).
+    const isTimeFreeTable = tableCheckoutData.table?.type === 'NORMAL';
+    const sessionHoursCap = isTimeFreeTable ? 0 : (Number(session?.hours_paid) || 0);
+    const sessionRoundsCap = isTimeFreeTable ? 0 :
+        (session?.game_mode === 'PINA' ? 1 + (Number(session?.extended_times) || 0) : (Number(session?.extended_times) || 0));
+    const seatHoursOff = Math.max(0, hoursOff - sessionHoursCap);
+    const seatRoundsOff = Math.max(0, roundsOff - sessionRoundsCap);
+
     // Metadata de juego para una línea "Compartido": porción exacta de horas,
     // piñas y recaudo de tiempo que contiene esa línea (excluye el consumo
     // compartido de productos). Los reportes de cierre la usan para no inflar
@@ -427,7 +438,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 const pinaQty = seat.timeCharges
                     ? seat.timeCharges.filter(tc => tc.type === 'pina').reduce((s, tc) => s + (tc.amount || 1), 0)
                     : (seat.pinas || 1);
-                const billablePinas = Math.max(0, pinaQty - roundsOff);
+                const billablePinas = Math.max(0, pinaQty - seatRoundsOff);
                 syntheticCart.push({
                     id: crypto.randomUUID(),
                     name: `Jugada ${seatLabel}`,
@@ -441,7 +452,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 const horasQty = seat.timeCharges
                     ? seat.timeCharges.filter(tc => tc.type === 'hora').reduce((s, tc) => s + (tc.amount || 0), 0)
                     : (seat.hoursPaid || 0);
-                const billableHours = Math.max(0, horasQty - hoursOff);
+                const billableHours = Math.max(0, horasQty - seatHoursOff);
                 syntheticCart.push({
                     id: crypto.randomUUID(),
                     name: `Tiempo ${seatLabel} (${formatHoursPaid(horasQty)})`,
@@ -496,10 +507,11 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
         if (fullBreakdown) {
             const unpaidSeatBds = fullBreakdown.seats.filter(sb => !sb.seat.paid);
             const divisorLabel = unpaidSeatBds.length;
-            // Los offsets de abonos son a nivel sesión: se consumen secuencialmente
-            // entre los asientos (no restarse completos a cada uno, que subfactura).
-            let remainingRoundsOff = roundsOff;
-            let remainingHoursOff = hoursOff;
+            // Solo el remanente del offset (tras absorberlo la sesión) llega a los
+            // asientos, y se consume secuencialmente entre ellos (no restarse
+            // completo a cada uno, que subfactura).
+            let remainingRoundsOff = seatRoundsOff;
+            let remainingHoursOff = seatHoursOff;
             unpaidSeatBds.forEach(seatBd => {
                 const seat = seatBd.seat;
                 const seatLabel = `${tableName} (${seat.label || 'Persona'})`;

@@ -121,8 +121,8 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
             config,
             hoursOffset,
             roundsOffset,
-            paidHoursOffsets: {},
-            paidRoundsOffsets: {},
+            paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
+            paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
             isPartial: isPartial
         };
         const result = buildTableSyntheticCart(tableCheckoutData, config, allProducts);

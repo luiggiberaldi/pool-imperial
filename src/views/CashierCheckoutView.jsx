@@ -164,8 +164,8 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                         config,
                                         hoursOffset,
                                         roundsOffset,
-                                        paidHoursOffsets: {},
-                                        paidRoundsOffsets: {},
+                                        paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
+                                        paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
                                         isPartial: isAnyAbono
                                     };
                                     const result = buildTableSyntheticCart(tableCheckoutData, config, products);
@@ -199,8 +199,8 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                         config,
                                         hoursOffset,
                                         roundsOffset,
-                                        paidHoursOffsets: {},
-                                        paidRoundsOffsets: {},
+                                        paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
+                                        paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
                                         seatId: req.seatId
                                     };
                                     const result = buildTableSyntheticCart(tableCheckoutData, config, products);
