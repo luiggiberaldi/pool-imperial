@@ -86,6 +86,25 @@ export function formatGameHours(hours) {
 }
 
 /**
+ * Determina si un item de venta NO es un producto real del negocio:
+ * propinas, servicio voluntario, recargos, abonos parciales y cargos de mesa
+ * (tiempo, jugadas, compartidos). Se usa para excluirlos de Top Productos,
+ * conteos de artículos vendidos y estadísticas de inventario.
+ */
+export function isNonProductSaleItem(item) {
+    const nameLower = (item?.name || '').toLowerCase();
+    return item?.isTip === true ||
+        nameLower.includes('propina') ||
+        nameLower.includes('servicio voluntario') ||
+        nameLower.includes('recargo tdc') ||
+        nameLower.startsWith('compartido') ||
+        nameLower.startsWith('tiempo') ||
+        nameLower.startsWith('jugada') ||
+        nameLower.startsWith('abono') ||
+        item?.id === 'abono-monto-libre';
+}
+
+/**
  * Calcula las estadísticas de actividad de juego (horas de mesa + jugadas/piñas)
  * a partir de una lista de ventas ya filtradas (sin ANULADAS).
  *
@@ -157,6 +176,43 @@ export function computeIncomeBreakdown(salesArray) {
     let abonosEfectivo = 0;
     let ventasFiadas = 0;
 
+    // Clasifica los items de una venta en buckets y los suma escalados a `amount`
+    // (lo realmente recibido por esa venta): así los abonos previos y descuentos
+    // no se cuentan dos veces y la suma de buckets siempre cuadra con el neto.
+    const classifyItems = (s, amount) => {
+        if (amount <= 0) return;
+        let prod = 0, tiempo = 0, tips = 0;
+        (s.items || []).forEach(item => {
+            const nameLower = (item.name || '').toLowerCase();
+            const qty = Number(item.qty) || 0;
+            const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
+
+            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
+                tips += itemTotal;
+            } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada')) {
+                tiempo += itemTotal;
+            } else if (nameLower.startsWith('compartido')) {
+                const meta = item.gameMeta;
+                const sharedTime = meta && meta.hoursRevenue !== undefined
+                    ? Number(meta.hoursRevenue) || 0
+                    : ((nameLower.includes('b2') || nameLower.includes('pool')) ? (11250 * qty) : itemTotal);
+                tiempo += sharedTime;
+                prod += Math.max(0, itemTotal - sharedTime);
+            } else {
+                prod += itemTotal;
+            }
+        });
+        const gross = prod + tiempo + tips;
+        if (gross <= 0) {
+            productosContado += amount;
+            return;
+        }
+        const scale = amount / gross;
+        productosContado += prod * scale;
+        tiempoMesas += tiempo * scale;
+        propinas += tips * scale;
+    };
+
     (salesArray || []).forEach(s => {
         if (s.status === 'ANULADA' || s.tipo === 'APERTURA_CAJA') return;
 
@@ -164,30 +220,18 @@ export function computeIncomeBreakdown(salesArray) {
         const netSaleTotal = FinancialEngine.calculateSaleNetTotal(s);
 
         if (isFiadoSale) {
-            ventasFiadas += (s.fiadoUsd || netSaleTotal);
+            const fiado = Number(s.fiadoUsd) || 0;
+            if (fiado > 0) {
+                ventasFiadas += fiado;
+                // Venta fiada mixta: la parte pagada (efectivo/nequi) no se pierde
+                classifyItems(s, Math.max(0, netSaleTotal - fiado));
+            } else {
+                ventasFiadas += netSaleTotal;
+            }
         } else if (s.items && s.items.length === 1 && (s.items[0].id === 'abono-monto-libre' || (s.items[0].name || '').toLowerCase().startsWith('abono'))) {
             abonosEfectivo += netSaleTotal;
         } else {
-            (s.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                const qty = Number(item.qty) || 0;
-                const itemTotal = (Number(item.priceUsd) || Number(item.price) || 0) * qty;
-
-                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario')) {
-                    propinas += itemTotal;
-                } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada')) {
-                    tiempoMesas += itemTotal;
-                } else if (nameLower.startsWith('compartido')) {
-                    const meta = item.gameMeta;
-                    const sharedTime = meta && meta.hoursRevenue !== undefined
-                        ? Number(meta.hoursRevenue) || 0
-                        : ((nameLower.includes('b2') || nameLower.includes('pool')) ? (11250 * qty) : itemTotal);
-                    tiempoMesas += sharedTime;
-                    productosContado += Math.max(0, itemTotal - sharedTime);
-                } else {
-                    productosContado += itemTotal;
-                }
-            });
+            classifyItems(s, netSaleTotal);
         }
     });
 

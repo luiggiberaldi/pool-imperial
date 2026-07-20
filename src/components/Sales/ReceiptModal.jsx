@@ -145,7 +145,7 @@ export default function ReceiptModal({ receipt, onClose, onShareWhatsApp }) {
 
                                 {receipt.changeUsd > 0 && (
                                     <div className="mt-2 pt-2 border-t border-slate-200">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Vuelto Entregado</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Cambio Entregado</p>
                                         <div className="flex justify-between text-emerald-600 font-bold">
                                             <span>Cambio:</span>
                                             <span>{formatCop(receipt.changeUsd)}</span>

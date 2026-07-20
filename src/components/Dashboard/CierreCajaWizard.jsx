@@ -4,7 +4,7 @@ import { getPaymentLabel, getPaymentIcon, toTitleCase } from '../../config/payme
 import { round2 } from '../../utils/dinero';
 import { printThermalDailyClose } from '../../utils/ticketGenerator';
 import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
-import { computeIncomeBreakdown } from '../../utils/calculatorUtils';
+import { computeIncomeBreakdown, isNonProductSaleItem } from '../../utils/calculatorUtils';
 
 export default function CierreCajaWizard({
     isOpen,
@@ -114,14 +114,7 @@ export default function CierreCajaWizard({
         currentAdjustments.forEach(adj => {
             if (adj.status === 'ANULADA') return;
             (adj.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (
-                    nameLower.startsWith('compartido') ||
-                    nameLower.startsWith('tiempo') ||
-                    nameLower.startsWith('jugada') ||
-                    nameLower.startsWith('abono') ||
-                    item.id === 'abono-monto-libre'
-                ) return;
+                if (isNonProductSaleItem(item)) return;
 
                 const prodId = item.id;
                 if (!movements[prodId]) {
@@ -140,16 +133,7 @@ export default function CierreCajaWizard({
         currentSales.forEach(sale => {
             if (sale.status === 'ANULADA') return;
             (sale.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
-                
-                if (
-                    nameLower.startsWith('compartido') ||
-                    nameLower.startsWith('tiempo') ||
-                    nameLower.startsWith('jugada') ||
-                    nameLower.startsWith('abono') ||
-                    item.id === 'abono-monto-libre'
-                ) return;
+                if (isNonProductSaleItem(item)) return;
 
                 const prodId = item.id;
                 if (!movements[prodId]) {

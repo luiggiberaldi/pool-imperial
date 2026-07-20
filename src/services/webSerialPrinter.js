@@ -8,7 +8,7 @@
  * Open Drawer: [27, 112, 0, 50, 250]
  */
 
-import { capitalizeName, formatGameHours, computeGameStats, computeIncomeBreakdown } from '../utils/calculatorUtils';
+import { capitalizeName, formatGameHours, computeGameStats, computeIncomeBreakdown, isNonProductSaleItem } from '../utils/calculatorUtils';
 import { lookupPrinter } from './printerDatabase';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatHoursPaid, formatElapsedTime, calculateFullTableBreakdown, buildTableSyntheticCart, getRoundedLibreMinutes } from '../utils/tableBillingEngine';
@@ -738,7 +738,7 @@ export async function printReceiptEscPos(sale, bcvRate) {
 
     if (sale.changeUsd > 0) {
         p.line('-', W);
-        p.bold(true).row('Vuelto:', formatCOP(sale.changeUsd), W);
+        p.bold(true).row('Cambio:', formatCOP(sale.changeUsd), W);
         p.bold(true);
     }
     if (sale.fiadoUsd > 0) {
@@ -834,14 +834,7 @@ export async function printDailyCloseEscPos({
         (adjustments || []).forEach(adj => {
             if (adj.status === 'ANULADA') return;
             (adj.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (
-                    nameLower.startsWith('compartido') ||
-                    nameLower.startsWith('tiempo') ||
-                    nameLower.startsWith('jugada') ||
-                    nameLower.startsWith('abono') ||
-                    item.id === 'abono-monto-libre'
-                ) return;
+                if (isNonProductSaleItem(item)) return;
 
                 const prodId = item.id;
                 if (!movements[prodId]) {
@@ -859,16 +852,7 @@ export async function printDailyCloseEscPos({
         allSales.forEach(sale => {
             if (sale.status === 'ANULADA') return;
             (sale.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
-                
-                if (
-                    nameLower.startsWith('compartido') ||
-                    nameLower.startsWith('tiempo') ||
-                    nameLower.startsWith('jugada') ||
-                    nameLower.startsWith('abono') ||
-                    item.id === 'abono-monto-libre'
-                ) return;
+                if (isNonProductSaleItem(item)) return;
 
                 const prodId = item.id;
                 if (!movements[prodId]) {

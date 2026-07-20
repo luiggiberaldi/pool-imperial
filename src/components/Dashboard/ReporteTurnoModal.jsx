@@ -141,7 +141,9 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
         finalAllSales.forEach(s => {
             const isCanceled = s.status === 'ANULADA';
             const productos = s.items ? s.items.map(i => `${i.name} x${i.qty}`).join(' | ') : '—';
-            const saleCop = s.totalCop || s.totalUsd || 0;
+            // Neto de la venta (descuenta abonos previos ya contados en su propio recibo)
+            const saleCop = FinancialEngine.calculateSaleNetTotal(s);
+            const abonoPrevio = (s.payments || []).filter(p => p.isAbonoPrevio === true).reduce((sum, p) => sum + (p.amountUsd || 0), 0);
             const saleUsd = saleCop / (s.rate || 4150);
             rows.push([
                 formatHora(s.timestamp),
@@ -150,7 +152,7 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                 s.items ? s.items.reduce((sum, i) => sum + i.qty, 0) : 0,
                 isCanceled ? 'ANULADA' : new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(saleCop),
                 isCanceled ? 'ANULADA' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(saleUsd),
-                isCanceled ? 'ANULADA' : getSalePaymentLabel(s),
+                isCanceled ? 'ANULADA' : (getSalePaymentLabel(s) + (abonoPrevio > 0 ? ` (abonado ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(abonoPrevio)} antes)` : '')),
             ]);
         });
 
@@ -356,6 +358,8 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                             <div className="space-y-1.5">
                                 {finalAllSales.map(s => {
                                     const isCanceled = s.status === 'ANULADA';
+                                    const netCop = FinancialEngine.calculateSaleNetTotal(s);
+                                    const abonoPrevio = (s.payments || []).filter(p => p.isAbonoPrevio === true).reduce((sum, p) => sum + (p.amountUsd || 0), 0);
                                     return (
                                         <div key={s.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3.5 py-2.5">
                                             <div className="flex-1 min-w-0">
@@ -370,9 +374,16 @@ export default function ReporteTurnoModal({ isOpen, onClose, todaySales, todayTo
                                                     {s.items ? s.items.map(i => `${i.name} x${i.qty}`).join(', ') : '—'}
                                                 </p>
                                             </div>
-                                            <p className={`text-sm font-black ${isCanceled ? 'text-red-500 line-through' : 'text-slate-800 dark:text-white'} ml-3 shrink-0`}>
-                                                {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(s.totalCop || s.totalUsd || 0)}
-                                            </p>
+                                            <div className="ml-3 shrink-0 text-right">
+                                                <p className={`text-sm font-black ${isCanceled ? 'text-red-500 line-through' : 'text-slate-800 dark:text-white'}`}>
+                                                    {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(netCop)}
+                                                </p>
+                                                {!isCanceled && abonoPrevio > 0 && (
+                                                    <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold">
+                                                        (abonado {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(abonoPrevio)} antes)
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}

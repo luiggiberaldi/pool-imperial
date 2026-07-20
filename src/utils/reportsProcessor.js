@@ -1,5 +1,6 @@
 import { FinancialEngine } from '../core/FinancialEngine';
 import { getLocalISODate } from './dateHelpers';
+import { isNonProductSaleItem } from './calculatorUtils';
 
 /**
  * Calcula los datos de reportes para Pool Imperial (COP único).
@@ -52,8 +53,7 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
     });
 
     const totalItems = salesForStats.reduce((s, sale) => s + (sale.items ? sale.items.reduce((is, i) => {
-        const nameLower = (i.name || '').toLowerCase();
-        if (i.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return is;
+        if (isNonProductSaleItem(i)) return is;
         return is + i.qty;
     }, 0) : 0), 0);
     const profit = FinancialEngine.calculateAggregateProfit(salesForStats, 1, products);
@@ -82,8 +82,7 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
 
     salesForStats.forEach(s => {
         s.items?.forEach(item => {
-            const nameLower = (item.name || '').toLowerCase();
-            if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
+            if (isNonProductSaleItem(item)) return;
             if (!productMap[item.name]) productMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
             productMap[item.name].qty += item.qty;
             productMap[item.name].revenue += (item.priceUsd || 0) * item.qty; // priceUsd ahora = COP
@@ -167,8 +166,7 @@ export function groupSalesByCierreId(allSales, from, to, products) {
                 }
             });
             const totalItems = salesForStats.reduce((acc, s) => acc + (s.items ? s.items.reduce((is, it) => {
-                const nameLower = (it.name || '').toLowerCase();
-                if (it.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return is;
+                if (isNonProductSaleItem(it)) return is;
                 return is + it.qty;
             }, 0) : 0), 0);
             const profit = FinancialEngine.calculateAggregateProfit(salesForStats, 1, products);

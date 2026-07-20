@@ -2,7 +2,7 @@ import { jsPDF } from 'jspdf';
 import { getPaymentLabel, toTitleCase } from '../config/paymentMethods';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { FinancialEngine } from '../core/FinancialEngine';
-import { formatGameHours, computeGameStats, computeIncomeBreakdown } from './calculatorUtils';
+import { formatGameHours, computeGameStats, computeIncomeBreakdown, isNonProductSaleItem } from './calculatorUtils';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -586,14 +586,7 @@ export async function generateDailyClosePDF({
         (adjustments || []).forEach(adj => {
             if (adj.status === 'ANULADA') return;
             (adj.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (
-                    nameLower.startsWith('compartido') ||
-                    nameLower.startsWith('tiempo') ||
-                    nameLower.startsWith('jugada') ||
-                    nameLower.startsWith('abono') ||
-                    item.id === 'abono-monto-libre'
-                ) return;
+                if (isNonProductSaleItem(item)) return;
 
                 const prodId = item.id;
                 if (!movements[prodId]) {
@@ -611,16 +604,7 @@ export async function generateDailyClosePDF({
         allSales.forEach(sale => {
             if (sale.status === 'ANULADA') return;
             (sale.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
-                
-                if (
-                    nameLower.startsWith('compartido') ||
-                    nameLower.startsWith('tiempo') ||
-                    nameLower.startsWith('jugada') ||
-                    nameLower.startsWith('abono') ||
-                    item.id === 'abono-monto-libre'
-                ) return;
+                if (isNonProductSaleItem(item)) return;
 
                 const prodId = item.id;
                 if (!movements[prodId]) {
@@ -1088,12 +1072,12 @@ export async function generateDailyClosePDF({
             payY += 4;
         }
 
-        // Vuelto si aplica
+        // Cambio si aplica
         if (s.changeUsd && s.changeUsd > 0) {
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(6.5);
             doc.setTextColor(...RED);
-            doc.text(`Vuelto: ${formatCOP(s.changeUsd)}`, M + 120, payY);
+            doc.text(`Cambio: ${formatCOP(s.changeUsd)}`, M + 120, payY);
             payY += 4;
         }
 

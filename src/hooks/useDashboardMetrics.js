@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { FinancialEngine } from '../core/FinancialEngine';
-import { capitalizeName } from '../utils/calculatorUtils';
+import { capitalizeName, isNonProductSaleItem } from '../utils/calculatorUtils';
 
 export function getLocalISODate(d = new Date()) {
     const year = d.getFullYear();
@@ -88,8 +88,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     const todayTotalUsd = useMemo(() => todaySales.reduce((sum, s) => sum + FinancialEngine.calculateSaleNetTotal(s), 0), [todaySales]);
     const todayItemsSold = useMemo(() =>
         todaySales.reduce((sum, s) => sum + (s.items ? s.items.reduce((is, i) => {
-            const nameLower = (i.name || '').toLowerCase();
-            if (i.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return is;
+            if (isNonProductSaleItem(i)) return is;
             return is + i.qty;
         }, 0) : 0), 0),
         [todaySales]
@@ -139,8 +138,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
     const dayTotalBs = useMemo(() => daySales.reduce((sum, s) => sum + (s.totalBs || 0), 0), [daySales]);
     const dayItemsSold = useMemo(() =>
         daySales.reduce((sum, s) => sum + (s.items ? s.items.reduce((is, i) => {
-            const nameLower = (i.name || '').toLowerCase();
-            if (i.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return is;
+            if (isNonProductSaleItem(i)) return is;
             return is + i.qty;
         }, 0) : 0), 0),
         [daySales]
@@ -258,20 +256,17 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
 
     const todayTopProducts = useMemo(() => {
         const map = {};
-        const productIds = new Set((products || []).map(p => p.id));
-        const productNames = new Set((products || []).map(p => p.name.toLowerCase()));
 
         todaySales.forEach(s => {
             s.items?.forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
+                if (isNonProductSaleItem(item)) return;
                 if (!map[item.name]) map[item.name] = { name: item.name, qty: 0, revenue: 0 };
                 map[item.name].qty += item.qty;
                 map[item.name].revenue += item.priceUsd * item.qty;
             });
         });
         return Object.values(map).sort((a, b) => b.qty - a.qty);
-    }, [todaySales, products]);
+    }, [todaySales]);
 
     return {
         today, todaySales, todayAllSales, todayCashFlow, todayApertura, todayAdjustments,

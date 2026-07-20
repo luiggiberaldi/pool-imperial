@@ -134,7 +134,7 @@ export default function TransactionRow({
                             )}
                             {s.changeUsd > 0 && (
                                 <div className="flex justify-between text-emerald-500">
-                                    <span>Vuelto entregado</span>
+                                    <span>Cambio entregado</span>
                                     <span className="font-bold">{formatCop(s.changeUsd)}</span>
                                 </div>
                             )}

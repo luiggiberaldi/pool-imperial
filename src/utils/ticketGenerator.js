@@ -323,7 +323,7 @@ export async function generateTicketPDF(sale, _bcvRate) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(6.5);
         doc.setTextColor(...MUTED);
-        doc.text('VUELTO ENTREGADO', M, y);
+        doc.text('CAMBIO ENTREGADO', M, y);
         y += 5;
 
         doc.setFont('helvetica', 'bold');

@@ -22,7 +22,7 @@ export default function CheckoutChangeBreakdown({
                 : 'bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800'
                 }`}>
                 <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${isPaid ? 'text-emerald-500' : 'text-orange-500'}`}>
-                    {isPaid ? 'Vuelto' : 'Falta por Cobrar'}
+                    {isPaid ? 'Cambio' : 'Falta por Cobrar'}
                 </p>
                 <div className="flex items-end justify-between gap-4">
                     <span className={`text-2xl font-black ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>

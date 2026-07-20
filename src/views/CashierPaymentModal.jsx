@@ -756,7 +756,7 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                 {!isFiado && rCop > 0 && (
                     <div className={`mt-2 p-3.5 rounded-xl flex items-center justify-between border ${!isReady ? 'bg-rose-50 border-rose-200' : 'bg-sky-50 border-sky-200'}`}>
                         <span className={`text-sm font-bold ${!isReady ? 'text-rose-600' : 'text-sky-700'}`}>
-                            {!isReady ? 'Falta cobrar:' : 'Vuelto:'}
+                            {!isReady ? 'Falta cobrar:' : 'Cambio:'}
                         </span>
                         <div className="flex flex-col items-end">
                             <span className={`text-xl font-black ${!isReady ? 'text-rose-600' : 'text-sky-600'}`}>

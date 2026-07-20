@@ -1,4 +1,4 @@
-import { capitalizeName, formatGameHours, computeGameStats, computeIncomeBreakdown } from './calculatorUtils';
+import { capitalizeName, formatGameHours, computeGameStats, computeIncomeBreakdown, isNonProductSaleItem } from './calculatorUtils';
 import { printReceiptEscPos, getWebSerialConfig, printDailyCloseEscPos } from '../services/webSerialPrinter';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { showToast } from '../components/Toast';
@@ -109,7 +109,7 @@ function _printThermalHTML(sale, _bcvRate) {
     const changeHtml = hasChange ? `
         <div style="margin-top:6px;padding:4px 0;border-top:1px dashed #ccc;">
             <table style="width:100%"><tr>
-                <td style="color:#107c41;font-weight:bold;font-size:11px;">Vuelto:</td>
+                <td style="color:#107c41;font-weight:bold;font-size:11px;">Cambio:</td>
                 <td style="color:#107c41;font-weight:bold;font-size:11px;text-align:right;">${formatCOP(sale.changeUsd)}</td>
             </tr></table>
         </div>` : '';
@@ -636,14 +636,7 @@ export async function printThermalDailyClose({
         (adjustments || []).forEach(adj => {
             if (adj.status === 'ANULADA') return;
             (adj.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (
-                    nameLower.startsWith('compartido') ||
-                    nameLower.startsWith('tiempo') ||
-                    nameLower.startsWith('jugada') ||
-                    nameLower.startsWith('abono') ||
-                    item.id === 'abono-monto-libre'
-                ) return;
+                if (isNonProductSaleItem(item)) return;
 
                 const prodId = item.id;
                 if (!movements[prodId]) {
@@ -661,16 +654,7 @@ export async function printThermalDailyClose({
         allSales.forEach(sale => {
             if (sale.status === 'ANULADA') return;
             (sale.items || []).forEach(item => {
-                const nameLower = (item.name || '').toLowerCase();
-                if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
-                
-                if (
-                    nameLower.startsWith('compartido') ||
-                    nameLower.startsWith('tiempo') ||
-                    nameLower.startsWith('jugada') ||
-                    nameLower.startsWith('abono') ||
-                    item.id === 'abono-monto-libre'
-                ) return;
+                if (isNonProductSaleItem(item)) return;
 
                 const prodId = item.id;
                 if (!movements[prodId]) {

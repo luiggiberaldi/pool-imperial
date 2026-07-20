@@ -87,3 +87,7 @@ scripts/
 capacitor.config.json
 .env
 .env
+
+# Scripts de analisis local (contienen datos/tokens)
+scratch/
+listo pos lite/

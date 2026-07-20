@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, LockIcon, Printer, DollarSign, CheckCircle2, Trash2, Download } from 'lucide-react';
-import { formatCop } from '../../utils/calculatorUtils';
+import { formatCop, isNonProductSaleItem } from '../../utils/calculatorUtils';
 import { getPaymentLabel, getPaymentIcon, toTitleCase, PAYMENT_ICONS } from '../../config/paymentMethods';
 import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
 import { printThermalDailyClose } from '../../utils/ticketGenerator';
@@ -32,15 +32,10 @@ export default function CierreHistoryCard({ cierre, products: _products, cierreN
         e.stopPropagation();
         
         const todayProductMap = {};
-        const prodList = _products || [];
-        const productIds = new Set(prodList.map(p => p.id));
-        const productNames = new Set(prodList.map(p => p.name.toLowerCase()));
-
         cierre.salesForStats.forEach(s => {
             if (s.items) {
                 s.items.forEach(item => {
-                    const nameLower = (item.name || '').toLowerCase();
-                    if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
+                    if (isNonProductSaleItem(item)) return;
                     if (!todayProductMap[item.name]) todayProductMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
                     todayProductMap[item.name].qty += item.qty;
                     todayProductMap[item.name].revenue += item.priceUsd * item.qty;
@@ -79,15 +74,10 @@ export default function CierreHistoryCard({ cierre, products: _products, cierreN
         e.stopPropagation();
         
         const todayProductMap = {};
-        const prodList = _products || [];
-        const productIds = new Set(prodList.map(p => p.id));
-        const productNames = new Set(prodList.map(p => p.name.toLowerCase()));
-
         cierre.salesForStats.forEach(s => {
             if (s.items) {
                 s.items.forEach(item => {
-                    const nameLower = (item.name || '').toLowerCase();
-                    if (item.isTip || nameLower.includes('propina') || nameLower.includes('servicio voluntario') || nameLower.includes('recargo tdc')) return;
+                    if (isNonProductSaleItem(item)) return;
                     if (!todayProductMap[item.name]) todayProductMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
                     todayProductMap[item.name].qty += item.qty;
                     todayProductMap[item.name].revenue += item.priceUsd * item.qty;
