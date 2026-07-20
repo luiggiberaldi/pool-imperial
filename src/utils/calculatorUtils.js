@@ -118,21 +118,22 @@ export function computeGameStats(visibleSales) {
                 const meta = item.gameMeta;
                 if (meta && (meta.hoursRevenue !== undefined || meta.hoursQty !== undefined)) {
                     const hRev = Number(meta.hoursRevenue) || 0;
-                    totalHours += Number(meta.hoursQty) || (hRev > 0 ? hRev / 10000 : 0);
+                    const hQty = Number(meta.hoursQty) || (hRev > 0 ? hRev / 10000 : 0);
+                    totalHours += hQty;
                     hoursRevenue += hRev;
                     totalRounds += Number(meta.roundsQty) || 0;
                     roundsRevenue += Number(meta.roundsRevenue) || 0;
                 } else {
-                    // Venta previa a gameMeta: deducir la porción real de tiempo ($11.250 por seat en B2)
-                    const sharedTime = nameLower.includes('b2') ? (11250 * qty) : revenue;
+                    // Fallback para ventas sin gameMeta: aislar porción de tiempo real ($11.250 por seat en B2/Pool)
+                    const sharedTime = (nameLower.includes('b2') || nameLower.includes('pool')) ? (11250 * qty) : revenue;
                     hoursRevenue += sharedTime;
+                    totalHours += sharedTime / 10000;
                 }
             }
         });
     });
 
-    // Si hubo recaudo por tiempo (ej. ventas compartidas previo a gameMeta) y totalHours es 0:
-    // calcular las horas reales equivalentes ($10.000 COP/h)
+    // Si hubo recaudo por tiempo y totalHours es 0: calcular horas reales equivalentes ($10.000 COP/h)
     if (hoursRevenue > 0 && totalHours === 0) {
         totalHours = hoursRevenue / 10000;
     }
@@ -177,9 +178,12 @@ export function computeIncomeBreakdown(salesArray) {
                 } else if (nameLower.startsWith('tiempo') || nameLower.startsWith('jugada')) {
                     tiempoMesas += itemTotal;
                 } else if (nameLower.startsWith('compartido')) {
-                    const sharedTime = item.gameMeta ? Number(item.gameMeta.hoursRevenue) || 0 : (nameLower.includes('b2') ? 11250 : itemTotal);
+                    const meta = item.gameMeta;
+                    const sharedTime = meta && meta.hoursRevenue !== undefined
+                        ? Number(meta.hoursRevenue) || 0
+                        : ((nameLower.includes('b2') || nameLower.includes('pool')) ? (11250 * qty) : itemTotal);
                     tiempoMesas += sharedTime;
-                    productosContado += (itemTotal - sharedTime);
+                    productosContado += Math.max(0, itemTotal - sharedTime);
                 } else {
                     productosContado += itemTotal;
                 }

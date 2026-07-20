@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { storageService } from '../utils/storageService';
 import { showToast } from '../components/Toast';
 import { BarChart3, TrendingUp, Package, AlertTriangle, ArrowUpRight, Users, ChevronDown, ChevronUp, Phone, FileText, Recycle, Key, Settings, LockIcon, Unlock, LogOut, Award, LineChart, ListChecks, RotateCcw, Bell, Clock, Wallet, X, Receipt } from 'lucide-react';
-import { formatCop } from '../utils/calculatorUtils';
+import { formatCop, formatGameHours, computeGameStats } from '../utils/calculatorUtils';
 import SalesHistory from '../components/Dashboard/SalesHistory';
 import SalesChart from '../components/Dashboard/SalesChart';
 import ConfirmModal from '../components/ConfirmModal';
@@ -103,6 +103,10 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const displaySalesCount = dashTab === 'hoy' ? daySales.length : todaySales.length;
     const displayItemsSold = dashTab === 'hoy' ? dayItemsSold : todayItemsSold;
     const displayProfit = dashTab === 'hoy' ? dayProfit : todayProfit;
+
+    // Estadísticas de horas de mesa y jugadas facturadas
+    const salesForGameStats = dashTab === 'hoy' ? daySales : todaySales;
+    const gameStats = useMemo(() => computeGameStats(salesForGameStats), [salesForGameStats]);
 
     // Notification center
     const { notifications, urgentCount, totalCount } = useNotificationCenter({
@@ -664,6 +668,35 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                             ))}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Actividad de Juego (Mesas y Partidas) */}
+            {(gameStats.totalHours > 0 || gameStats.totalRounds > 0 || gameStats.hoursRevenue > 0 || gameStats.roundsRevenue > 0 || gameStats.totalRevenue > 0) && (
+                <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-1.5">
+                        <Clock size={14} className="text-indigo-500" /> Actividad de Juego (Mesas y Partidas)
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="bg-emerald-50/40 rounded-xl p-3 border border-emerald-100/30 flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Tiempo de Juego Facturado</span>
+                            <span className="text-base font-black text-emerald-600 mt-1">
+                                {formatGameHours(gameStats.totalHours)} <span className="text-xs font-medium text-slate-400">({formatCop(gameStats.hoursRevenue)})</span>
+                            </span>
+                        </div>
+                        <div className="bg-amber-50/40 rounded-xl p-3 border border-amber-100/30 flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Jugadas Facturadas</span>
+                            <span className="text-base font-black text-amber-600 mt-1">
+                                {gameStats.totalRounds} u <span className="text-xs font-medium text-slate-400">({formatCop(gameStats.roundsRevenue)})</span>
+                            </span>
+                        </div>
+                        <div className="bg-indigo-50/40 rounded-xl p-3 border border-indigo-100/30 flex flex-col">
+                            <span className="text-[10px] uppercase tracking-wider font-extrabold text-slate-400">Total Recaudo de Mesas</span>
+                            <span className="text-base font-black text-indigo-600 mt-1">
+                                {formatCop(gameStats.totalRevenue)}
+                            </span>
+                        </div>
+                    </div>
                 </div>
             )}
 
