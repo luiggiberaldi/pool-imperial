@@ -21,9 +21,9 @@ export function calculateReportsData(allSales, from, to, _bcvRate, products, tas
         return dateStr >= from && dateStr <= to;
     };
 
-    // Ventas de Mercancía (para Totales, Profit, Top Productos)
+    // Ventas y Abonos de Deuda (para Historial Detallado de Cierre)
     const salesForStats = allSales.filter(s => {
-        if (s.status === 'ANULADA' || (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA')) return false;
+        if (s.status === 'ANULADA' || (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'COBRO_DEUDA')) return false;
         return isInRange(s);
     });
 
@@ -151,7 +151,7 @@ export function groupSalesByCierreId(allSales, from, to, products) {
         .map(c => {
             const dateObj = new Date(c.cierreId);
 
-            const salesForStats = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA') && s.status !== 'ANULADA');
+            const salesForStats = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA') && s.status !== 'ANULADA');
             const salesForCashFlow = c.sales.filter(s => (s.tipo === 'VENTA' || s.tipo === 'VENTA_FIADA' || s.tipo === 'COBRO_DEUDA' || s.tipo === 'PAGO_PROVEEDOR') && s.status !== 'ANULADA' && !(s.tipo === 'PAGO_PROVEEDOR' && s.afectaCaja === false));
             const adjustments = c.sales.filter(s => s.tipo === 'AJUSTE_ENTRADA' || s.tipo === 'AJUSTE_SALIDA');
 

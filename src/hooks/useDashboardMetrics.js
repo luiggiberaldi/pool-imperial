@@ -45,7 +45,7 @@ export function useDashboardMetrics({ sales, customers, products, bcvRate, selec
 
     const todayAllSales = useMemo(() =>
         sales.filter(s => {
-            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA') return false;
+            if (s.tipo !== 'VENTA' && s.tipo !== 'VENTA_FIADA' && s.tipo !== 'COBRO_DEUDA') return false;
             return isInSessionPeriod(s);
         }),
         [sales, today, sessionOpenedAt]
