@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Pencil, Trash2, RefreshCw, CreditCard, Clock, Phone, Save, User, CheckCircle2, ArrowUpRight, ShoppingBag, ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import { getPaymentLabel, toTitleCase } from '../../config/paymentMethods';
 
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(val || 0));
 
@@ -28,75 +29,47 @@ export function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjus
                 </div>
 
                 <div className="px-5 pb-6 space-y-5">
-                    {/* Header */}
-                    <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                            <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
-                                {customer.name.charAt(0).toUpperCase()}
-                            </span>
+                    {/* Tarjeta Cliente */}
+                    <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-center relative">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center font-black text-2xl mx-auto shadow-md shadow-amber-500/20 mb-3">
+                            {customer.name.charAt(0).toUpperCase()}
                         </div>
-                        <div>
-                            <h3 className="text-lg font-black text-slate-800 dark:text-white">{customer.name}</h3>
-                            <div className="flex items-center gap-2 mt-0.5">
-                                {customer.documentId && (
-                                    <p className="text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                                        {customer.documentId}
-                                    </p>
-                                )}
-                                {customer.phone && (
-                                    <p className="text-xs text-slate-400 flex items-center gap-1">
-                                        <Phone size={12} /> {customer.phone}
-                                    </p>
-                                )}
-                            </div>
-                            {createdDate && (
-                                <p className="text-[10px] text-slate-400 mt-1">Cliente desde {createdDate}</p>
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white leading-tight">{customer.name}</h3>
+                        {customer.phone && (
+                            <p className="text-xs text-slate-400 flex items-center justify-center gap-1 mt-1 font-medium">
+                                <Phone size={12} /> {customer.phone}
+                            </p>
+                        )}
+                        {createdDate && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">Cliente desde {createdDate}</p>
+                        )}
+
+                        {/* Deuda Total Badge */}
+                        <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-500">Saldo Pendiente:</span>
+                            {(customer.debtUsd || 0) > 0 ? (
+                                <span className="text-base font-black text-red-500 font-mono">
+                                    {formatCOP(customer.debtUsd)}
+                                </span>
+                            ) : (
+                                <span className="text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1 rounded-full flex items-center gap-1">
+                                    <CheckCircle2 size={12} /> Al día
+                                </span>
                             )}
                         </div>
                     </div>
 
-                    {/* Saldo */}
-                    <div className="flex gap-2">
-                        {customer.deuda > 0 ? (
-                            <div className="flex-1 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-xl px-3 py-2.5 text-center">
-                                <p className="text-[10px] font-bold text-red-400 uppercase">Debe</p>
-                                <p className="text-lg font-black text-red-500">-{formatCOP(customer.deuda)}</p>
-                            </div>
-                        ) : customer.favor > 0 ? (
-                            <div className="flex-1 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 rounded-xl px-3 py-2.5 text-center">
-                                <p className="text-[10px] font-bold text-emerald-400 uppercase">A favor</p>
-                                <p className="text-lg font-black text-emerald-500">+{formatCOP(customer.favor)}</p>
-                            </div>
-                        ) : (
-                            <div className="flex-1 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-center">
-                                <p className="text-sm font-black text-slate-400 flex items-center justify-center gap-1">
-                                    <CheckCircle2 size={14} className="text-emerald-400" /> Al día
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Acciones */}
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Botones de Acción */}
+                    <div className="grid grid-cols-1 gap-2">
                         <button
                             onClick={onAjustar}
-                            className="flex flex-col items-center gap-1.5 py-3 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors active:scale-95 col-span-1"
+                            className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-2xl font-bold text-xs shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all active:scale-95"
                         >
-                            <CreditCard size={18} />
-                            <span>Ajustar Cuenta</span>
+                            <CreditCard size={16} /> Ajustar Cuenta
                         </button>
-                        {(customer.deuda !== 0 || customer.favor !== 0) && isAdmin && (
-                            <button
-                                onClick={onReset}
-                                className="flex flex-col items-center gap-1.5 py-3 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors active:scale-95"
-                            >
-                                <RefreshCw size={18} />
-                                <span>Poner en 0</span>
-                            </button>
-                        )}
                     </div>
 
-                    {/* Historial */}
+                    {/* Historial de Compras */}
                     <div>
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-3">
                             <Clock size={12} /> Historial de Compras
@@ -114,11 +87,23 @@ export function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjus
                                     const isAnulada = sale.status === 'ANULADA';
                                     const isExpanded = expandedSaleId === sale.id;
                                     const hasItems = sale.items && sale.items.length > 0;
+
+                                    const validPayments = (sale.payments && sale.payments.length > 0)
+                                        ? sale.payments.filter(p => !p.isAbonoPrevio)
+                                        : (sale.paymentMethod || sale.tipo === 'COBRO_DEUDA' || sale.tipo === 'VENTA_FIADA'
+                                            ? [{
+                                                methodId: sale.paymentMethod || (sale.tipo === 'VENTA_FIADA' ? 'fiado' : 'efectivo'),
+                                                methodLabel: sale.paymentMethod ? getPaymentLabel(sale.paymentMethod) : (sale.tipo === 'VENTA_FIADA' ? 'Fiado' : 'Efectivo'),
+                                                amountUsd: sale.totalUsd || sale.totalCop || 0
+                                              }]
+                                            : []);
+                                    const canExpand = hasItems || validPayments.length > 0;
+
                                     return (
                                         <div key={sale.id} className={`bg-slate-50 dark:bg-slate-950 rounded-xl overflow-hidden ${isAnulada ? 'opacity-50 grayscale' : ''}`}>
                                             <div
                                                 className="flex items-start gap-2.5 py-2 px-2 cursor-pointer active:bg-slate-100 dark:active:bg-slate-800/50 transition-colors"
-                                                onClick={() => hasItems && setExpandedSaleId(isExpanded ? null : sale.id)}
+                                                onClick={() => canExpand && setExpandedSaleId(isExpanded ? null : sale.id)}
                                             >
                                                 <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isAnulada ? 'bg-slate-200 dark:bg-slate-800' : isCobro ? 'bg-emerald-100 dark:bg-emerald-900/30' : isFiada ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-blue-100 dark:bg-blue-900/30'}`}>
                                                     {isCobro ? <ArrowUpRight size={14} className={isAnulada ? "text-slate-500" : "text-emerald-500"} /> : isFiada ? <CreditCard size={14} className={isAnulada ? "text-slate-500" : "text-amber-500"} /> : <ShoppingBag size={14} className={isAnulada ? "text-slate-500" : "text-blue-500"} />}
@@ -144,7 +129,7 @@ export function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjus
                                                                     {isCobro ? '+' : ''}{formatCOP(sale.totalUsd || 0)}
                                                                 </p>
                                                             </div>
-                                                            {hasItems && (
+                                                            {canExpand && (
                                                                 isExpanded
                                                                     ? <ChevronUp size={14} className="text-slate-400 shrink-0" />
                                                                     : <ChevronDown size={14} className="text-slate-400 shrink-0" />
@@ -162,29 +147,59 @@ export function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjus
                                                     <p className="text-[9px] text-slate-400 mt-0.5">{dateStr} • {timeStr}{sale.saleNumber ? ` • #${String(sale.saleNumber).padStart(4, '0')}` : ''}</p>
                                                 </div>
                                             </div>
-                                            {/* Expanded items detail */}
-                                            {isExpanded && hasItems && (
+                                            {/* Expanded items & payments detail */}
+                                            {isExpanded && canExpand && (
                                                 <div className="px-3 pb-2.5 pt-0.5 border-t border-slate-100 dark:border-slate-800/50 animate-in fade-in slide-in-from-top-1 duration-150">
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5 mt-1.5">Artículos</p>
-                                                    <div className="space-y-1">
-                                                        {sale.items.map((item, idx) => (
-                                                            <div key={idx} className="flex justify-between items-center">
-                                                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                                                    <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 w-5 h-5 rounded flex items-center justify-center shrink-0">
-                                                                        {item.isWeight ? item.qty.toFixed(1) : item.qty}
-                                                                    </span>
-                                                                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate">{item.name}</span>
-                                                                </div>
-                                                                <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 shrink-0 ml-2">
-                                                                    {formatCOP(item.priceUsd * item.qty)}
-                                                                </span>
+                                                    {hasItems && (
+                                                        <>
+                                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5 mt-1.5">Artículos</p>
+                                                            <div className="space-y-1">
+                                                                {sale.items.map((item, idx) => (
+                                                                    <div key={idx} className="flex justify-between items-center">
+                                                                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                                                            <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 w-5 h-5 rounded flex items-center justify-center shrink-0">
+                                                                                {item.isWeight ? item.qty.toFixed(1) : item.qty}
+                                                                            </span>
+                                                                            <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate">{item.name}</span>
+                                                                        </div>
+                                                                        <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 shrink-0 ml-2">
+                                                                            {formatCOP(item.priceUsd * item.qty)}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
                                                             </div>
-                                                        ))}
-                                                    </div>
+                                                        </>
+                                                    )}
                                                     {sale.discountAmountUsd > 0 && (
                                                         <div className="flex justify-between items-center mt-1.5 pt-1 border-t border-dashed border-slate-200 dark:border-slate-800">
                                                             <span className="text-[10px] font-bold text-orange-500">Descuento</span>
                                                             <span className="text-[10px] font-black text-orange-500">-${formatCOP(sale.discountAmountUsd)}</span>
+                                                        </div>
+                                                    )}
+                                                    {/* Desglose de Pagos Recibidos */}
+                                                    {validPayments.length > 0 && (
+                                                        <div className="mt-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-800">
+                                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Pagos Recibidos</p>
+                                                            <div className="space-y-1">
+                                                                {validPayments.map((p, pIdx) => {
+                                                                    const label = toTitleCase(p.methodLabel || getPaymentLabel(p.methodId) || 'Efectivo');
+                                                                    const amt = p.amountUsd !== undefined ? p.amountUsd : (p.amount || 0);
+                                                                    return (
+                                                                        <div key={pIdx} className="flex justify-between items-center text-[11px]">
+                                                                            <span className="font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                                                                                <CreditCard size={11} className="text-emerald-500 shrink-0" />
+                                                                                <span>{label}</span>
+                                                                                {p.reference && (
+                                                                                    <span className="text-[9px] font-mono text-slate-400">Ref: {p.reference}</span>
+                                                                                )}
+                                                                            </span>
+                                                                            <span className="font-black text-slate-700 dark:text-slate-200">
+                                                                                {formatCOP(amt)}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
