@@ -1,6 +1,14 @@
-import { storageService } from './storageService';
-import { procesarImpactoCliente } from './financialLogic';
-import { round2 } from './dinero';
+import { storageService } from './storageService.js';
+import { procesarImpactoCliente } from './financialLogic.js';
+import { round2 } from './dinero.js';
+
+export function cleanCopAmount(val) {
+    if (typeof val === 'number') return round2(Math.max(0, val));
+    if (!val) return 0;
+    const cleaned = String(val).replace(/[^0-9]/g, '');
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : round2(parsed);
+}
 
 /**
  * Procesa la lógica de abonar o endeudar a un cliente desde el TransactionModal.
@@ -17,8 +25,11 @@ export async function processCustomerTransaction({
     copEnabled: _copEnabled
 }) {
     // En Pool Imperial todo se maneja en COP
-    const rawAmount = parseFloat(transactionAmount);
-    const amountCop = round2(rawAmount);
+    const amountCop = cleanCopAmount(transactionAmount);
+
+    if (amountCop <= 0) {
+        return { updatedCustomer: customer, newCustomers: await storageService.getItem('bodega_customers_v1', []) };
+    }
 
     // Lógica financiera
     let transaccionOpts = {};
@@ -49,32 +60,32 @@ export async function processCustomerTransaction({
     const nextSaleNumber = (numericNums.length > 0 ? Math.max(...numericNums) : 0) + 1;
 
     let newRecord = null;
+    const custName = customer?.name || customer?.clienteName || 'Cliente';
+    const custId = customer?.id || customer?.clienteId || null;
 
     if (type === 'ABONO') {
-        // No crear registro si el monto es 0
-        if (amountCop <= 0) {
-            return { updatedCustomer, newCustomers };
-        }
         const cobroRecord = {
             id: crypto.randomUUID(),
             saleNumber: nextSaleNumber,
             timestamp: new Date().toISOString(),
             tipo: 'COBRO_DEUDA',
-            clienteId: customer.id,
-            clienteName: customer.name,
+            customerId: custId,
+            customerName: custName,
+            clienteId: custId,
+            clienteName: custName,
             totalBs: 0,
             totalUsd: amountCop, // En Pool Imperial totalUsd almacena COP (campo heredado)
             totalCop: amountCop,
-            paymentMethod: paymentMethod,
+            paymentMethod: paymentMethod || 'efectivo',
             payments: [{
-                methodId: paymentMethod,
+                methodId: paymentMethod || 'efectivo',
                 amount: amountCop,
                 currency: 'COP',
                 amountUsd: amountCop,
                 amountBs: 0,
-                methodLabel: paymentMethod.replace('_', ' ')
+                methodLabel: (paymentMethod || 'efectivo').replace('_', ' ')
             }],
-            items: [{ name: `Abono de deuda: ${customer.name}`, qty: 1, priceUsd: amountCop, costBs: 0 }]
+            items: [{ name: `Abono de deuda: ${custName}`, qty: 1, priceUsd: amountCop, costBs: 0 }]
         };
         sales.unshift(cobroRecord);
         newRecord = cobroRecord;
@@ -84,13 +95,15 @@ export async function processCustomerTransaction({
             saleNumber: nextSaleNumber,
             timestamp: new Date().toISOString(),
             tipo: 'VENTA_FIADA',
-            clienteId: customer.id,
-            clienteName: customer.name,
+            customerId: custId,
+            customerName: custName,
+            clienteId: custId,
+            clienteName: custName,
             totalBs: 0,
             totalUsd: amountCop, // En Pool Imperial totalUsd almacena COP (campo heredado)
             totalCop: amountCop,
             fiadoUsd: amountCop,
-            items: [{ name: `Credito manual: ${customer.name}`, qty: 1, priceUsd: amountCop, costBs: 0 }]
+            items: [{ name: `Credito manual: ${custName}`, qty: 1, priceUsd: amountCop, costBs: 0 }]
         };
         sales.unshift(fiadoRecord);
         newRecord = fiadoRecord;
@@ -112,4 +125,30 @@ export async function processCustomerTransaction({
     }
 
     return { updatedCustomer, newCustomers };
+}
+
+/**
+ * Limpia registros corruptos o huérfanos de $0 en bodega_sales_v1
+ */
+export async function cleanOrphanZeroSales() {
+    try {
+        const sales = await storageService.getItem('bodega_sales_v1', []);
+        let modified = false;
+        const cleanedSales = sales.filter(s => {
+            const isZero = (s.totalCop || 0) <= 0.001 && (s.totalUsd || 0) <= 0.001;
+            const isDebtOrNoItems = s.tipo === 'COBRO_DEUDA' || !s.items || s.items.length === 0;
+            if (isZero && isDebtOrNoItems && s.status !== 'ANULADA') {
+                modified = true;
+                return false;
+            }
+            return true;
+        });
+        if (modified) {
+            await storageService.setItem('bodega_sales_v1', cleanedSales);
+            console.log('[CleanZeroSales] Registros corruptos de $0 eliminados del historial.');
+        }
+        return cleanedSales;
+    } catch (_) {
+        return [];
+    }
 }

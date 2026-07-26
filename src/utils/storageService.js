@@ -67,6 +67,18 @@ export const storageService = {
             const value = await localforage.getItem(sk);
 
             if (value !== null) {
+                if (key === 'bodega_sales_v1' && Array.isArray(value)) {
+                    const cleaned = value.filter(s => {
+                        if (!s) return false;
+                        const isZero = (s.totalCop || 0) <= 0.001 && (s.totalUsd || 0) <= 0.001;
+                        const isDebtOrNoItems = s.tipo === 'COBRO_DEUDA' || !s.items || s.items.length === 0;
+                        return !(isZero && isDebtOrNoItems && s.status !== 'ANULADA');
+                    });
+                    if (cleaned.length !== value.length) {
+                        localforage.setItem(sk, cleaned).catch(() => {});
+                        return cleaned;
+                    }
+                }
                 return value;
             }
 

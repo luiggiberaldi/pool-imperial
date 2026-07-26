@@ -79,8 +79,9 @@ export default function TransactionRow({
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className={`text-sm font-bold flex items-center gap-1.5 truncate ${isCanceled ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-200'}`}>
-                        {s.customerName || 'Consumidor Final'}
+                        {s.customerName || s.clienteName || 'Consumidor Final'}
                         {s.tipo === 'VENTA_FIADA' && <span className="text-[9px] bg-amber-100 text-amber-600 px-1 rounded uppercase">Fiado</span>}
+                        {s.tipo === 'COBRO_DEUDA' && <span className="text-[9px] bg-emerald-100 text-emerald-600 px-1 rounded uppercase">Abono Deuda</span>}
                         {isCanceled && <span className="text-[9px] bg-red-100 text-red-500 px-1 rounded uppercase">Anulada</span>}
                     </p>
                     <p className="text-[11px] text-slate-500 flex items-center gap-1 flex-wrap">
@@ -90,7 +91,7 @@ export default function TransactionRow({
                     </p>
                 </div>
                 <div className="text-right shrink-0">
-                    <p className={`text-sm font-black ${isCanceled ? 'text-slate-400' : 'text-slate-800 dark:text-white'}`}>{formatCop(s.totalUsd || 0)}</p>
+                    <p className={`text-sm font-black ${isCanceled ? 'text-slate-400' : 'text-slate-800 dark:text-white'}`}>{formatCop(s.totalCop || s.totalUsd || 0)}</p>
                     <div className="flex justify-end mt-0.5">
                         {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                     </div>
@@ -109,13 +110,13 @@ export default function TransactionRow({
                                 {s.items.map((item, i) => (
                                     <div key={i} className={`flex justify-between items-center text-xs ${isCanceled ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
                                         <span className="truncate pr-2">{item.isWeight ? `${item.qty.toFixed(3)}kg` : `${item.qty}u`} {item.name}</span>
-                                        <span className="font-medium shrink-0">{formatCop(item.priceUsd * item.qty)}</span>
+                                        <span className="font-medium shrink-0">{formatCop((item.priceUsd || item.unit_price_usd || 0) * (item.qty || 1))}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     ) : (
-                        <p className="text-xs text-slate-400 mb-3 pt-2">Pago de Deudas (Sin productos)</p>
+                        <p className="text-xs text-slate-400 mb-3 pt-2">{s.tipo === 'COBRO_DEUDA' ? 'Abono de Deuda (Sin productos)' : 'Transacción sin productos'}</p>
                     )}
 
                     {/* RESUMEN DE COBRO */}
@@ -124,7 +125,7 @@ export default function TransactionRow({
                         <div className="space-y-1 text-xs">
                             <div className="flex justify-between text-slate-600 dark:text-slate-300 font-bold">
                                 <span>Total</span>
-                                <span>{formatCop(s.totalUsd || 0)}</span>
+                                <span>{formatCop(s.totalCop || s.totalUsd || 0)}</span>
                             </div>
                             {s.discountAmountUsd > 0 && (
                                 <div className="flex justify-between text-amber-500">
