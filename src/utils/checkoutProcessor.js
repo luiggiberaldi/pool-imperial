@@ -2,6 +2,7 @@ import { storageService } from './storageService';
 import { procesarImpactoCliente } from './financialLogic';
 import { logEvent } from '../services/auditService';
 import { useAuthStore } from '../hooks/store/authStore';
+import { useTablesStore } from '../hooks/store/useTablesStore';
 import { round2, subR, sumR } from './dinero';
 import { supabaseCloud as supabase } from '../config/supabaseCloud';
 import { offlineQueueService } from '../services/offlineQueueService';
@@ -79,12 +80,15 @@ export async function processSaleTransaction({
         try {
             const priorSales = await storageService.getItem(SALES_KEY, []);
             const nowMs = Date.now();
+            const activeSessions = useTablesStore.getState().activeSessions || [];
+            const isTableActive = activeSessions.some(s => s.id === tableSessionId);
+            const isSplitOrPartial = !!(seatId || isPartial || splitMeta);
             const dup = priorSales.find(s =>
                 s.tableSessionId === tableSessionId &&
-                (s.seatId || null) === (seatId || null) &&
                 (s.status === 'COMPLETADA' || s.status === 'PENDIENTE_SYNC' || s.status === 'PENDIENTE_VERIFICACION') &&
                 Math.abs(Number(s.totalCop ?? s.totalUsd ?? 0) - Number(totalCOP)) <= EPSILON &&
-                s.timestamp && (nowMs - new Date(s.timestamp).getTime()) < TABLE_DUP_WINDOW_MS
+                s.timestamp && (nowMs - new Date(s.timestamp).getTime()) < TABLE_DUP_WINDOW_MS &&
+                (seatId ? s.seatId === seatId : (!isTableActive && !isSplitOrPartial))
             );
             if (dup) {
                 return { success: false, duplicate: true, error: `Esta mesa ya fue cobrada${dup.saleNumber ? ` (venta #${dup.saleNumber})` : ''} hace un momento. Si necesitas cobrarla de nuevo, libera la mesa primero.` };

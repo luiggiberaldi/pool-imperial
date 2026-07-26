@@ -1,11 +1,15 @@
 import { useMemo } from 'react';
 import { calculateElapsedTime } from '../utils/tableBillingEngine';
+import { useAuthStore } from './store/authStore';
 
 /**
  * Generates in-app notification items for the bell icon.
  * Pure computation — no side effects, no browser notifications.
  */
 export function useNotificationCenter({ products, activeSessions, pausedSessions, activeCashSession, customers, tables }) {
+    const role = useAuthStore(s => s.role);
+    const isAdmin = role === 'ADMIN';
+
     const notifications = useMemo(() => {
         const items = [];
 

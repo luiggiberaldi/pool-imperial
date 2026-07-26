@@ -21,7 +21,7 @@ export async function processVoidSale(sale, currentSales, currentProducts) {
 
     // 2. Revertir Stock (misma lógica que checkoutProcessor pero invertida)
     let updatedProducts = [...currentProducts];
-    if (sale.items && sale.items.length > 0) {
+    if (!sale.skipStockDeduction && sale.items && sale.items.length > 0) {
         // Calcular restauraciones por product ID (igual que deductions en checkout)
         const restorations = {};
         sale.items.forEach(item => {

@@ -300,7 +300,14 @@ export function calculateFullTableBreakdown(session, seats, elapsedMinutes, conf
         }
     }
 
-    const remainingSharedTotal = Math.max(0, sharedTotal - retiredPaidShared);
+    const paidSeatsCount = allSeats.filter(s => s.paid).length;
+    const totalSeatsCount = allSeats.length;
+    const netSharedTotal = Math.max(0, sharedTotal - retiredPaidShared);
+    const paidSeatsShared = (totalSeatsCount > 0 && paidSeatsCount > 0)
+        ? round2(netSharedTotal * (paidSeatsCount / totalSeatsCount))
+        : 0;
+
+    const remainingSharedTotal = Math.max(0, netSharedTotal - paidSeatsShared);
     const activeCount = (frozenDivisor !== null && frozenDivisor !== undefined && frozenDivisor > 0) ? frozenDivisor : activeSeats.length;
 
     const getSharedPortion = (seat) => {
@@ -489,14 +496,53 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
             if (fullBreakdown) {
                 const seatBd = fullBreakdown.seats.find(s => s.seat.id === seatId);
                 if (seatBd && seatBd.sharedPortion > 0) {
-                    const sharedDivisor = fullBreakdown.seats.filter(s => !s.seat.paid).length;
-                    syntheticCart.push({
-                        id: crypto.randomUUID(),
-                        name: `Compartido ${tableName} (÷${sharedDivisor})`,
-                        priceUsdt: round2(seatBd.sharedPortion), priceUsd: round2(seatBd.sharedPortion),
-                        qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
-                        gameMeta: buildSharedGameMeta(fullBreakdown, sharedDivisor, seatBd.sharedPortion)
-                    });
+                    const unpaidSeats = seats.filter(s => !s.paid);
+                    const unpaidCount = unpaidSeats.length || 1;
+                    const totalSeatsCount = seats.length || 1;
+                    const isLastPayment = unpaidCount <= 1;
+
+                    if (!isLastPayment) {
+                        // PAGOS INTERMEDIOS (Persona 1 a N-1):
+                        // Emitir ítem de cuota limpia por el monto asignado (ej. $47.000)
+                        // SIN fraccionar productos en decimales (1.5u) ni descontar stock.
+                        const cuotaIndex = totalSeatsCount - unpaidCount + 1;
+                        const percent = Math.round((1 / totalSeatsCount) * 100);
+                        syntheticCart.push({
+                            id: crypto.randomUUID(),
+                            name: `Cuota Persona ${cuotaIndex} (${percent}% Mesa ${tableName})`,
+                            priceUsdt: round2(seatBd.sharedPortion), priceUsd: round2(seatBd.sharedPortion),
+                            qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                            isQuotaItem: true,
+                            gameMeta: buildSharedGameMeta(fullBreakdown, totalSeatsCount, seatBd.sharedPortion)
+                        });
+                    } else {
+                        // PAGO FINAL (Última Persona que cierra la mesa):
+                        // Incluir los productos físicos ENTEROS (ej. 3u Tequila) de la mesa
+                        // para que la última venta efectúe el descuento completo de stock en unidades enteras.
+                        const timeRatio = fullBreakdown.sharedTotal > 0
+                            ? Math.min(1, fullBreakdown.sharedTimeTotal / fullBreakdown.sharedTotal)
+                            : 1;
+                        const timePortion = round2(seatBd.sharedPortion * timeRatio);
+                        if (timePortion > 0) {
+                            syntheticCart.push({
+                                id: crypto.randomUUID(),
+                                name: `Compartido ${tableName} (÷${totalSeatsCount})`,
+                                priceUsdt: timePortion, priceUsd: timePortion,
+                                qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                                gameMeta: buildSharedGameMeta(fullBreakdown, totalSeatsCount, seatBd.sharedPortion)
+                            });
+                        }
+
+                        if (fullBreakdown.sharedItems && fullBreakdown.sharedItems.length > 0) {
+                            fullBreakdown.sharedItems.forEach(item => {
+                                const p = products.find(prod => prod.id === item.product_id);
+                                syntheticCart.push(p
+                                    ? { ...p, priceUsdt: Number(item.unit_price_usd), priceUsd: Number(item.unit_price_usd), qty: Number(item.qty), costBs: 0, costUsd: p.costUsd || 0, exactBs: 0 }
+                                    : { id: item.product_id, name: item.product_name || 'Producto', priceUsdt: Number(item.unit_price_usd), priceUsd: Number(item.unit_price_usd), qty: Number(item.qty), costBs: 0, costUsd: 0, unit: 'unidad', category: 'otros', stock: 9999 }
+                                );
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -507,6 +553,11 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
         if (fullBreakdown) {
             const unpaidSeatBds = fullBreakdown.seats.filter(sb => !sb.seat.paid);
             const divisorLabel = unpaidSeatBds.length;
+            // Los productos compartidos solo se itemizan a precio completo cuando
+            // nadie ha pagado parte del pot compartido; si un asiento retirado ya
+            // pagó su porción (fusionada), itemizarlos completos los cobraría doble.
+            const sharedFullyUnpaid = (fullBreakdown.retiredPaidShared || 0) === 0
+                && fullBreakdown.seats.every(sb => !sb.seat.paid);
             // Solo el remanente del offset (tras absorberlo la sesión) llega a los
             // asientos, y se consume secuencialmente entre ellos (no restarse
             // completo a cada uno, que subfactura).
@@ -569,15 +620,49 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                     );
                 });
                 if (seatBd.sharedPortion > 0) {
-                    syntheticCart.push({
-                        id: crypto.randomUUID(),
-                        name: `Compartido ${tableName} (÷${divisorLabel})`,
-                        priceUsdt: round2(seatBd.sharedPortion), priceUsd: round2(seatBd.sharedPortion),
-                        qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
-                        gameMeta: buildSharedGameMeta(fullBreakdown, divisorLabel, seatBd.sharedPortion)
-                    });
+                    if (sharedFullyUnpaid) {
+                        // La línea Compartido representa SOLO la porción de tiempo;
+                        // los productos compartidos salen itemizados aparte (abajo).
+                        const timeRatio = fullBreakdown.sharedTotal > 0
+                            ? Math.min(1, fullBreakdown.sharedTimeTotal / fullBreakdown.sharedTotal)
+                            : 1;
+                        const timePortion = round2(seatBd.sharedPortion * timeRatio);
+                        if (timePortion > 0) {
+                            syntheticCart.push({
+                                id: crypto.randomUUID(),
+                                name: `Compartido ${tableName} (÷${divisorLabel})`,
+                                priceUsdt: timePortion, priceUsd: timePortion,
+                                qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                                gameMeta: buildSharedGameMeta(fullBreakdown, divisorLabel, seatBd.sharedPortion)
+                            });
+                        }
+                    } else {
+                        // Pot compartido parcialmente pagado: mantener la línea fusionada
+                        // (remainingSharedTotal ya descuenta lo pagado por retirados).
+                        syntheticCart.push({
+                            id: crypto.randomUUID(),
+                            name: `Compartido ${tableName} (÷${divisorLabel})`,
+                            priceUsdt: round2(seatBd.sharedPortion), priceUsd: round2(seatBd.sharedPortion),
+                            qty: 1, costUsd: 0, costBs: 0, category: 'servicios', unit: 'servicio', stock: 9999,
+                            gameMeta: buildSharedGameMeta(fullBreakdown, divisorLabel, seatBd.sharedPortion)
+                        });
+                    }
                 }
             });
+
+            // Productos compartidos (sin asiento) itemizados UNA sola vez, con su
+            // product_id real: visibles en ticket, cierre y auditoría por artículo.
+            // El stock NO se toca aquí: ya se descontó al agregarlos a la comanda
+            // (OrderPanel) y el checkout de mesas usa skipStockDeduction.
+            if (sharedFullyUnpaid && fullBreakdown.sharedItems && fullBreakdown.sharedItems.length > 0) {
+                fullBreakdown.sharedItems.forEach(item => {
+                    const p = products.find(prod => prod.id === item.product_id);
+                    syntheticCart.push(p
+                        ? { ...p, priceUsdt: Number(item.unit_price_usd), priceUsd: Number(item.unit_price_usd), qty: Number(item.qty), costBs: 0, costUsd: p.costUsd || 0, exactBs: 0 }
+                        : { id: item.product_id, name: item.product_name || 'Producto', priceUsdt: Number(item.unit_price_usd), priceUsd: Number(item.unit_price_usd), qty: Number(item.qty), costBs: 0, costUsd: 0, unit: 'unidad', category: 'otros', stock: 9999 }
+                    );
+                });
+            }
         }
     } else {
         // CLASSIC FULL TABLE

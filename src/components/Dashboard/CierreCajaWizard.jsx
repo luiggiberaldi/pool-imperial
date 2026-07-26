@@ -395,8 +395,8 @@ export default function CierreCajaWizard({
                                 </div>
                             </div>
 
-                            {/* Desglose por metodo de pago — solo admin */}
-                            {isAdmin && paymentEntries.length > 0 && (
+                            {/* Desglose por metodo de pago — visible para admin y cajero */}
+                            {paymentEntries.length > 0 && (
                                 <div>
                                     <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 pl-1">Desglose por metodo</h4>
                                     <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 divide-y divide-slate-100 dark:divide-slate-700/50">
@@ -527,12 +527,8 @@ export default function CierreCajaWizard({
                                     />
                                 </div>
                                 <p className="text-[11px] text-slate-400 mt-1.5 pl-1">
-                                    {isAdmin ? (
-                                        <>
-                                            Sistema espera: <span className="font-bold text-indigo-500">{fmtCop(expectedCop)}</span>
-                                            {openingCop > 0 && <span className="text-[10px] text-slate-400 ml-1">(Base: {fmtCop(openingCop)} + Ventas: {fmtCop(expectedCop - openingCop)})</span>}
-                                        </>
-                                    ) : 'Asegúrate de contar bien todo el efectivo de la gaveta'}
+                                    Sistema espera: <span className="font-bold text-indigo-500">{fmtCop(expectedCop)}</span>
+                                    {openingCop > 0 && <span className="text-[10px] text-slate-400 ml-1">(Base: {fmtCop(openingCop)} + Ventas: {fmtCop(expectedCop - openingCop)})</span>}
                                 </p>
                             </div>
 
@@ -552,12 +548,8 @@ export default function CierreCajaWizard({
                                     />
                                 </div>
                                 <p className="text-[11px] text-slate-400 mt-1.5 pl-1">
-                                    {isAdmin ? (
-                                        <>
-                                            Sistema espera: <span className="font-bold text-emerald-500">{fmtUsd(expectedUsd)}</span>
-                                            {openingUsd > 0 && <span className="text-[10px] text-slate-400 ml-1">(Base: {fmtUsd(openingUsd)} + Ventas: {fmtUsd(expectedUsd - openingUsd)})</span>}
-                                        </>
-                                    ) : 'Asegúrate de contar bien todo el efectivo de la gaveta'}
+                                    Sistema espera: <span className="font-bold text-emerald-500">{fmtUsd(expectedUsd)}</span>
+                                    {openingUsd > 0 && <span className="text-[10px] text-slate-400 ml-1">(Base: {fmtUsd(openingUsd)} + Ventas: {fmtUsd(expectedUsd - openingUsd)})</span>}
                                 </p>
                             </div>
 
@@ -584,11 +576,7 @@ export default function CierreCajaWizard({
                                             />
                                         </div>
                                         <p className="text-[11px] text-slate-400 mt-1.5 pl-1">
-                                            {isAdmin ? (
-                                                <>
-                                                    Sistema espera: <span className="font-bold text-indigo-500">{isUsd ? fmtUsd(data.total) : fmtCop(data.total)}</span>
-                                                </>
-                                            ) : 'Asegúrate de verificar y contar bien las transacciones'}
+                                            Sistema espera: <span className="font-bold text-indigo-500">{isUsd ? fmtUsd(data.total) : fmtCop(data.total)}</span>
                                         </p>
                                     </div>
                                 );
@@ -614,81 +602,69 @@ export default function CierreCajaWizard({
                         const SemIcon = sem.icon;
                         return (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-300">
-                                {/* Semaforo e Información (Solo Admin) */}
-                                {isAdmin ? (
-                                    <>
-                                        <div className={`${sem.bg} rounded-2xl p-5 text-white text-center relative overflow-hidden`}>
-                                            <div className="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
-                                            <SemIcon size={40} className="mx-auto mb-2" />
-                                            <h3 className="text-xl font-black">{sem.label}</h3>
-                                            <p className="text-sm font-medium text-white/80 mt-1">
-                                                Dif. COP: {diffCop >= 0 ? '+' : ''}{fmtCop(diffCop)} | Dif. USD: {diffUsd >= 0 ? '+' : ''}{fmtUsd(diffUsd)}
-                                            </p>
-                                        </div>
+                                {/* Semaforo e Información — visible para admin y cajero */}
+                                <div className={`${sem.bg} rounded-2xl p-5 text-white text-center relative overflow-hidden`}>
+                                    <div className="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+                                    <SemIcon size={40} className="mx-auto mb-2" />
+                                    <h3 className="text-xl font-black">{sem.label}</h3>
+                                    <p className="text-sm font-medium text-white/80 mt-1">
+                                        Dif. COP: {diffCop >= 0 ? '+' : ''}{fmtCop(diffCop)} | Dif. USD: {diffUsd >= 0 ? '+' : ''}{fmtUsd(diffUsd)}
+                                    </p>
+                                </div>
 
-                                        <div>
-                                            <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 pl-1">Comparativa de Arqueo</h4>
-                                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 overflow-hidden">
-                                                {/* Header */}
-                                                <div className="grid grid-cols-4 gap-1 px-3 py-2.5 bg-slate-100 dark:bg-slate-700/50 text-right">
-                                                    <span className="text-[10px] font-bold text-slate-500 uppercase text-left">Método</span>
-                                                    <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">Esperado</span>
-                                                    <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">Declarado</span>
-                                                    <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">Diferencia</span>
-                                                </div>
-                                                {/* COP Row */}
-                                                <div className="grid grid-cols-4 gap-1 px-3 py-3 border-b border-slate-100 dark:border-slate-700/50 text-right items-center">
-                                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-left">Efectivo COP</span>
-                                                    <span className="text-xs font-mono text-slate-500">{fmtCop(expectedCop)}</span>
-                                                    <span className="text-xs font-mono text-slate-700 dark:text-white font-bold">{fmtCop(declaredCop)}</span>
-                                                    <span className={`text-xs font-mono font-black ${diffCop >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                                        {diffCop >= 0 ? '+' : ''}{fmtCop(diffCop)}
-                                                    </span>
-                                                </div>
-                                                {/* USD Row */}
-                                                <div className="grid grid-cols-4 gap-1 px-3 py-3 border-b border-slate-100 dark:border-slate-700/50 text-right items-center">
-                                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-left">Efectivo USD</span>
-                                                    <span className="text-xs font-mono text-slate-500">{fmtUsd(expectedUsd)}</span>
-                                                    <span className="text-xs font-mono text-slate-700 dark:text-white font-bold">{fmtUsd(declaredUsd)}</span>
-                                                    <span className={`text-xs font-mono font-black ${diffUsd >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                                        {diffUsd >= 0 ? '+' : ''}{fmtUsd(diffUsd)}
-                                                    </span>
-                                                </div>
-                                                {/* Other rows */}
-                                                {otherPaymentEntries.map(([methodId, data]) => {
-                                                    const expected = data.total;
-                                                    const declared = parseFloat(declaredOthers[methodId]) || 0;
-                                                    const diff = declared - expected;
-                                                    const isUsd = data.currency === 'USD';
-                                                    return (
-                                                        <div key={methodId} className="grid grid-cols-4 gap-1 px-3 py-3 border-b border-slate-100 dark:border-slate-700/50 text-right items-center">
-                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-left truncate">
-                                                                {toTitleCase(getPaymentLabel(methodId, data.label))}
-                                                            </span>
-                                                            <span className="text-xs font-mono text-slate-500">
-                                                                {isUsd ? fmtUsd(expected) : fmtCop(expected)}
-                                                            </span>
-                                                            <span className="text-xs font-mono text-slate-700 dark:text-white font-bold">
-                                                                {isUsd ? fmtUsd(declared) : fmtCop(declared)}
-                                                            </span>
-                                                            <span className={`text-xs font-mono font-black ${diff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                                                {diff >= 0 ? '+' : ''}{isUsd ? fmtUsd(diff) : fmtCop(diff)}
-                                                            </span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
+                                <div>
+                                    <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2 pl-1">Comparativa de Arqueo</h4>
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 overflow-hidden">
+                                        {/* Header */}
+                                        <div className="grid grid-cols-4 gap-1 px-3 py-2.5 bg-slate-100 dark:bg-slate-700/50 text-right">
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase text-left">Método</span>
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">Esperado</span>
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">Declarado</span>
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase font-mono">Diferencia</span>
                                         </div>
-                                    </>
-                                ) : (
-                                    <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-5 text-center relative overflow-hidden border border-slate-200 dark:border-slate-700">
-                                        <CheckCircle2 size={40} className="mx-auto mb-2 text-indigo-500" />
-                                        <h3 className="text-xl font-black text-slate-800 dark:text-white">Conteo Registrado</h3>
-                                        <p className="text-sm font-medium text-slate-500 mt-2">
-                                            Los totales ingresados han sido capturados para la auditoría de caja (Cierre Ciego). Puedes confirmar el cierre.
-                                        </p>
+                                        {/* COP Row */}
+                                        <div className="grid grid-cols-4 gap-1 px-3 py-3 border-b border-slate-100 dark:border-slate-700/50 text-right items-center">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-left">Efectivo COP</span>
+                                            <span className="text-xs font-mono text-slate-500">{fmtCop(expectedCop)}</span>
+                                            <span className="text-xs font-mono text-slate-700 dark:text-white font-bold">{fmtCop(declaredCop)}</span>
+                                            <span className={`text-xs font-mono font-black ${diffCop >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                {diffCop >= 0 ? '+' : ''}{fmtCop(diffCop)}
+                                            </span>
+                                        </div>
+                                        {/* USD Row */}
+                                        <div className="grid grid-cols-4 gap-1 px-3 py-3 border-b border-slate-100 dark:border-slate-700/50 text-right items-center">
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-left">Efectivo USD</span>
+                                            <span className="text-xs font-mono text-slate-500">{fmtUsd(expectedUsd)}</span>
+                                            <span className="text-xs font-mono text-slate-700 dark:text-white font-bold">{fmtUsd(declaredUsd)}</span>
+                                            <span className={`text-xs font-mono font-black ${diffUsd >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                {diffUsd >= 0 ? '+' : ''}{fmtUsd(diffUsd)}
+                                            </span>
+                                        </div>
+                                        {/* Other rows */}
+                                        {otherPaymentEntries.map(([methodId, data]) => {
+                                            const expected = data.total;
+                                            const declared = parseFloat(declaredOthers[methodId]) || 0;
+                                            const diff = declared - expected;
+                                            const isUsd = data.currency === 'USD';
+                                            return (
+                                                <div key={methodId} className="grid grid-cols-4 gap-1 px-3 py-3 border-b border-slate-100 dark:border-slate-700/50 text-right items-center">
+                                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 text-left truncate">
+                                                        {toTitleCase(getPaymentLabel(methodId, data.label))}
+                                                    </span>
+                                                    <span className="text-xs font-mono text-slate-500">
+                                                        {isUsd ? fmtUsd(expected) : fmtCop(expected)}
+                                                    </span>
+                                                    <span className="text-xs font-mono text-slate-700 dark:text-white font-bold">
+                                                        {isUsd ? fmtUsd(declared) : fmtCop(declared)}
+                                                    </span>
+                                                    <span className={`text-xs font-mono font-black ${diff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                        {diff >= 0 ? '+' : ''}{isUsd ? fmtUsd(diff) : fmtCop(diff)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                )}
+                                </div>
 
                                 {/* Actions */}
                                 <div className="flex gap-3 pt-2">

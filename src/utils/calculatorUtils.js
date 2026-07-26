@@ -1,4 +1,4 @@
-import { FinancialEngine } from '../core/FinancialEngine';
+import { FinancialEngine } from '../core/FinancialEngine.js';
 
 // [CONFIGURACIÓN] Comisión de efectivo REMOVIDA
 // La tasa de efectivo ahora depende exclusivamente de la calibración manual del usuario
@@ -94,6 +94,7 @@ export function formatGameHours(hours) {
 export function isNonProductSaleItem(item) {
     const nameLower = (item?.name || '').toLowerCase();
     return item?.isTip === true ||
+        item?.isQuotaItem === true ||
         nameLower.includes('propina') ||
         nameLower.includes('servicio voluntario') ||
         nameLower.includes('recargo tdc') ||
@@ -101,6 +102,7 @@ export function isNonProductSaleItem(item) {
         nameLower.startsWith('tiempo') ||
         nameLower.startsWith('jugada') ||
         nameLower.startsWith('abono') ||
+        nameLower.startsWith('cuota') ||
         item?.id === 'abono-monto-libre';
 }
 
