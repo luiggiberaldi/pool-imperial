@@ -61,6 +61,21 @@ export function DeleteHistoryModal({
 }) {
     if (!isOpen) return null;
 
+    const annulledCount = (sales || []).filter(s => s?.status === 'ANULADA').length;
+
+    const handlePurgeAnnulled = async () => {
+        const { purgeAllAnnulledSales } = await import('../../utils/voidSaleProcessor');
+        const res = await purgeAllAnnulledSales();
+        if (res.count > 0) {
+            setSales(res.sales);
+            showToast(`Se eliminaron ${res.count} ventas anuladas`, 'success');
+        } else {
+            showToast('No hay ventas anuladas para eliminar', 'info');
+        }
+        onClose();
+        setDeleteConfirmText('');
+    };
+
     const handleDelete = async () => {
         if (deleteConfirmText.trim().toUpperCase() === 'BORRAR') {
             setSales([]);
@@ -82,16 +97,28 @@ export function DeleteHistoryModal({
             <div className="bg-white w-full max-w-sm rounded-[24px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
                 <div className="p-6 flex flex-col items-center text-center">
                     <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4"><Trash2 size={32} /></div>
-                    <h3 className="text-xl font-black text-slate-800 mb-2">¿Estás absolutamente seguro?</h3>
-                    <p className="text-sm text-slate-500 mb-4 px-2">Esta acción borrará permanentemente <strong className="text-red-500">TODO el historial de ventas y reportes estadísticos</strong>. (No afectará tu inventario de productos).</p>
-                    <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 mb-2 mt-2">
-                        <p className="text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">Escribe "BORRAR" para confirmar:</p>
+                    <h3 className="text-xl font-black text-slate-800 mb-2">Gestionar Historial</h3>
+                    <p className="text-sm text-slate-500 mb-4 px-2">Puedes eliminar únicamente las ventas anuladas o borrar todo el historial.</p>
+
+                    {annulledCount > 0 && (
+                        <div className="w-full mb-4">
+                            <button
+                                onClick={handlePurgeAnnulled}
+                                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
+                            >
+                                <Trash2 size={16} /> Eliminar Solo Ventas Anuladas ({annulledCount})
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="w-full bg-slate-50 p-4 rounded-xl border border-slate-200 mb-2">
+                        <p className="text-xs font-bold text-slate-600 mb-2 uppercase tracking-wide">Escribe "BORRAR" para limpiar todo:</p>
                         <input type="text" value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} placeholder="Ej. BORRAR" className="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-center font-black text-red-500 uppercase tracking-widest focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all outline-none" />
                     </div>
                 </div>
                 <div className="p-4 border-t border-slate-100 bg-slate-50 flex gap-3">
                     <button onClick={() => { onClose(); setDeleteConfirmText(''); }} className="flex-1 py-3.5 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-xl active:scale-[0.98] transition-all">Cancelar</button>
-                    <button onClick={handleDelete} disabled={deleteConfirmText.trim().toUpperCase() !== 'BORRAR'} className="flex-1 py-3.5 bg-red-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold rounded-xl active:scale-[0.98] transition-all flex justify-center items-center gap-2"><Trash2 size={18} /> Borrar Historial</button>
+                    <button onClick={handleDelete} disabled={deleteConfirmText.trim().toUpperCase() !== 'BORRAR'} className="flex-1 py-3.5 bg-red-500 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold rounded-xl active:scale-[0.98] transition-all flex justify-center items-center gap-2"><Trash2 size={18} /> Borrar Todo</button>
                 </div>
             </div>
         </div>

@@ -122,3 +122,34 @@ export async function processVoidSale(sale, currentSales, currentProducts) {
 
     return { updatedSales, updatedProducts, updatedCustomers };
 }
+
+/**
+ * Elimina permanentemente del almacenamiento todas las ventas marcadas con status: 'ANULADA'.
+ */
+export async function purgeAllAnnulledSales() {
+    const sales = await storageService.getItem(SALES_KEY, []);
+    const annulledCount = sales.filter(s => s && s.status === 'ANULADA').length;
+    if (annulledCount === 0) {
+        return { count: 0, sales };
+    }
+
+    const cleanedSales = sales.filter(s => s && s.status !== 'ANULADA');
+    await storageService.setItem(SALES_KEY, cleanedSales);
+
+    // Intentar purgar en Supabase Cloud si hay conexión
+    try {
+        let userId = useAuthStore.getState().cloudSession?.user?.id;
+        if (!userId) {
+            const { data: { session } } = await supabaseCloud.auth.getSession().catch(() => ({ data: {} }));
+            userId = session?.user?.id;
+        }
+        if (userId) {
+            await supabaseCloud.from('sales').delete().eq('status', 'ANULADA').eq('user_id', userId);
+        }
+    } catch (e) {
+        console.warn('[PurgeAnnulled] Nube no disponible para purgar anuladas:', e);
+    }
+
+    window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
+    return { count: annulledCount, sales: cleanedSales };
+}

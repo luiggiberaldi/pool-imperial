@@ -10,7 +10,8 @@ import { useCart } from '../context/CartContext';
 import EmptyState from '../components/EmptyState';
 import CustomSelect from '../components/CustomSelect';
 import ConfirmModal from '../components/ConfirmModal';
-import { processVoidSale } from '../utils/voidSaleProcessor';
+import { processVoidSale, purgeAllAnnulledSales } from '../utils/voidSaleProcessor';
+import { showToast } from '../components/Toast';
 import CierreHistoryCard from '../components/Reports/CierreHistoryCard';
 import TransactionRow from '../components/Reports/TransactionRow';
 import PaymentBreakdownCard from '../components/Reports/PaymentBreakdownCard';
@@ -140,6 +141,21 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
             setRecycleOffer(sale);
         } catch (error) {
             console.error('Error anulando venta:', error);
+        }
+    };
+
+    const handlePurgeAnnulledInReports = async () => {
+        triggerHaptic && triggerHaptic();
+        try {
+            const res = await purgeAllAnnulledSales();
+            if (res.count > 0) {
+                setAllSales(res.sales);
+                showToast(`Se eliminaron ${res.count} ventas anuladas`, 'success');
+            } else {
+                showToast('No hay ventas anuladas para eliminar', 'info');
+            }
+        } catch (e) {
+            console.error('Error purgando anuladas:', e);
         }
     };
 
@@ -759,6 +775,15 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                 >{f.label}</button>
                             ))}
                             <div className="flex-1 min-w-0" />
+                            {isAdmin && voidedInList.length > 0 && (
+                                <button
+                                    onClick={handlePurgeAnnulledInReports}
+                                    className="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all shadow-sm active:scale-95 shrink-0"
+                                    title="Eliminar permanentemente todas las ventas anuladas"
+                                >
+                                    <Trash2 size={12} /> Purgar {voidedInList.length} anulada{voidedInList.length !== 1 ? 's' : ''}
+                                </button>
+                            )}
                             <span className="text-[10px] font-bold text-slate-400 shrink-0">{searchedSales.length} resultado{searchedSales.length !== 1 ? 's' : ''}</span>
                         </div>
 
