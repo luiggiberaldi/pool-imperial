@@ -4,7 +4,7 @@ import { useTablesStore } from '../hooks/store/useTablesStore';
 import { useOrdersStore } from '../hooks/store/useOrdersStore';
 import { useAuthStore } from '../hooks/store/authStore';
 import { useCustomersStore } from '../hooks/store/useCustomersStore';
-import { calculateSessionCost, calculateSessionCostBreakdown, formatHoursPaid, buildTableSyntheticCart, getSessionElapsedMinutes, parseSessionNotes, serializeSessionNotes, getDeductibleAbonoTotal } from '../utils/tableBillingEngine';
+import { calculateSessionCost, calculateSessionCostBreakdown, formatHoursPaid, buildTableSyntheticCart, getSessionElapsedMinutes, parseSessionNotes, serializeSessionNotes, getPriorAbonoContext } from '../utils/tableBillingEngine';
 import { Modal } from '../components/Modal';
 import { processSaleTransaction } from '../utils/checkoutProcessor';
 import { useProductContext } from '../context/ProductContext';
@@ -173,17 +173,11 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
     const tipAmt = includeTip ? Math.round(baseGrandTotalBuilt * (tipPercent / 100)) : 0;
     const grandTotal = round2(baseGrandTotalBuilt + serviceChargeAmt + tipAmt);
 
-    // ── Abonos previos del historial (solo para cierre definitivo) ──
-    const priorAbonoHistory = (() => {
-        if (isAnyAbono) return []; // En modo abono, no hay previos que descontár
-        const notes = session?.notes || '';
-        if (!notes.includes('|||HISTORIAL_ABONOS:')) return [];
-        try {
-            const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
-            return Array.isArray(hist) ? hist : [];
-        } catch (_) { return []; }
-    })();
-    const priorAbonoTotal = getDeductibleAbonoTotal(priorAbonoHistory);
+    // ── Abonos previos (fuente única: getPriorAbonoContext) ──
+    // El guard de seatId/isPartial vive dentro del helper: en cobros por asiento
+    // o abonos parciales NO se descuentan abonos previos (doble crédito).
+    const priorAbonoCtx = getPriorAbonoContext(session, { seatId, isPartial: isAnyAbono });
+    const priorAbonoTotal = priorAbonoCtx.deductibleTotal;
     const netToPay = Math.max(0, grandTotal - priorAbonoTotal);
 
     // Auto-fill received COP for electronic payment methods
@@ -271,20 +265,9 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
             // 3. Preparar array de pagos
             const paymentPayload = [];
 
-            // Inyectar abonos previos (solo en cierre definitivo)
-            priorAbonoHistory.filter(h => h.itemsRemoved === false).forEach(h => {
-                paymentPayload.push({
-                    id: crypto.randomUUID(),
-                    methodId: (h.method || 'efectivo').toLowerCase(),
-                    methodLabel: `${(h.method || 'Efectivo')} (Abono)`,
-                    currency: 'COP',
-                    amountUsd: Number(h.amount),
-                    amountOriginal: Number(h.amount),
-                    amountOriginalCurrency: 'COP',
-                    amountBs: 0,
-                    isAbonoPrevio: true,
-                });
-            });
+            // Inyectar abonos previos (solo en cierre definitivo, montos netos —
+            // ver getPriorAbonoContext)
+            priorAbonoCtx.injectablePayments.forEach(p => paymentPayload.push(p));
 
             if (isFiado) {
                 paymentPayload.push({ methodId: 'fiado', amountUsd: grandTotal, currency: 'COP' });
@@ -399,17 +382,31 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
             if (isAnyAbono) {
                 try {
                     const ordersStore = useOrdersStore.getState();
+                    // itemsRemoved refleja el resultado REAL del borrado: si algún item
+                    // quedó en la comanda, el abono debe ser deducible al cierre
+                    // (itemsRemoved: false) para que el cliente no lo pague dos veces.
+                    let allItemsRemoved = true;
                     if (isAbono && abonoItems && abonoItems.length > 0) {
                         for (const item of abonoItems) {
                             const originalItem = ordersStore.orderItems.find(oi => oi.id === item.id);
-                            if (originalItem) {
-                                const remainingQty = Number(originalItem.qty) - Number(item.qty);
+                            if (!originalItem) continue;
+                            const remainingQty = Number(originalItem.qty) - Number(item.qty);
+                            try {
                                 if (remainingQty <= 0) {
                                     await ordersStore.deleteItem(item.id);
+                                    // deleteItem no lanza en error: verificar post-condición
+                                    if (useOrdersStore.getState().orderItems.some(oi => oi.id === item.id)) {
+                                        allItemsRemoved = false;
+                                    }
                                 } else {
                                     await ordersStore.updateItemQty(item.id, remainingQty);
                                 }
+                            } catch (_) {
+                                allItemsRemoved = false;
                             }
+                        }
+                        if (!allItemsRemoved) {
+                            showToast('Algunos items no salieron de la comanda: el abono quedará como deducible del cierre', 'warning');
                         }
                     }
 
@@ -420,7 +417,7 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                         serviceAmount: Number(serviceChargeAmt + tipAmt),
                         method: isFiado ? 'FIADO' : method,
                         methods: [{ methodId: isFiado ? 'fiado' : method.toLowerCase(), amountUsd: Number(grandTotal) }],
-                        itemsRemoved: !!isAbono,
+                        itemsRemoved: !!isAbono && allItemsRemoved,
                         date: new Date().toISOString()
                     }];
                     const newNotes = serializeSessionNotes(cleanNotes, null, null, newHistorial);

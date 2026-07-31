@@ -12,7 +12,8 @@ import {
     calculateSessionCostBreakdown, 
     calculateConsumptionBs,
     buildTableSyntheticCart,
-    getAbonoBreakdown
+    getAbonoBreakdown,
+    parseSessionNotes
 } from '../../utils/tableBillingEngine';
 import { round2 } from '../../utils/dinero';
 import { useTablesStore } from '../../hooks/store/useTablesStore';
@@ -143,6 +144,15 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     // Devuelve el stock si cancela la mesa
     const handleCancelTable = async () => {
         if (isMutating) return;
+        // Guardarraíl: si la mesa tiene abonos ya cobrados en caja, anularla NO
+        // devuelve ese dinero ni anula esas ventas — exigir confirmación explícita.
+        const { historial: _histAbonos } = parseSessionNotes(session?.notes || '');
+        if (_histAbonos.length > 0) {
+            const _abonado = _histAbonos.reduce((s, h) => s + (Number(h.amount) || 0), 0);
+            const _fmt = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(_abonado);
+            const ok = window.confirm(`⚠️ Esta mesa tiene ${_fmt} en abonos ya cobrados en caja.\n\nAnular la mesa NO devuelve ese dinero ni anula esas ventas (hazlo desde el historial de ventas si corresponde).\n\n¿Anular de todas formas?`);
+            if (!ok) return;
+        }
         setIsMutating(true);
         setShowCancelModal(false);
         try {

@@ -272,6 +272,9 @@ export async function processSaleTransaction({
         ivaRate: 0,
         ivaAmount: finalTaxAmount || 0,
         taxBreakdown: taxBreakdown || {},
+        // Persistir el flag: al anular, voidSaleProcessor NO debe restaurar stock
+        // de ventas de mesa (el descuento vino de la comanda, no de la venta)
+        skipStockDeduction: !!skipStockDeduction,
     };
 
     const existingSales = await storageService.getItem(SALES_KEY, []);

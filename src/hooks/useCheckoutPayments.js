@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { round2, sumR, subR } from '../utils/dinero';
-import { getDeductibleAbonoTotal } from '../utils/tableBillingEngine';
+import { getPriorAbonoContext } from '../utils/tableBillingEngine';
 
 const EPSILON_COP = 1; // Tolerancia base cuando se paga solo en COP
 // Cuando hay pagos en USD, la tolerancia sube a 1 centavo USD = tasaCop/100 COP
@@ -42,26 +42,12 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
 
     const ivaAmount = totalTax || 0;
 
-    // ── Detectar abonos previos de la sesión de mesa ──
-    const priorAbonoTotal = useMemo(() => {
-        if (!tableContext || tableContext.isPartial || tableContext.seatId) return 0; // En abonos parciales o cobros por asiento no hay previos
-        const notes = tableContext.session?.notes || '';
-        if (!notes.includes('|||HISTORIAL_ABONOS:')) return 0;
-        try {
-            const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
-            return getDeductibleAbonoTotal(hist);
-        } catch (_) { return 0; }
-    }, [tableContext]);
-
-    // ── Historial de abonos previos (para inyectar en payments al confirmar) ──
-    const priorAbonoHistory = useMemo(() => {
-        if (priorAbonoTotal <= 0) return [];
-        const notes = tableContext?.session?.notes || '';
-        try {
-            const hist = JSON.parse(notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
-            return Array.isArray(hist) ? hist.filter(h => h.itemsRemoved === false) : [];
-        } catch (_) { return []; }
-    }, [priorAbonoTotal, tableContext]);
+    // ── Abonos previos de la sesión de mesa (fuente única: getPriorAbonoContext) ──
+    const priorAbonoCtx = useMemo(() => getPriorAbonoContext(tableContext?.session, {
+        seatId: tableContext?.seatId || null,
+        isPartial: !!tableContext?.isPartial
+    }), [tableContext]);
+    const priorAbonoTotal = priorAbonoCtx.deductibleTotal;
 
     const adjustedTotal = useMemo(() => {
         return cartTotalUsd + tdcSurcharge;
@@ -222,38 +208,8 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
                 });
 
             // Inyectar abonos previos con flag isAbonoPrevio antes de confirmar
-            const priorPayments = priorAbonoHistory.map(h => {
-                if (h.methods && Array.isArray(h.methods) && h.methods.length > 0) {
-                    return h.methods.map(m => ({
-                        id: crypto.randomUUID(),
-                        methodId: m.methodId,
-                        methodLabel: `${m.methodId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} (Abono)`,
-                        currency: 'COP',
-                        amountInput: Number(m.amountUsd),
-                        amountInputCurrency: 'COP',
-                        amountUsd: Number(m.amountUsd),
-                        amountOriginal: Number(m.amountUsd),
-                        amountOriginalCurrency: 'COP',
-                        amountBs: 0,
-                        isAbonoPrevio: true,
-                    }));
-                }
-                return [{
-                    id: crypto.randomUUID(),
-                    methodId: (h.method || 'efectivo').toLowerCase(),
-                    methodLabel: `${(h.method || 'Efectivo')} (Abono)`,
-                    currency: 'COP',
-                    amountInput: Number(h.amount),
-                    amountInputCurrency: 'COP',
-                    amountUsd: Number(h.amount),
-                    amountOriginal: Number(h.amount),
-                    amountOriginalCurrency: 'COP',
-                    amountBs: 0,
-                    isAbonoPrevio: true,
-                }];
-            }).flat();
-
-            const allPayments = [...priorPayments, ...payments];
+            // (montos netos escalados — ver getPriorAbonoContext)
+            const allPayments = [...priorAbonoCtx.injectablePayments, ...payments];
 
             const manualChangeGiven = changeUsdGiven ? Math.round(parseFloat(changeUsdGiven)) : changeUsd;
 
@@ -265,7 +221,7 @@ export function useCheckoutPayments({ paymentMethods, effectiveRate, tasaCop, ca
             submittingRef.current = false;
             setIsSubmitting(false);
         }
-    }, [barValues, references, paymentMethods, onConfirmSale, triggerHaptic, changeUsdGiven, changeUsd, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax, tasaCop]);
+    }, [barValues, references, paymentMethods, onConfirmSale, triggerHaptic, changeUsdGiven, changeUsd, splitMeta, tdcSurchargePercent, tdcSurcharge, totalTax, tasaCop, priorAbonoCtx]);
 
     const handleConfirm = useCallback(async () => {
         const anomaly = detectPaymentAnomaly({ cartTotalUsd: adjustedTotal, totalPaidUsd });

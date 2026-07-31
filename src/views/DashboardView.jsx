@@ -198,11 +198,17 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
         if (!sale) return;
         setVoidSaleTarget(null);
         try {
-            const { updatedSales, updatedProducts, updatedCustomers } = await processVoidSale(sale, sales, products);
+            const { updatedSales, updatedProducts, updatedCustomers, abonoReversion } = await processVoidSale(sale, sales, products);
             setSales(updatedSales);
             setProducts(updatedProducts);
             setCustomers(updatedCustomers);
-            showToast('Venta anulada con éxito', 'success');
+            if (abonoReversion?.reverted) {
+                showToast(`Venta anulada. Abono revertido de la mesa${abonoReversion.itemsRestored > 0 ? ` (${abonoReversion.itemsRestored} items devueltos a la comanda)` : ''}`, 'success');
+            } else if (abonoReversion?.ambiguous) {
+                showToast('Venta anulada, pero hay varios abonos con el mismo monto: revierte el abono manualmente en la mesa', 'warning');
+            } else {
+                showToast('Venta anulada con éxito', 'success');
+            }
             setRecycleOffer(sale);
         } catch (error) {
             console.error('Error anulando venta:', error);
@@ -632,8 +638,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 </button>
             )}
 
-            {/* Deudas Pendientes (Solo visible para Administradores) */}
-            {isAdmin && totalDeudas.count > 0 && (
+            {/* Deudas Pendientes (Solo visible para Administradores y Cajeros) */}
+            {(isAdmin || role === 'CAJERO') && totalDeudas.count > 0 && (
                 <div onClick={() => { setShowTopDeudas(!showTopDeudas); triggerHaptic && triggerHaptic(); }}
                     className="bg-white rounded-2xl p-4 border border-rose-100 shadow-sm relative overflow-hidden cursor-pointer active:scale-[0.99] transition-all">
                     <div className="absolute -right-4 -top-4 w-16 h-16 bg-rose-50 rounded-full blur-2xl" />

@@ -135,9 +135,14 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         if (!sale) return;
         setVoidSaleTarget(null);
         try {
-            const { updatedSales, updatedProducts } = await processVoidSale(sale, allSales, products);
+            const { updatedSales, updatedProducts, abonoReversion } = await processVoidSale(sale, allSales, products);
             setProducts(updatedProducts);
             setAllSales(updatedSales);
+            if (abonoReversion?.reverted) {
+                showToast(`Abono revertido de la mesa${abonoReversion.itemsRestored > 0 ? ` (${abonoReversion.itemsRestored} items devueltos a la comanda)` : ''}`, 'success');
+            } else if (abonoReversion?.ambiguous) {
+                showToast('Hay varios abonos con el mismo monto: revierte el abono manualmente en la mesa', 'warning');
+            }
             setRecycleOffer(sale);
         } catch (error) {
             console.error('Error anulando venta:', error);

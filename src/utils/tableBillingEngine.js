@@ -873,3 +873,58 @@ export function getDeductibleAbonoTotal(historial) {
         .filter(h => h.itemsRemoved === false)
         .reduce((sum, h) => sum + (Number(h.netAmount ?? h.amount) || 0), 0);
 }
+
+/**
+ * Contexto de abonos previos para un cobro de mesa. ÚNICA fuente de verdad de
+ * las reglas de descuento — usada por CashierPaymentModal y useCheckoutPayments
+ * para que no vuelvan a divergir:
+ *
+ *   - Los abonos previos SOLO se descuentan en el cierre definitivo de la mesa
+ *     completa. En cobros por asiento (seatId) o abonos parciales (isPartial)
+ *     no aplican: descontarlos ahí los acreditaría dos veces.
+ *   - El descuento es NETO (netAmount, sin propina/servicio del abono), y los
+ *     pagos isAbonoPrevio se inyectan escalados a ese neto para preservar el
+ *     invariante: Σ(pagos) + fiado == totalCop de la venta.
+ *
+ * @returns {{ deductibleTotal: number, entries: Array, injectablePayments: Array }}
+ */
+export function getPriorAbonoContext(session, { seatId = null, isPartial = false } = {}) {
+    const empty = { deductibleTotal: 0, entries: [], injectablePayments: [] };
+    if (!session || seatId || isPartial) return empty;
+
+    const { historial } = parseSessionNotes(session.notes || '');
+    const entries = historial.filter(h => h.itemsRemoved === false);
+    if (entries.length === 0) return empty;
+
+    const deductibleTotal = entries.reduce((s, h) => s + (Number(h.netAmount ?? h.amount) || 0), 0);
+
+    const mkPayment = (methodId, amount) => ({
+        id: crypto.randomUUID(),
+        methodId: (methodId || 'efectivo').toLowerCase(),
+        methodLabel: `${(methodId || 'Efectivo').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} (Abono)`,
+        currency: 'COP',
+        amountInput: amount,
+        amountInputCurrency: 'COP',
+        amountUsd: amount,
+        amountOriginal: amount,
+        amountOriginalCurrency: 'COP',
+        amountBs: 0,
+        isAbonoPrevio: true,
+    });
+
+    const injectablePayments = entries.flatMap(h => {
+        const gross = Number(h.amount) || 0;
+        const net = Number(h.netAmount ?? h.amount) || 0;
+        if (net <= 0) return [];
+        // methods guarda montos brutos por método: escalar al neto deducible
+        const factor = gross > 0 ? net / gross : 1;
+        if (Array.isArray(h.methods) && h.methods.length > 0) {
+            return h.methods
+                .map(m => mkPayment(m.methodId, round2((Number(m.amountUsd) || 0) * factor)))
+                .filter(p => p.amountUsd > 0);
+        }
+        return [mkPayment(h.method, round2(net))];
+    });
+
+    return { deductibleTotal, entries, injectablePayments };
+}

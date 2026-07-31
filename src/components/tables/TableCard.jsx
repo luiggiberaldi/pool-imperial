@@ -141,6 +141,20 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     const consumptionBs = calculateConsumptionBs(currentItems, tasaUSD, products);
     
     const handleCancelTable = async () => {
+        // Guardarraíl: si la mesa tiene abonos ya cobrados en caja, anularla NO
+        // devuelve ese dinero ni anula esas ventas — exigir confirmación explícita.
+        if ((session?.notes || '').includes('|||HISTORIAL_ABONOS:')) {
+            let _abonado = 0;
+            try {
+                const _hist = JSON.parse(session.notes.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim());
+                _abonado = (Array.isArray(_hist) ? _hist : []).reduce((s, h) => s + (Number(h.amount) || 0), 0);
+            } catch (_) {}
+            if (_abonado > 0) {
+                const _fmt = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(_abonado);
+                const ok = window.confirm(`⚠️ Esta mesa tiene ${_fmt} en abonos ya cobrados en caja.\n\nAnular la mesa NO devuelve ese dinero ni anula esas ventas (hazlo desde el historial de ventas si corresponde).\n\n¿Anular de todas formas?`);
+                if (!ok) return;
+            }
+        }
         setShowCancelModal(false);
         onClose?.(); // Reset selectedTableId in TablesView to prevent reopening wizard modal on the free table
         try {

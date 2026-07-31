@@ -282,17 +282,31 @@ export function useSalesCheckout({
         if (tableCheckoutData.isPartial) {
             try {
                 const ordersStore = useOrdersStore.getState();
+                // itemsRemoved refleja el resultado REAL del borrado: si algún item
+                // quedó en la comanda, el abono debe ser deducible al cierre
+                // (itemsRemoved: false) para que el cliente no lo pague dos veces.
+                let allItemsRemoved = true;
                 if (tableCheckoutData.currentItems && tableCheckoutData.currentItems.length > 0) {
                     for (const item of tableCheckoutData.currentItems) {
                         const originalItem = ordersStore.orderItems.find(oi => oi.id === item.id);
-                        if (originalItem) {
-                            const remainingQty = Number(originalItem.qty) - Number(item.qty);
+                        if (!originalItem) continue;
+                        const remainingQty = Number(originalItem.qty) - Number(item.qty);
+                        try {
                             if (remainingQty <= 0) {
-                                    await ordersStore.deleteItem(item.id);
+                                await ordersStore.deleteItem(item.id);
+                                // deleteItem no lanza en error: verificar post-condición
+                                if (useOrdersStore.getState().orderItems.some(oi => oi.id === item.id)) {
+                                    allItemsRemoved = false;
+                                }
                             } else {
-                                    await ordersStore.updateItemQty(item.id, remainingQty);
+                                await ordersStore.updateItemQty(item.id, remainingQty);
                             }
+                        } catch (_) {
+                            allItemsRemoved = false;
                         }
+                    }
+                    if (!allItemsRemoved) {
+                        showToast('Algunos items no salieron de la comanda: el abono quedará como deducible del cierre', 'warning');
                     }
                 }
 
@@ -316,7 +330,7 @@ export function useSalesCheckout({
                     methods: payments
                         .filter(p => !p.isAbonoPrevio)
                         .map(p => ({ methodId: p.methodId, amountUsd: p.amountUsd })),
-                    itemsRemoved: !!(tableCheckoutData.currentItems && tableCheckoutData.currentItems.length > 0),
+                    itemsRemoved: !!(tableCheckoutData.currentItems && tableCheckoutData.currentItems.length > 0) && allItemsRemoved,
                     date: new Date().toISOString()
                 }];
                 const newNotes = serializeSessionNotes(cleanNotes, null, null, newHistorial);
