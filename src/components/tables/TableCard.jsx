@@ -188,8 +188,10 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     };
 
     // Live Timer Update
-    const isPaused = pausedData?.isPaused ?? false;
-    const pauseElapsed = pausedData?.elapsedAtPause ?? 0;
+    const isPaused = Boolean(session?.paused_at || pausedData?.isPaused);
+    const pauseElapsed = session?.paused_at && session?.started_at
+        ? Math.max(0, (new Date(session.paused_at).getTime() - new Date(session.started_at).getTime()) / 60000)
+        : (pausedData?.elapsedAtPause ?? 0);
 
     // elapsed en minutos limitado al tope si tiene limite (para billing)
     const elapsed = useMemo(() => {
@@ -201,7 +203,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
             return Math.min(rawElapsed, limitMins);
         }
         return rawElapsed;
-    }, [isPlaying, session?.started_at, isPaused, pauseElapsed, hasLimit, totalHoursPaid, tick]);
+    }, [isPlaying, session?.started_at, session?.paused_at, isPaused, pauseElapsed, hasLimit, totalHoursPaid, tick]);
 
     // elapsed en segundos limitado al tope si tiene limite (para displays en tiempo real)
     const elapsedSeconds = useMemo(() => {
@@ -209,7 +211,12 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
         // Al pausar, elapsedAtPause son minutos con decimales (precisión exacta del
         // punto de pausa). Se redondea a segundos enteros con floor para que coincida
         // con el timer en marcha (que también usa Math.floor) y no muestre decimales.
-        if (isPaused) return Math.floor((pausedData?.elapsedAtPause || 0) * 60);
+        if (isPaused) {
+            const pauseSecs = session?.paused_at && session?.started_at
+                ? Math.floor((new Date(session.paused_at).getTime() - new Date(session.started_at).getTime()) / 1000)
+                : Math.floor((pausedData?.elapsedAtPause || 0) * 60);
+            return Math.max(0, pauseSecs);
+        }
         const start = new Date(session.started_at).getTime();
         const now = getServerNow();
         const rawSecs = Math.max(0, Math.floor((now - start) / 1000));
@@ -218,7 +225,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
             return Math.min(rawSecs, limitSecs);
         }
         return rawSecs;
-    }, [isPlaying, session?.started_at, isPaused, pausedData, hasLimit, totalHoursPaid, tick]);
+    }, [isPlaying, session?.started_at, session?.paused_at, isPaused, pausedData, hasLimit, totalHoursPaid, tick]);
 
     // segundos restantes exactos
     const remainingSeconds = useMemo(() => {

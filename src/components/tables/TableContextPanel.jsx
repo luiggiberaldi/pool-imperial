@@ -187,14 +187,16 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     };
 
     // Live Timer Update
-    const isPaused = pausedData?.isPaused ?? false;
-    const pauseElapsed = pausedData?.elapsedAtPause ?? 0;
+    const isPaused = Boolean(session?.paused_at || pausedData?.isPaused);
+    const pauseElapsed = session?.paused_at && session?.started_at
+        ? Math.max(0, (new Date(session.paused_at).getTime() - new Date(session.started_at).getTime()) / 60000)
+        : (pausedData?.elapsedAtPause ?? 0);
 
     const elapsed = useMemo(() => {
         if (!isPlaying || !session?.started_at) return 0;
         if (isPaused) return pauseElapsed;
         return calculateElapsedTime(session.started_at);
-    }, [isPlaying, session?.started_at, isPaused, pauseElapsed, tick]);
+    }, [isPlaying, session?.started_at, session?.paused_at, isPaused, pauseElapsed, tick]);
 
     // Sincronización Remota Segura (Resiliencia Multi-dispositivo)
     useEffect(() => {

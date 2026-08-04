@@ -164,17 +164,22 @@ function useTableStatus(session) {
 function LiveTimer({ session, className = '' }) {
     const tick = useSharedTick();
     const pausedData = useTablesStore(state => session ? state.pausedSessions[session.id] : null);
-    const isPaused = pausedData?.isPaused ?? false;
+    const isPaused = Boolean(session?.paused_at || pausedData?.isPaused);
 
     const elapsedSeconds = useMemo(() => {
         if (!session?.started_at) return 0;
         // Floor: elapsedAtPause son minutos con decimales; sin redondear se mostraría
         // como basura (ej. "3.2139999s") en el timer del mini-plano.
-        if (isPaused) return Math.floor((pausedData?.elapsedAtPause || 0) * 60);
+        if (isPaused) {
+            const pauseSecs = session?.paused_at && session?.started_at
+                ? Math.floor((new Date(session.paused_at).getTime() - new Date(session.started_at).getTime()) / 1000)
+                : Math.floor((pausedData?.elapsedAtPause || 0) * 60);
+            return Math.max(0, pauseSecs);
+        }
         const start = new Date(session.started_at).getTime();
         const now = Date.now();
         return Math.max(0, Math.floor((now - start) / 1000));
-    }, [session?.started_at, isPaused, pausedData, tick]);
+    }, [session?.started_at, session?.paused_at, isPaused, pausedData, tick]);
 
     return <span className={className}>{fmtTimer(elapsedSeconds)}</span>;
 }
@@ -183,7 +188,7 @@ function LiveTimer({ session, className = '' }) {
 function LiveCountdownTimer({ session, className = '' }) {
     const tick = useSharedTick();
     const pausedData = useTablesStore(state => session ? state.pausedSessions[session.id] : null);
-    const isPaused = pausedData?.isPaused ?? false;
+    const isPaused = Boolean(session?.paused_at || pausedData?.isPaused);
     const hoursPaid = session?.hours_paid || 0;
     
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
@@ -197,7 +202,10 @@ function LiveCountdownTimer({ session, className = '' }) {
         
         let elapsedSecs;
         if (isPaused) {
-            elapsedSecs = Math.floor((pausedData?.elapsedAtPause || 0) * 60);
+            elapsedSecs = session?.paused_at && session?.started_at
+                ? Math.floor((new Date(session.paused_at).getTime() - new Date(session.started_at).getTime()) / 1000)
+                : Math.floor((pausedData?.elapsedAtPause || 0) * 60);
+            elapsedSecs = Math.max(0, elapsedSecs);
         } else {
             const start = new Date(session.started_at).getTime();
             const now = Date.now();
