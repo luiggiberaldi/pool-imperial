@@ -44,12 +44,18 @@ export function CustomerDetailSheet({ customer, isOpen, isAdmin, onClose, onAjus
                             <p className="text-[10px] text-slate-400 mt-0.5">Cliente desde {createdDate}</p>
                         )}
 
-                        {/* Deuda Total Badge */}
+                        {/* Deuda / Saldo Badge */}
                         <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-500">Saldo Pendiente:</span>
-                            {(customer.debtUsd || 0) > 0 ? (
+                            <span className="text-xs font-bold text-slate-500">
+                                {Math.round(customer.deuda || 0) >= 1 ? 'Deuda Pendiente:' : Math.round(customer.favor || 0) >= 1 ? 'Saldo a Favor:' : 'Estado:'}
+                            </span>
+                            {Math.round(customer.deuda || 0) >= 1 ? (
                                 <span className="text-base font-black text-red-500 font-mono">
-                                    {formatCOP(customer.debtUsd)}
+                                    -{formatCOP(customer.deuda)}
+                                </span>
+                            ) : Math.round(customer.favor || 0) >= 1 ? (
+                                <span className="text-base font-black text-emerald-500 font-mono">
+                                    +{formatCOP(customer.favor)}
                                 </span>
                             ) : (
                                 <span className="text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-2.5 py-1 rounded-full flex items-center gap-1">

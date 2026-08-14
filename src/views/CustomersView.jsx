@@ -114,11 +114,11 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
 
     // ── LÓGICA DE CLIENTES ──
     const handleDeleteCustomerRequest = (customer) => {
-        const deuda = customer.deuda || 0;
-        const saldo = customer.favor || 0;
-        const fmtCop = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Math.round(v || 0));
-        if (deuda > 0.005) { showToast(`No se puede eliminar: ${customer.name} tiene una deuda de ${fmtCop(deuda)} pendiente.`, 'error'); return; }
-        if (saldo > 0.005) { showToast(`No se puede eliminar: ${customer.name} tiene un saldo a favor de ${fmtCop(saldo)}.`, 'error'); return; }
+        const deuda = Math.round(customer.deuda || 0);
+        const saldo = Math.round(customer.favor || 0);
+        const fmtCop = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v || 0);
+        if (deuda >= 1) { showToast(`No se puede eliminar: ${customer.name} tiene una deuda de ${fmtCop(deuda)} pendiente.`, 'error'); return; }
+        if (saldo >= 1) { showToast(`No se puede eliminar: ${customer.name} tiene un saldo a favor de ${fmtCop(saldo)}.`, 'error'); return; }
         setDeleteCustomerTarget(customer);
     };
 
@@ -321,8 +321,8 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
     const filteredCustomers = customers.filter(c => {
         const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || (c.phone && c.phone.includes(searchTerm));
         if (!matchesSearch) return false;
-        if (filterType === 'deuda') return c.deuda > 0.01;
-        if (filterType === 'favor') return c.favor > 0.01;
+        if (filterType === 'deuda') return Math.round(c.deuda || 0) >= 1;
+        if (filterType === 'favor') return Math.round(c.favor || 0) >= 1;
         return true;
     });
 
@@ -536,10 +536,11 @@ export default function CustomersView({ triggerHaptic, rates, isActive }) {
                 onReset={() => { setResetBalanceCustomer(selectedCustomer); setSelectedCustomer(null); }}
                 onEdit={() => { setEditingCustomer(selectedCustomer); setSelectedCustomer(null); }}
                 onDelete={() => {
-                    const deuda = selectedCustomer?.deuda || 0;
-                    const saldo = selectedCustomer?.favor || 0;
-                    if (deuda > 0.005) { showToast(`No se puede eliminar: ${selectedCustomer.name} tiene una deuda de $${deuda.toFixed(2)} pendiente.`, 'error'); return; }
-                    if (saldo > 0.005) { showToast(`No se puede eliminar: ${selectedCustomer.name} tiene un saldo a favor de $${saldo.toFixed(2)}.`, 'error'); return; }
+                    const deuda = Math.round(selectedCustomer?.deuda || 0);
+                    const saldo = Math.round(selectedCustomer?.favor || 0);
+                    const fmtCop = (v) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(v || 0);
+                    if (deuda >= 1) { showToast(`No se puede eliminar: ${selectedCustomer.name} tiene una deuda de ${fmtCop(deuda)} pendiente.`, 'error'); return; }
+                    if (saldo >= 1) { showToast(`No se puede eliminar: ${selectedCustomer.name} tiene un saldo a favor de ${fmtCop(saldo)}.`, 'error'); return; }
                     setDeleteCustomerTarget(selectedCustomer);
                     setSelectedCustomer(null);
                 }}

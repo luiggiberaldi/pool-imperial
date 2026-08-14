@@ -30,9 +30,9 @@ export default function CustomerCard({ customer, onClick, onDelete }) {
                     </div>
                 </div>
                 <div className="text-right shrink-0">
-                    {customer.deuda > 0 ? (
+                    {Math.round(customer.deuda || 0) >= 1 ? (
                         <p className="text-sm font-black text-red-500 leading-tight">-{formatCOP(customer.deuda)}</p>
-                    ) : customer.favor > 0 ? (
+                    ) : Math.round(customer.favor || 0) >= 1 ? (
                         <p className="text-sm font-black text-emerald-500 leading-tight">+{formatCOP(customer.favor)}</p>
                     ) : (
                         <p className="text-xs font-bold text-slate-400 flex items-center gap-1">
