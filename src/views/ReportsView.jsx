@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { BarChart3, Calendar, Download, TrendingUp, ShoppingBag, DollarSign, Package, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Clock, Recycle, Search, X, LockIcon, ListOrdered, Percent, Trash2, AlertTriangle } from 'lucide-react';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { formatCop, formatUsd, formatGameHours, computeGameStats } from '../utils/calculatorUtils';
-import { generateDailyClosePDF as _generateDailyClosePDF } from '../utils/dailyCloseGenerator';
+import { FinancialEngine } from '../core/FinancialEngine';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
-import { generateSalesReportPDF, generateArticlesReportPDF, generateCierresListReportPDF } from '../utils/salesReportGenerator';
+import { generateMetricsReportPDF, generateSalesReportPDF, generateArticlesReportPDF, generateCierresListReportPDF } from '../utils/salesReportGenerator';
 import { useProductContext } from '../context/ProductContext';
 import { useCart } from '../context/CartContext';
 import EmptyState from '../components/EmptyState';
@@ -16,6 +16,7 @@ import CierreHistoryCard from '../components/Reports/CierreHistoryCard';
 import TransactionRow from '../components/Reports/TransactionRow';
 import PaymentBreakdownCard from '../components/Reports/PaymentBreakdownCard';
 import { useReportsData } from '../hooks/useReportsData';
+import { getReportRangeLabel } from '../utils/reportRangeEngine';
 import { useAuthStore } from '../hooks/store/authStore';
 import { useCashStore } from '../hooks/store/cashStore';
 import { storageService } from '../utils/storageService';
@@ -30,6 +31,36 @@ const RANGE_OPTIONS = [
     { id: 'lastMonth', label: 'Mes Anterior' },
     { id: 'custom', label: 'Personalizado' },
 ];
+const HIDDEN_REPORT_USERS = new Set(['sistema', 'super admin', 'administrador']);
+
+function getSaleUserOptions(sale) {
+    const options = [];
+    if (sale?.meseroId) {
+        options.push({
+            key: `mesero:${sale.meseroId}`,
+            label: `${sale.meseroNombre || 'Mesero'} (Mesero)`,
+        });
+    }
+    if (sale?.vendedorId) {
+        options.push({
+            key: `vendedor:${sale.vendedorId}`,
+            label: `${sale.vendedorNombre || 'Vendedor'} (Vendedor)`,
+        });
+    }
+    if (options.length === 0) {
+        const legacyName = sale?.meseroNombre || sale?.vendedorNombre;
+        const normalizedName = legacyName ? String(legacyName).trim() : '';
+        options.push({
+            key: normalizedName ? `legacy:${normalizedName.toLowerCase()}` : 'system',
+            label: normalizedName || 'Sistema',
+        });
+    }
+    return options;
+}
+
+function saleMatchesUser(sale, selectedKey) {
+    return getSaleUserOptions(sale).some(option => option.key === selectedKey);
+}
 
 export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, isActive }) {
     const { products, setProducts, effectiveRate: bcvRate, copEnabled, tasaCop } = useProductContext();
@@ -49,22 +80,41 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
     const [historyFilter, setHistoryFilter] = useState('all');
     const [userFilter, setUserFilter] = useState('all');
     const [voidSaleTarget, setVoidSaleTarget] = useState(null);
+    const [purgeTargetIds, setPurgeTargetIds] = useState(null);
     const [recycleOffer, setRecycleOffer] = useState(null);
     const [articleSearch, setArticleSearch] = useState('');
     const [articleSort, setArticleSort] = useState('qty'); // 'qty' | 'revenue' | 'name'
 
     const {
         allSales, setAllSales, isLoading,
-        salesForStats, salesForCashFlow, historySales,
+        isSyncing, syncError, lastSyncedAt, pendingSalesCount, syncConflictCount, range,
+        salesForStats, salesForCashFlow, historySales, productSales,
         totalUsd, totalBs, totalItems, profit,
         paymentBreakdown, topProducts, salesByDay,
         groupedClosings, maxDayTotal,
         avgRate, totalUsdReal, profitUsdReal,
         totalTax, taxBreakdown, netRevenue,
-    } = useReportsData({ isActive, products, bcvRate, selectedRange, customFrom, customTo, activeTab, tasaCop });
+    } = useReportsData({
+        isActive,
+        products,
+        bcvRate,
+        selectedRange,
+        customFrom,
+        customTo,
+        activeTab,
+        tasaCop,
+        activeCashSession,
+    });
 
     const cierreNumbers = useMemo(() => {
-        const allCierreIds = Array.from(new Set(allSales.map(s => s.cierreId).filter(Boolean))).sort((a, b) => a - b);
+        const allCierreIds = Array.from(new Set(
+            allSales.map(sale => sale.cierreId ?? sale.closureId ?? sale.cierre_id ?? sale.closure_id).filter(Boolean)
+        )).sort((a, b) => {
+            const aNumber = Number(a);
+            const bNumber = Number(b);
+            if (Number.isFinite(aNumber) && Number.isFinite(bNumber)) return aNumber - bNumber;
+            return String(a).localeCompare(String(b));
+        });
         const numbers = {};
         allCierreIds.forEach((cId, index) => {
             numbers[cId] = index + 1;
@@ -101,34 +151,23 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
     const gameStats = useMemo(() => computeGameStats(salesForStats), [salesForStats]);
 
     // ── Aggregated product sales for "Por Artículo" tab ──
+    // Usa snapshots históricos de la venta, no el catálogo actual: un producto
+    // eliminado o renombrado no desaparece del reporte.
     const allProductsSold = useMemo(() => {
-        const map = {};
-        const productIds = new Set((products || []).map(p => p.id));
-        const productNames = new Set((products || []).map(p => p.name.toLowerCase()));
-
-        salesForStats.forEach(s => {
-            s.items?.forEach(item => {
-                const nameLower = item.name?.toLowerCase();
-                if (!productIds.has(item.id) && !productNames.has(nameLower)) return;
-
-                const key = item.name;
-                if (!map[key]) map[key] = { name: item.name, qty: 0, revenue: 0, isWeight: !!item.isWeight };
-                map[key].qty += item.qty;
-                map[key].revenue += item.priceUsd * item.qty;
-            });
-        });
-        let list = Object.values(map);
-        // Filter by search
+        let list = (productSales || []).map(product => ({
+            ...product,
+            qty: Number(product.qty) || 0,
+            revenue: Number(product.revenue) || 0,
+        }));
         if (articleSearch.trim()) {
             const q = articleSearch.toLowerCase();
-            list = list.filter(p => p.name.toLowerCase().includes(q));
+            list = list.filter(product => product.name.toLowerCase().includes(q));
         }
-        // Sort
         if (articleSort === 'qty') list.sort((a, b) => b.qty - a.qty);
         else if (articleSort === 'revenue') list.sort((a, b) => b.revenue - a.revenue);
         else list.sort((a, b) => a.name.localeCompare(b.name));
         return list;
-    }, [salesForStats, articleSearch, articleSort, products]);
+    }, [productSales, articleSearch, articleSort]);
 
     const confirmVoidSale = async () => {
         const sale = voidSaleTarget;
@@ -151,115 +190,134 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
 
     const handlePurgeAnnulledInReports = async () => {
         triggerHaptic && triggerHaptic();
+        const saleIds = Array.from(new Set((purgeTargetIds || []).filter(Boolean)));
+        setPurgeTargetIds(null);
+        if (saleIds.length === 0) return;
         try {
-            const res = await purgeAllAnnulledSales();
+            const res = await purgeAllAnnulledSales({ saleIds });
             if (res.count > 0) {
                 setAllSales(res.sales);
-                showToast(`Se eliminaron ${res.count} ventas anuladas`, 'success');
+                showToast(`Se eliminaron ${res.count} ventas anuladas del filtro visible`, 'success');
             } else {
-                showToast('No hay ventas anuladas para eliminar', 'info');
+                showToast('Las ventas anuladas visibles ya no están disponibles para purgar', 'info');
             }
         } catch (e) {
             console.error('Error purgando anuladas:', e);
+            showToast(e?.message || 'No se pudieron purgar las ventas anuladas', 'error');
         }
     };
 
     const handleDeleteCierre = async (cierreId, shouldReopen = true) => {
-        const salesInCierre = allSales.filter(s => s.cierreId === cierreId);
+        const closureKey = String(cierreId);
+        const salesInCierre = allSales.filter(s => String(s.cierreId ?? s.closureId ?? s.cierre_id ?? s.closure_id ?? '') === closureKey);
+        const cierreRecord = salesInCierre.find(s => s.tipo === 'CIERRE_CAJA');
+        const cashSessionId = cierreRecord?.cashSessionId
+            || cierreRecord?.cash_session_id
+            || salesInCierre.find(s => s.cashSessionId || s.cash_session_id)?.cashSessionId
+            || salesInCierre.find(s => s.cash_session_id)?.cash_session_id
+            || null;
+
         if (salesInCierre.length === 0) {
+            showToast('El cierre seleccionado ya no existe en este dispositivo', 'warning');
             return;
         }
 
-        // 1. Modificar localmente
-        const updatedSales = allSales.map(s => {
-            if (s.cierreId === cierreId) {
-                if (shouldReopen) {
-                    return { ...s, cajaCerrada: false, cierreId: null };
-                } else {
-                    return { ...s, cierreId: null };
-                }
+        // Nunca inferir qué caja reabrir por "la última cerrada": dos cierres
+        // cercanos pueden pertenecer a cuentas o turnos distintos.
+        if (shouldReopen) {
+            if (!cashSessionId) {
+                showToast('Este cierre antiguo no tiene vínculo con una sesión de caja. Usa “Solo Borrar Cierre” o corrígelo manualmente.', 'warning');
+                return;
             }
-            return s;
+            if (activeCashSession?.id && String(activeCashSession.id) !== String(cashSessionId)) {
+                showToast('Ya existe otro turno abierto; cierra ese turno antes de reabrir este cierre.', 'warning');
+                return;
+            }
+
+            try {
+                const { supabaseCloud } = await import('../config/supabaseCloud');
+                const { data: { session } } = await supabaseCloud.auth.getSession();
+                if (!session?.user?.id) throw new Error('Se requiere conexión con la cuenta para reabrir el turno.');
+
+                const { data: targetSession, error: readError } = await supabaseCloud
+                    .from('cash_sessions')
+                    .select('id,status,closed_at')
+                    .eq('id', cashSessionId)
+                    .eq('user_id', session.user.id)
+                    .maybeSingle();
+                if (readError) throw readError;
+                if (!targetSession || targetSession.status !== 'CLOSED') {
+                    throw new Error('La sesión vinculada no está cerrada o ya fue modificada.');
+                }
+
+                const { data: reopenedRows, error: reopenError } = await supabaseCloud
+                    .from('cash_sessions')
+                    .update({ status: 'OPEN', closed_at: null, final_cash_usd: 0 })
+                    .eq('id', cashSessionId)
+                    .eq('user_id', session.user.id)
+                    .eq('status', 'CLOSED')
+                    .select('id');
+                if (reopenError) throw reopenError;
+                if (!reopenedRows?.length) throw new Error('La sesión cambió mientras se reabría; no se modificó el historial local.');
+            } catch (error) {
+                console.error('Error al reabrir la sesión vinculada:', error);
+                showToast(error?.message || 'No se pudo reabrir la sesión de caja', 'error');
+                return;
+            }
+        }
+
+        const updatedSales = allSales.map(sale => {
+            if (String(sale.cierreId ?? sale.closureId ?? sale.cierre_id ?? sale.closure_id ?? '') !== closureKey) return sale;
+            return shouldReopen
+                ? { ...sale, cajaCerrada: false, cierreId: null, closureId: null, cierre_id: null, closure_id: null }
+                : { ...sale, cierreId: null, closureId: null, cierre_id: null, closure_id: null };
         });
 
-        // 2. Guardar localmente
         await storageService.setItem('bodega_sales_v1', updatedSales);
         setAllSales(updatedSales);
         window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: 'bodega_sales_v1' } }));
 
-        // 3. Sincronizar en la nube
         try {
             const { supabaseCloud } = await import('../config/supabaseCloud');
             const { data: { session } } = await supabaseCloud.auth.getSession();
             if (session?.user?.id) {
                 const { syncCierreMarks } = await import('../utils/salesSyncService');
-                const salesToSync = updatedSales.filter(s => salesInCierre.some(sic => sic.id === s.id));
+                const salesToSync = updatedSales.filter(sale => salesInCierre.some(previous => previous.id === sale.id));
                 await syncCierreMarks(salesToSync, session.user.id);
             }
-        } catch (e) {
-            console.error('Error al sincronizar marcas de cierre a la nube:', e);
+        } catch (error) {
+            console.error('Error al sincronizar marcas de cierre a la nube:', error);
+            showToast('El cambio quedó local; no se pudo sincronizar aún con la nube.', 'warning');
         }
 
-        // 4. Reabrir sesión de caja en Supabase si corresponde y si se solicitó reabrir
         if (shouldReopen) {
-            try {
-                const { supabaseCloud } = await import('../config/supabaseCloud');
-                const { data: lastClosedSession } = await supabaseCloud
-                    .from('cash_sessions')
-                    .select('*')
-                    .eq('status', 'CLOSED')
-                    .order('closed_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-
-                if (lastClosedSession) {
-                    const sessionCloseTime = new Date(lastClosedSession.closed_at).getTime();
-                    const diffMs = Math.abs(sessionCloseTime - cierreId);
-                    
-                    // Si el cierre coincide en menos de 5 minutos, reabrimos la sesión
-                    if (diffMs < 5 * 60 * 1000) {
-                        const { error } = await supabaseCloud
-                            .from('cash_sessions')
-                            .update({
-                                status: 'OPEN',
-                                closed_at: null,
-                                final_cash_usd: 0
-                            })
-                            .eq('id', lastClosedSession.id);
-
-                        if (!error) {
-                            console.log('[Caja] Sesión de caja reabierta en Supabase ✓');
-                            await useCashStore.getState().syncCashSession(true);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('Error al intentar reabrir la sesión de caja:', err);
-            }
+            await useCashStore.getState().syncCashSession(true);
+            showToast('Turno reabierto con la sesión vinculada', 'success');
+        } else {
+            showToast('Cierre eliminado; las ventas permanecen cerradas', 'success');
         }
     };
 
     const handleExportPDF = async () => {
         triggerHaptic && triggerHaptic();
         try {
-            const rangeOpt = RANGE_OPTIONS.find(o => o.id === selectedRange);
-            let rangeLabel = rangeOpt ? rangeOpt.label : '';
-            if (selectedRange === 'custom' && (customFrom || customTo)) {
-                rangeLabel = `${customFrom || '...'} a ${customTo || '...'}`;
-            }
+            const rangeLabel = getReportRangeLabel(range);
 
             if (activeTab === 'metrics') {
-                const { generateDailyClosePDF } = await import('../utils/dailyCloseGenerator');
-                await generateDailyClosePDF({
-                    sales: salesForCashFlow,
-                    allSales: salesForStats,
-                    bcvRate: 0,
+                generateMetricsReportPDF({
+                    totalCOP: totalUsd,
+                    netRevenue,
+                    totalTax,
+                    taxBreakdown,
+                    profit,
+                    totalItems,
+                    salesForStats,
                     paymentBreakdown,
                     topProducts,
-                    todayTotalUsd: totalUsd,
-                    todayTotalBs: 0,
-                    todayProfit: profit,
-                    todayItemsSold: totalItems,
+                    salesByDay,
+                }, {
+                    rangeLabel,
+                    businessName: localStorage.getItem('business_name') || 'Pool Imperial',
                 });
             } else if (activeTab === 'articles') {
                 generateArticlesReportPDF(allProductsSold, {
@@ -273,7 +331,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                     rangeLabel,
                     search: historySearch,
                     filterLabel,
-                    userName: userFilter !== 'all' ? userFilter : '',
+                    userName: selectedUserLabel,
                     commission: userFilter !== 'all' ? selectedUserCommission : null,
                 });
             } else if (activeTab === 'history') {
@@ -293,47 +351,54 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
             || (historyFilter === 'completed' && s.status !== 'ANULADA')
             || (historyFilter === 'voided' && s.status === 'ANULADA');
         if (!matchesFilter) return false;
-        // Filtro por usuario (mesero/vendedor)
-        if (userFilter !== 'all' && (s.meseroNombre || s.vendedorNombre || '') !== userFilter) return false;
+        // Filtro por usuario: prioriza ID (mesero/vendedor) y mantiene
+        // compatibilidad con ventas antiguas que solo guardaban el nombre.
+        if (userFilter !== 'all' && !saleMatchesUser(s, userFilter)) return false;
         if (!historySearch.trim()) return true;
         const q = historySearch.toLowerCase();
         if ((s.customerName || 'consumidor final').toLowerCase().includes(q)) return true;
-        if (s.items && s.items.some(i => i.name.toLowerCase().includes(q))) return true;
-        if (s.id.toLowerCase().includes(q)) return true;
+        if (s.items && s.items.some(i => String(i?.name || '').toLowerCase().includes(q))) return true;
+        if (String(s.id || '').toLowerCase().includes(q)) return true;
         // Búsqueda por número de factura (ej: "73", "#73", "0000073")
         if (s.saleNumber !== undefined && String(s.saleNumber).includes(q.replace('#', ''))) return true;
         if (s.saleNumber !== undefined && String(s.saleNumber).padStart(7, '0').includes(q.replace('#', ''))) return true;
         // Búsqueda por nombre de mesa
-        if (s.tableName && s.tableName.toLowerCase().includes(q)) return true;
+        if (s.tableName && String(s.tableName).toLowerCase().includes(q)) return true;
         // Búsqueda por nombre de usuario (mesero/vendedor que atendió)
-        if (s.meseroNombre && s.meseroNombre.toLowerCase().includes(q)) return true;
-        if (s.vendedorNombre && s.vendedorNombre.toLowerCase().includes(q)) return true;
+        if (s.meseroNombre && String(s.meseroNombre).toLowerCase().includes(q)) return true;
+        if (s.vendedorNombre && String(s.vendedorNombre).toLowerCase().includes(q)) return true;
         return false;
     }), [historySales, historyFilter, historySearch, userFilter]);
 
     const isDownloadDisabled = useMemo(() => {
+        if (!range?.isValid) return true;
         if (activeTab === 'metrics') return salesForStats.length === 0 && salesForCashFlow.length === 0;
         if (activeTab === 'articles') return allProductsSold.length === 0;
         if (activeTab === 'sales') return searchedSales.length === 0;
         if (activeTab === 'history') return groupedClosings.length === 0;
         return true;
-    }, [activeTab, salesForStats, salesForCashFlow, allProductsSold, searchedSales, groupedClosings]);
+    }, [range, activeTab, salesForStats, salesForCashFlow, allProductsSold, searchedSales, groupedClosings]);
 
     const completedInList = searchedSales.filter(s => s.status !== 'ANULADA');
     const voidedInList = searchedSales.filter(s => s.status === 'ANULADA');
-    const sumUsd = completedInList.reduce((a, s) => a + (s.totalUsd || 0), 0);
+    const sumUsd = completedInList.reduce((total, sale) => total + FinancialEngine.calculateSaleNetTotal(sale), 0);
 
     // Lista de usuarios (meseros/vendedores) presentes en el periodo
-    const HIDDEN_USERS = ['sistema', 'super admin', 'administrador'];
     const usersInPeriod = useMemo(() => {
-        const set = new Set();
-        historySales.forEach(s => {
-            const u = s.meseroNombre || s.vendedorNombre;
-            // Excluir cuentas de sistema y la oculta de desarrollador (Super Admin / Administrador semilla)
-            if (u && !HIDDEN_USERS.includes(u.toLowerCase())) set.add(u);
+        const users = new Map();
+        historySales.forEach(sale => {
+            getSaleUserOptions(sale).forEach(({ key, label }) => {
+                if (!label || HIDDEN_REPORT_USERS.has(label.toLowerCase())) return;
+                if (!users.has(key)) users.set(key, { key, label });
+            });
         });
-        return Array.from(set).sort((a, b) => a.localeCompare(b));
+        return Array.from(users.values()).sort((a, b) => a.label.localeCompare(b.label));
     }, [historySales]);
+
+    const selectedUserLabel = useMemo(() => {
+        if (userFilter === 'all') return '';
+        return usersInPeriod.find(user => user.key === userFilter)?.label || '';
+    }, [userFilter, usersInPeriod]);
 
     // Comisiones (propinas) generadas por el usuario seleccionado en el rango
     const selectedUserCommission = useMemo(() => {
@@ -341,7 +406,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         let total = 0;
         historySales.forEach(s => {
             if (s.status === 'ANULADA') return;
-            if ((s.meseroNombre || s.vendedorNombre || '') !== userFilter) return;
+            if (!saleMatchesUser(s, userFilter)) return;
             (s.items || []).forEach(item => {
                 if (item.isTip || (item.name && item.name.toLowerCase().includes('propina'))) {
                     total += (item.priceUsd || 0) * (item.qty || 1);
@@ -350,6 +415,27 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
         });
         return total;
     }, [historySales, userFilter]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+        setExpandedSaleId(null);
+    }, [
+        selectedRange,
+        customFrom,
+        customTo,
+        activeTab,
+        historyFilter,
+        userFilter,
+        activeCashSession?.id,
+        range?.fromDate,
+        range?.toDate,
+    ]);
+
+    useEffect(() => {
+        if (selectedRange !== 'custom') return;
+        setUserFilter('all');
+    }, [selectedRange, customFrom, customTo]);
+
 
     if (isLoading) {
         return (
@@ -381,15 +467,13 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                     </div>
                     Reportes
                 </h2>
-                {activeTab !== 'metrics' && (
-                    <button
+                <button
                         onClick={handleExportPDF}
                         disabled={isDownloadDisabled}
                         className="flex items-center gap-2 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white font-bold rounded-xl text-sm shadow-md shadow-indigo-500/20 active:scale-95 transition-all"
                     >
                         <Download size={16} /> Descargar PDF
                     </button>
-                )}
             </div>
 
             {/* Tab Selector */}
@@ -430,6 +514,35 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                     </button>
                 ))}
             </div>
+            {range?.isValid && (
+                <p className="text-[10px] font-semibold text-slate-400 -mt-2">
+                    Periodo efectivo: {getReportRangeLabel(range)} · Zona comercial: {range.timezone}
+                </p>
+            )}
+
+            {!range?.isValid && !(selectedRange === 'current_shift' && !activeCashSession) && (
+                <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-2xl p-3 flex items-center gap-3 animate-in fade-in duration-200">
+                    <AlertTriangle className="text-red-500 shrink-0" size={18} />
+                    <p className="text-xs font-bold text-red-700 dark:text-red-300">{range?.error || 'El rango seleccionado no es válido.'}</p>
+                </div>
+            )}
+
+            {(isSyncing || syncError || lastSyncedAt || pendingSalesCount > 0 || syncConflictCount > 0) && (
+                <div className={`rounded-xl px-3 py-2 text-[10px] font-bold flex items-center gap-2 ${syncError || pendingSalesCount > 0 || syncConflictCount > 0
+                    ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40'
+                    : 'bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 border border-slate-100 dark:border-slate-800'}`}>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${isSyncing ? 'bg-indigo-500 animate-pulse' : syncError || pendingSalesCount > 0 || syncConflictCount > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                    {isSyncing
+                        ? 'Actualizando reportes desde la nube…'
+                        : syncError
+                            ? `Datos locales: ${syncError}`
+                            : pendingSalesCount > 0
+                                ? `${pendingSalesCount} venta(s) pendiente(s) de sincronización local`
+                                : syncConflictCount > 0
+                                    ? `${syncConflictCount} venta(s) requieren reconciliación manual`
+                                    : `Última actualización: ${new Date(lastSyncedAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`}
+                </div>
+            )}
 
             {/* Warning when Current Shift is selected but cash is closed */}
             {selectedRange === 'current_shift' && !activeCashSession && (
@@ -540,7 +653,11 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             <div className="flex items-end gap-1 h-24">
                                 {salesByDay.map((day) => {
                                     const pct = (day.total / maxDayTotal) * 100;
-                                    const dayLabel = new Date(day.date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+                                    const dayLabel = new Intl.DateTimeFormat('es-CO', {
+                                        timeZone: range?.timezone,
+                                        day: 'numeric',
+                                        month: 'short',
+                                    }).format(new Date(`${day.date}T12:00:00.000Z`));
                                     return (
                                         <div key={day.date} className="flex-1 flex flex-col items-center gap-0.5">
                                             <span className="text-[8px] font-bold text-slate-400">{formatCop(day.total)}</span>
@@ -604,7 +721,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                                 {topProducts.map((p, i) => (
-                                    <div key={p.name} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 rounded-xl p-2.5">
+                                    <div key={p.productId || p.name} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 rounded-xl p-2.5">
                                         <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${i < 3 ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>{i + 1}</span>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{p.name}</p>
@@ -641,7 +758,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             <p className="text-[10px] text-slate-400">{allProductsSold.length} producto{allProductsSold.length !== 1 ? 's' : ''} vendidos en este periodo</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-sm font-black text-slate-800 dark:text-white">{allProductsSold.reduce((a, p) => a + p.qty, 0).toFixed(0)} uds</p>
+                            <p className="text-sm font-black text-slate-800 dark:text-white">{Number(allProductsSold.reduce((a, p) => a + p.qty, 0).toFixed(2))} uds/kg</p>
                             <p className="text-[10px] font-bold text-indigo-500">{formatCop(allProductsSold.reduce((a, p) => a + p.revenue, 0))}</p>
                         </div>
                     </div>
@@ -688,7 +805,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             {/* Rows */}
                             {allProductsSold.map((p, i) => (
                                 <div
-                                    key={p.name}
+                                    key={p.productId || p.name}
                                     className={`grid grid-cols-[1fr_80px_80px] gap-2 px-4 py-2.5 items-center ${i % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/20'} ${i < allProductsSold.length - 1 ? 'border-b border-slate-50 dark:border-slate-800/50' : ''}`}
                                 >
                                     <div className="flex items-center gap-2.5 min-w-0">
@@ -704,7 +821,7 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             {/* Footer totals */}
                             <div className="grid grid-cols-[1fr_80px_80px] gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/20 border-t border-indigo-100 dark:border-indigo-800/30">
                                 <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase">Total</span>
-                                <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 text-right">{allProductsSold.reduce((a, p) => a + p.qty, 0).toFixed(0)}</span>
+                                <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 text-right">{Number(allProductsSold.reduce((a, p) => a + p.qty, 0).toFixed(2))}</span>
                                 <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 text-right">{formatCop(allProductsSold.reduce((a, p) => a + p.revenue, 0))}</span>
                             </div>
                         </div>
@@ -733,15 +850,13 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             onClick={() => {
                                 triggerHaptic && triggerHaptic();
                                 if (searchedSales.length === 0) return;
-                                const rangeOpt = RANGE_OPTIONS.find(o => o.id === selectedRange);
-                                let rangeLabel = rangeOpt ? rangeOpt.label : '';
-                                if (selectedRange === 'custom' && (customFrom || customTo)) rangeLabel = `${customFrom || '...'} a ${customTo || '...'}`;
+                                const rangeLabel = getReportRangeLabel(range);
                                 const filterLabel = { all: 'Todas', completed: 'Completadas', voided: 'Anuladas' }[historyFilter] || 'Todas';
                                 generateSalesReportPDF(searchedSales, {
                                     rangeLabel,
                                     search: historySearch,
                                     filterLabel,
-                                    userName: userFilter !== 'all' ? userFilter : '',
+                                    userName: selectedUserLabel,
                                     commission: userFilter !== 'all' ? selectedUserCommission : null,
                                 });
                             }}
@@ -782,9 +897,9 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                             <div className="flex-1 min-w-0" />
                             {isAdmin && voidedInList.length > 0 && (
                                 <button
-                                    onClick={handlePurgeAnnulledInReports}
+                                    onClick={() => setPurgeTargetIds(voidedInList.map(sale => sale.id))}
                                     className="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 transition-all shadow-sm active:scale-95 shrink-0"
-                                    title="Eliminar permanentemente todas las ventas anuladas"
+                                    title="Eliminar únicamente las ventas anuladas visibles con estos filtros"
                                 >
                                     <Trash2 size={12} /> Purgar {voidedInList.length} anulada{voidedInList.length !== 1 ? 's' : ''}
                                 </button>
@@ -802,8 +917,8 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                                     className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg py-2 px-3 text-xs font-bold text-slate-700 dark:text-white"
                                 >
                                     <option value="all">Todos los usuarios</option>
-                                    {usersInPeriod.map(u => (
-                                        <option key={u} value={u}>{u}</option>
+                                    {usersInPeriod.map(user => (
+                                        <option key={user.key} value={user.key}>{user.label}</option>
                                     ))}
                                 </CustomSelect>
                             </div>
@@ -948,6 +1063,16 @@ export default function ReportsView({ rates: _rates, triggerHaptic, onNavigate, 
                 title={`Anular venta #${voidSaleTarget?.id?.substring(0, 6).toUpperCase() || ''}`}
                 message={'Esta accion:\n- Marcara la venta como ANULADA\n- Devolvera el stock a la bodega\n- Revertira deudas o saldos a favor\n\nEsta accion no se puede deshacer.'}
                 confirmText="Si, anular"
+            />
+
+            <ConfirmModal
+                isOpen={Array.isArray(purgeTargetIds) && purgeTargetIds.length > 0}
+                onClose={() => setPurgeTargetIds(null)}
+                onConfirm={handlePurgeAnnulledInReports}
+                title="Purgar ventas anuladas visibles"
+                message={`Se eliminarán permanentemente ${purgeTargetIds?.length || 0} venta(s) anulada(s) que coinciden con el rango, búsqueda y filtros actuales. Las demás anuladas quedarán intactas.`}
+                confirmText="Sí, purgar visibles"
+                variant="danger"
             />
 
             {/* Custom Delete Cierre Modal with options */}

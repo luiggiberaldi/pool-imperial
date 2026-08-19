@@ -81,6 +81,8 @@ export async function injectHybridFlowSales(onLog = () => {}) {
                 cart: cartItems,
                 payments,
                 fiadoUsd: 0,
+                idempotency_key: crypto.randomUUID(),
+                localId: crypto.randomUUID(),
             };
 
             if (isOnline) {

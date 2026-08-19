@@ -1,7 +1,12 @@
+-- DEPRECATED: contiene backfills con un UUID fijo y excepciones user_id IS NULL.
+-- No ejecutar en producción. Usar database/harden_sync_rls.sql y un backfill
+-- revisado por cuenta antes de activar las políticas estrictas.
+DO $$ BEGIN
+    RAISE EXCEPTION 'DEPRECATED_ACCOUNT_ISOLATION_SCRIPT: ejecutar backfill revisado y database/harden_sync_rls.sql';
+END $$;
+
 -- =================================================================================
--- FIX: Aislamiento de datos por cuenta (user_id)
--- Ejecutar en Supabase Dashboard → SQL Editor
--- Proyecto: Pool Los Diaz
+-- FIX: Aislamiento de datos por cuenta (contenido histórico no ejecutable)
 -- =================================================================================
 
 -- 1. Agregar columna user_id a las tablas que la necesitan

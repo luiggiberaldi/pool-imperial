@@ -24,7 +24,7 @@ function formatElapsed(startedAt) {
 }
 
 export default function OperatorDashboardPanel({ onNavigate }) {
-    const { tables, activeSessions, config, paidHoursOffsets, paidRoundsOffsets } = useTablesStore();
+    const { tables, activeSessions, config, paidHoursOffsets, paidRoundsOffsets, paidElapsedOffsets } = useTablesStore();
     const { orders, orderItems } = useOrdersStore();
     const { currentUser } = useAuthStore();
     const cachedUsers = useAuthStore(s => s.cachedUsers);
@@ -134,7 +134,7 @@ export default function OperatorDashboardPanel({ onNavigate }) {
                 ownerName: getStaffName(s.opened_by),
             }))
             .sort((a, b) => b.elapsedMin - a.elapsedMin),
-        [activeSessions, tables, now, cachedUsers] // eslint-disable-line react-hooks/exhaustive-deps
+        [activeSessions, tables, now, cachedUsers, getStaffName] // eslint-disable-line react-hooks/exhaustive-deps
     );
 
     const checkoutTables = useMemo(() =>
@@ -182,7 +182,7 @@ export default function OperatorDashboardPanel({ onNavigate }) {
         activeSessions.map(s => {
             if (s.status !== 'ACTIVE') return null;
             const elapsedMin = calculateElapsedTime(s.started_at);
-            const gameCost = calculateSessionCost(elapsedMin, s.game_mode, config, s.hours_paid, s.extended_times, s.paid_at, (paidHoursOffsets || {})[s.id] || 0, (paidRoundsOffsets || {})[s.id] || 0, s.seats);
+            const gameCost = calculateSessionCost(elapsedMin, s.game_mode, config, s.hours_paid, s.extended_times, s.paid_at, (paidHoursOffsets || {})[s.id] || 0, (paidRoundsOffsets || {})[s.id] || 0, s.seats, 'POOL', (paidElapsedOffsets || {})[s.id] || 0);
             const order = orders.find(o => o.table_session_id === s.id);
             const consumptionCost = order
                 ? orderItems.filter(i => i.order_id === order.id).reduce((sum, i) => sum + (i.unit_price_usd || 0) * i.qty, 0)
@@ -196,7 +196,7 @@ export default function OperatorDashboardPanel({ onNavigate }) {
             const totalUsd = gameCost + seatTimeCost + consumptionCost;
             return totalUsd >= HIGH_BILL_THRESHOLD ? { session: s, totalUsd } : null;
         }).filter(Boolean).sort((a, b) => b.totalUsd - a.totalUsd),
-        [activeSessions, orders, orderItems, now, config] // eslint-disable-line react-hooks/exhaustive-deps
+        [activeSessions, orders, orderItems, now, config, paidHoursOffsets, paidRoundsOffsets, paidElapsedOffsets] // eslint-disable-line react-hooks/exhaustive-deps
     );
 
     const hasAnyAlert = timeAlerts.length > 0 || inactivityAlerts.length > 0 || highBillAlerts.length > 0;

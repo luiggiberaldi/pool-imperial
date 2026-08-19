@@ -34,6 +34,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const config = useTablesStore(state => state.config);
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
+    const paidElapsedOffsets = useTablesStore(state => state.paidElapsedOffsets);
     const removeSeatFromSession = useTablesStore(state => state.removeSeatFromSession);
     const { currentUser } = useAuthStore();
     const { products: allProducts, effectiveRate: tasaUSD } = useProductContext();
@@ -87,13 +88,14 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
     const isTimeFree = table.type === 'NORMAL';
     const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
     const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
-    const seatBreakdown = hasSeats ? calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, sharedDivision, frozenActiveCount, isTimeFree, hoursOffset, roundsOffset, table.type) : null;
+    const elapsedOffset = session ? ((paidElapsedOffsets || {})[session.id] || 0) : 0;
+    const seatBreakdown = hasSeats ? calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, sharedDivision, frozenActiveCount, isTimeFree, hoursOffset, roundsOffset, table.type, elapsedOffset) : null;
     const customDivisionMismatch = seatBreakdown && sharedDivisionType === 'custom' &&
         Math.abs(Object.values(customSharedAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0) - seatBreakdown.remainingSharedTotal) >= 0.01;
     const zeroBreakdown = { pinaCost: 0, hourCost: 0, libreCost: 0, hasPinas: false, hasHours: false, isLibre: false, total: 0 };
-    const breakdown = (isTimeFree || isPartial) ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, null, table.type);
+    const breakdown = (isTimeFree || isPartial) ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, null, table.type, elapsedOffset);
     // Full breakdown (sin offsets) para mostrar totales completos
-    const fullBreakdown = (isTimeFree || isPartial) ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, 0, 0, null, table.type);
+    const fullBreakdown = (isTimeFree || isPartial) ? zeroBreakdown : calculateSessionCostBreakdown(elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, 0, 0, null, table.type, 0);
     const isMixed = fullBreakdown.hasPinas && fullBreakdown.hasHours;
 
 
@@ -123,6 +125,7 @@ export default function TableBillModal({ data, onClose, onProceedToPayment }) {
             roundsOffset,
             paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
             paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
+            paidElapsedOffsets: session ? { [session.id]: elapsedOffset } : {},
             isPartial: isPartial
         };
         const result = buildTableSyntheticCart(tableCheckoutData, config, allProducts);

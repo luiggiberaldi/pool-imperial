@@ -160,7 +160,11 @@ export const useOrdersStore = create((set, get) => ({
         }
         // Forzar recreación del canal broadcast en el próximo subscribe
         if (ordersBroadcastChannel) {
-            try { ordersBroadcastChannel.unsubscribe(); } catch (_) {}
+            try {
+                ordersBroadcastChannel.unsubscribe();
+            } catch (_) {
+                // El canal puede haberse cerrado por una desconexión previa.
+            }
             ordersBroadcastChannel = null;
             ordersBroadcastUserId = null;
         }
@@ -179,8 +183,9 @@ export const useOrdersStore = create((set, get) => ({
                 .select('id, table_id, table_session_id, status, exchange_rate_used, user_id, created_at')
                 .eq('status', 'OPEN')
                 .gte('created_at', since);
-            // NO filtrar por user_id — todos los dispositivos deben ver todas las órdenes
-            // El aislamiento por cuenta ya lo garantiza RLS + el vínculo con table_sessions
+            // Filtrar también en el cliente: RLS es la última barrera, no el único
+            // contrato de sincronización.
+            if (userId) query = query.eq('user_id', userId);
 
             const { data: openOrders, error: orderError } = await query;
             if (orderError) throw orderError;
@@ -213,10 +218,58 @@ export const useOrdersStore = create((set, get) => ({
             set({ orders: openOrders, orderItems: items });
             await ordersCache.setItem(scopedKey('active_orders'), openOrders);
             await ordersCache.setItem(scopedKey('active_order_items'), items);
+            await get().processPendingOrderTableMoves();
             return { orders: openOrders, orderItems: items };
         } catch (err) {
             console.error('Error syncOrders:', err);
         }
+    },
+
+    processPendingOrderTableMoves: async () => {
+        const pendingKey = scopedKey('pending_order_table_moves');
+        const pending = await ordersCache.getItem(pendingKey) || [];
+        if (pending.length === 0) return;
+
+        const remaining = [];
+        for (const move of pending) {
+            try {
+                const { error } = await supabaseCloud
+                    .from('orders')
+                    .update({ table_id: move.tableId })
+                    .eq('id', move.orderId);
+                if (error) throw error;
+            } catch (_) {
+                remaining.push(move);
+            }
+        }
+        await ordersCache.setItem(pendingKey, remaining);
+    },
+
+    moveOrderToTable: async (orderId, tableId) => {
+        const movedOrders = get().orders.map(order =>
+            order.id === orderId ? { ...order, table_id: tableId } : order
+        );
+        set({ orders: movedOrders });
+        await ordersCache.setItem(scopedKey('active_orders'), movedOrders);
+
+        let synced = true;
+        try {
+            const { error } = await supabaseCloud
+                .from('orders')
+                .update({ table_id: tableId })
+                .eq('id', orderId);
+            if (error) throw error;
+        } catch (_) {
+            synced = false;
+            const pendingKey = scopedKey('pending_order_table_moves');
+            const pending = await ordersCache.getItem(pendingKey) || [];
+            const remaining = pending.filter(move => move.orderId !== orderId);
+            remaining.push({ orderId, tableId });
+            await ordersCache.setItem(pendingKey, remaining);
+            console.warn('[Orders] Movimiento de orden encolado para sincronizar');
+        }
+        _broadcastOrdersChanged();
+        return { synced, pending: !synced };
     },
 
     getOrderBySessionId: (sessionId) => {
@@ -227,8 +280,16 @@ export const useOrdersStore = create((set, get) => ({
         return get().orderItems.filter(i => i.order_id === orderId);
     },
 
-    // Añade un ítem a la sesión (crea la orden si no existe)
-    addItemToSession: async (tableId, sessionId, creatorId, productInfo, exchangeRate = 1, seatId = null) => {
+    // Añade una cantidad a la sesión (crea la orden si no existe).
+    // quantity mantiene cantidades fraccionarias de productos pesables durante una transferencia.
+    addItemToSession: async (tableId, sessionId, creatorId, productInfo, exchangeRate = 1, seatId = null, quantity = 1) => {
+        const numericQuantity = Number(quantity);
+        const normalizedQuantity = Number.isFinite(numericQuantity)
+            ? Number(numericQuantity.toFixed(3))
+            : numericQuantity;
+        if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
+            throw new Error('La cantidad del ítem debe ser mayor que cero');
+        }
         // Si la sesión aún tiene ID temporal, esperar a que sincronice con Supabase
         if (typeof sessionId === 'string' && sessionId.startsWith('temp-')) {
             try {
@@ -270,13 +331,21 @@ export const useOrdersStore = create((set, get) => ({
                 _broadcastOrdersChanged();
             }
 
-            // Chequear si el producto ya existe en la orden
-            const existingItem = get().orderItems.find(i => i.order_id === order.id && i.product_id === productInfo.id && (i.seat_id || null) === (seatId || null));
+            // Chequear si el producto ya existe en la orden con el mismo precio.
+            // Si el precio cambió durante el día, conservar dos líneas evita revalorar
+            // retroactivamente el consumo transferido.
+            const productPrice = Number(productInfo.priceUsd || productInfo.priceUsdt || productInfo.price || 0);
+            const existingItem = get().orderItems.find(i =>
+                i.order_id === order.id
+                && i.product_id === productInfo.id
+                && (i.seat_id || null) === (seatId || null)
+                && Number(i.unit_price_usd) === productPrice
+            );
 
             if (existingItem) {
                 const { data: updatedItem, error: err } = await supabaseCloud
                     .from('order_items')
-                    .update({ qty: existingItem.qty + 1 })
+                    .update({ qty: Number((Number(existingItem.qty) + normalizedQuantity).toFixed(3)) })
                     .eq('id', existingItem.id)
                     .select()
                     .single();
@@ -295,7 +364,7 @@ export const useOrdersStore = create((set, get) => ({
                         product_name: productInfo.name,
                         unit_price_usd: productInfo.priceUsd || productInfo.priceUsdt || productInfo.price || 0,
                         unit_price_bs: productInfo.priceBs || null,
-                        qty: 1,
+                        qty: normalizedQuantity,
                         added_by: creatorId,
                         ...(seatId ? { seat_id: seatId } : {})
                     }])
@@ -368,9 +437,18 @@ export const useOrdersStore = create((set, get) => ({
         await ordersCache.setItem(scopedKey('active_order_items'), newItems);
 
         try {
-            // Background network tasks
-            await supabaseCloud.from('order_items').delete().eq('order_id', order.id);
-            await supabaseCloud.from('orders').delete().eq('id', order.id);
+            // Background network tasks — revisar explícitamente `error`; Supabase
+            // devuelve errores dentro del resultado y no siempre lanza excepciones.
+            const { error: itemsError } = await supabaseCloud
+                .from('order_items')
+                .delete()
+                .eq('order_id', order.id);
+            if (itemsError) throw itemsError;
+            const { error: orderError } = await supabaseCloud
+                .from('orders')
+                .delete()
+                .eq('id', order.id);
+            if (orderError) throw orderError;
             _broadcastOrdersChanged();
         } catch (e) {
             console.error('Error canceling order (network) — rolling back:', e);

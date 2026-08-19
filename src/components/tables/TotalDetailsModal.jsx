@@ -20,10 +20,12 @@ export function TotalDetailsModal({
     const { products } = useProductContext();
     const paidHoursOffsets = useTablesStore(state => state.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(state => state.paidRoundsOffsets);
+    const paidElapsedOffsets = useTablesStore(state => state.paidElapsedOffsets);
     const requestSeatCheckout = useTablesStore(state => state.requestSeatCheckout);
     const cancelSeatCheckoutRequest = useTablesStore(state => state.cancelSeatCheckoutRequest);
     const hoursOffset = session ? (paidHoursOffsets[session.id] || 0) : 0;
     const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
+    const elapsedOffset = session ? ((paidElapsedOffsets || {})[session.id] || 0) : 0;
 
     const seats = session?.seats || [];
     const isMultiClient = seats.length > 1;
@@ -85,7 +87,8 @@ export function TotalDetailsModal({
             hoursOffset,
             roundsOffset,
             paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
-            paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {}
+            paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
+            paidElapsedOffsets: session ? { [session.id]: elapsedOffset } : {}
         };
         const result = buildTableSyntheticCart(tableCheckoutData, config, products);
         if (result && result.syntheticCart) {
@@ -115,7 +118,8 @@ export function TotalDetailsModal({
                 table?.type === 'NORMAL',
                 hoursOffset,
                 roundsOffset,
-                table?.type
+                table?.type,
+                elapsedOffset
             );
         } catch (e) {
             console.error("Error calculating table breakdown in TotalDetailsModal:", e);

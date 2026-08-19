@@ -224,30 +224,66 @@ export async function processVoidSale(sale, currentSales, currentProducts) {
 /**
  * Elimina permanentemente del almacenamiento todas las ventas marcadas con status: 'ANULADA'.
  */
-export async function purgeAllAnnulledSales() {
+export async function purgeAllAnnulledSales({ saleIds = null } = {}) {
     const sales = await storageService.getItem(SALES_KEY, []);
-    const annulledCount = sales.filter(s => s && s.status === 'ANULADA').length;
-    if (annulledCount === 0) {
+    const hasExplicitScope = Array.isArray(saleIds);
+    const scopedIds = new Set((saleIds || []).filter(Boolean).map(id => String(id)));
+    const annulled = sales.filter(s => s
+        && s.status === 'ANULADA'
+        && s.id !== null
+        && s.id !== undefined
+        && (!hasExplicitScope || scopedIds.has(String(s.id)))
+    );
+    if (annulled.length === 0) {
         return { count: 0, sales };
     }
 
-    const cleanedSales = sales.filter(s => s && s.status !== 'ANULADA');
-    await storageService.setItem(SALES_KEY, cleanedSales);
+    const ids = annulled.map(s => String(s.id)).filter(Boolean);
 
-    // Intentar purgar en Supabase Cloud si hay conexión
-    try {
-        let userId = useAuthStore.getState().cloudSession?.user?.id;
-        if (!userId) {
-            const { data: { session } } = await supabaseCloud.auth.getSession().catch(() => ({ data: {} }));
-            userId = session?.user?.id;
-        }
-        if (userId) {
-            await supabaseCloud.from('sales').delete().eq('status', 'ANULADA').eq('user_id', userId);
-        }
-    } catch (e) {
-        console.warn('[PurgeAnnulled] Nube no disponible para purgar anuladas:', e);
+    let userId = useAuthStore.getState().cloudSession?.user?.id;
+    if (!userId) {
+        const { data: { session } } = await supabaseCloud.auth.getSession().catch(() => ({ data: {} }));
+        userId = session?.user?.id;
+    }
+    if (userId && typeof navigator !== 'undefined' && navigator.onLine === false) {
+        throw new Error('Conéctate a internet para purgar anuladas sin que vuelvan a aparecer en el reporte.');
     }
 
-    window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
-    return { count: annulledCount, sales: cleanedSales };
+    if (userId && ids.length > 0) {
+        const { error: salesError } = await supabaseCloud
+            .from('sales')
+            .delete()
+            .eq('user_id', userId)
+            .eq('status', 'ANULADA')
+            .in('id', ids);
+        if (salesError) {
+            throw new Error(`No se pudo purgar la copia cloud de ventas: ${salesError.message}`);
+        }
+
+        const { error: syncError } = await supabaseCloud
+            .from('sync_documents')
+            .delete()
+            .eq('user_id', userId)
+            .eq('collection', 'sale')
+            .in('doc_id', ids);
+        if (syncError) {
+            throw new Error(`No se pudo purgar la copia de sincronización: ${syncError.message}`);
+        }
+    }
+
+    const removedIds = new Set(ids);
+    const cleanedSales = sales.filter(s => !removedIds.has(String(s?.id)));
+    await storageService.setItem(SALES_KEY, cleanedSales);
+
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
+    }
+    logEvent(
+        'VENTA',
+        'VENTAS_ANULADAS_PURGADAS',
+        `${annulled.length} venta(s) anulada(s) purgada(s)${hasExplicitScope ? ' dentro del filtro confirmado' : ''}.`,
+        useAuthStore.getState().usuarioActivo,
+        { saleIds: ids, scoped: hasExplicitScope }
+    );
+    return { count: annulled.length, sales: cleanedSales, scoped: hasExplicitScope };
 }

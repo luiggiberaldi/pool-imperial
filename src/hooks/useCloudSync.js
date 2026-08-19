@@ -50,6 +50,9 @@ const LOCAL_KEYS = [
 // ─── Estado Global del Motor ───────────────────────────────────────────────
 let globalSubscription = null;
 let globalSubscriptionUserId = null; // Track which user the subscription belongs to
+let salesRealtimeCleanup = null;
+let salesStatusCleanup = null;
+let backupRequestsChannel = null;
 let syncBroadcastChannel = null;
 let syncBroadcastUserId = null;
 let isSyncingFromCloud = false;
@@ -129,32 +132,45 @@ export const processSyncQueue = async () => {
  * con discrepancias o pendientes.
  */
 export const forcePullFromCloud = async () => {
+    let previousProducts = null;
+    let previousCategories = null;
     try {
         const { data: { session } } = await supabaseCloud.auth.getSession();
         if (!session?.user?.id) throw new Error('No hay sesión activa.');
 
         console.log('[CloudSync] Iniciando RESTAURACIÓN FORZADA desde la nube...');
-        localStorage.removeItem(getSyncQueueKey());
-
-        await storageService.removeItem('bodega_products_v1');
-        await storageService.removeItem('poolbar_categories_v1');
-
+        // Nunca borrar la cola antes de confirmar una descarga válida.
         const { data: docs, error } = await supabaseCloud
             .from('sync_documents')
             .select('collection, doc_id, data')
             .eq('user_id', session.user.id);
-
         if (error) throw error;
 
-        if (docs && docs.length > 0) {
-            for (const doc of docs) {
-                await _applyFromCloud(doc.doc_id, doc.collection, doc.data.payload);
+        previousProducts = await storageService.getItem('bodega_products_v1', []);
+        previousCategories = await storageService.getItem('poolbar_categories_v1', []);
+        await storageService.setItemSilent('bodega_products_v1', []);
+        await storageService.setItemSilent('poolbar_categories_v1', []);
+
+        const { applyIncomingSale } = await import('../utils/salesSyncService');
+        for (const doc of docs || []) {
+            const payload = doc.data?.payload;
+            if (doc.collection === 'sale') {
+                // Las ventas tienen un merge distinto; nunca escribir un doc_id UUID
+                // como si fuera una clave de catálogo en IndexedDB.
+                await applyIncomingSale(payload);
+            } else if (doc.collection === 'store' || doc.collection === 'local') {
+                await _applyFromCloud(doc.doc_id, doc.collection, payload);
             }
         }
 
         console.log('[CloudSync] Restauración forzada completa.');
         return true;
     } catch (e) {
+        // Restaurar la copia local si la aplicación parcial falla.
+        try {
+            if (previousProducts !== null) await storageService.setItemSilent('bodega_products_v1', previousProducts);
+            if (previousCategories !== null) await storageService.setItemSilent('poolbar_categories_v1', previousCategories);
+        } catch { /* conservar el error original */ }
         console.error('[CloudSync] Error en restauración forzada:', e);
         throw e;
     }
@@ -420,6 +436,48 @@ export async function fetchCloudProducts(userId) {
 }
 
 /**
+ * Lee sync_documents por páginas y con un pequeño solapamiento temporal. El
+ * cursor se actualiza usando updated_at del servidor, no el reloj del cliente.
+ */
+async function fetchSyncDocuments({ userId, since, collections = ['store', 'local'], docIds = SYNC_KEYS }) {
+    const pageSize = 500;
+    const documents = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+        let query = supabaseCloud
+            .from('sync_documents')
+            .select('collection, doc_id, data, updated_at')
+            .eq('user_id', userId)
+            .in('collection', collections)
+            .order('updated_at', { ascending: true })
+            .order('doc_id', { ascending: true })
+            .range(offset, offset + pageSize - 1);
+
+        if (Array.isArray(docIds) && docIds.length > 0) {
+            query = query.in('doc_id', docIds);
+        }
+        if (since) {
+            const sinceMs = Date.parse(since);
+            const overlap = Number.isFinite(sinceMs)
+                ? new Date(Math.max(0, sinceMs - 1000)).toISOString()
+                : since;
+            query = query.gte('updated_at', overlap);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        const page = data || [];
+        documents.push(...page);
+        hasMore = page.length === pageSize;
+        offset += pageSize;
+    }
+
+    return documents;
+}
+
+/**
  * Lightweight cloud pull: fetches latest from sync_documents without clearing local state.
  * Safe to call on visibility change / app foreground restore.
  */
@@ -430,31 +488,33 @@ export const pullLatestFromCloud = async () => {
 
         const queue = getSyncQueue();
         const lastPullAt = localStorage.getItem(getLastPullKey());
-
-        let query = supabaseCloud
-            .from('sync_documents')
-            .select('collection, doc_id, data, updated_at')
-            .eq('user_id', session.user.id)
-            .in('doc_id', SYNC_KEYS);
-
-        // Solo descargar documentos que cambiaron desde el último pull
-        if (lastPullAt) {
-            query = query.gt('updated_at', lastPullAt);
-        }
-
-        const { data: docs } = await query;
+        const docs = await fetchSyncDocuments({
+            userId: session.user.id,
+            since: lastPullAt,
+            collections: ['store', 'local'],
+            docIds: SYNC_KEYS,
+        });
 
         if (docs?.length > 0) {
             for (const doc of docs) {
                 if (queue.includes(doc.doc_id)) continue;
                 await _applyFromCloud(doc.doc_id, doc.collection, doc.data.payload);
             }
-        }
 
-        // Guardar timestamp del pull para el próximo ciclo
-        localStorage.setItem(getLastPullKey(), new Date().toISOString());
+            // Usar el máximo timestamp del servidor, nunca el reloj local. Si la
+            // consulta falla, el cursor permanece intacto para reintentar.
+            const maxUpdatedAt = docs.reduce((max, doc) => {
+                const value = Date.parse(doc?.updated_at || '');
+                return Number.isFinite(value) ? Math.max(max, value) : max;
+            }, Date.parse(lastPullAt || '') || 0);
+            if (maxUpdatedAt > 0) {
+                localStorage.setItem(getLastPullKey(), new Date(maxUpdatedAt).toISOString());
+            }
+        }
+        return true;
     } catch (e) {
-        console.warn('[CloudSync] pullLatest falló silenciosamente:', e.message);
+        console.warn('[CloudSync] pullLatest falló sin avanzar cursor:', e?.message);
+        return false;
     }
 };
 
@@ -483,16 +543,18 @@ if (typeof document !== 'undefined' && !isVisibilityBound) {
 }
 
 export function useCloudSync() {
-    const [isCloudConfigured, setIsCloudConfigured] = useState(false);
+    const [cloudUserId, setCloudUserId] = useState(null);
+    const isCloudConfigured = Boolean(cloudUserId);
     const isInitialized = useRef(false);
 
-    // Check Supabase session to determine cloud configuration status
+    // La identidad del motor es auth.uid(), no solo el booleano de sesión. Así
+    // un logout/login entre cuentas fuerza teardown y pull del namespace correcto.
     useEffect(() => {
         supabaseCloud.auth.getSession().then(({ data: { session } }) => {
-            setIsCloudConfigured(!!session);
-        }).catch(() => {});
+            setCloudUserId(session?.user?.id || null);
+        }).catch(() => setCloudUserId(null));
         const { data: { subscription } } = supabaseCloud.auth.onAuthStateChange((_event, session) => {
-            setIsCloudConfigured(!!session);
+            setCloudUserId(session?.user?.id || null);
         });
         return () => subscription.unsubscribe();
     }, []);
@@ -503,8 +565,20 @@ export function useCloudSync() {
                 globalSubscription.teardown();
                 globalSubscription = null;
                 globalSubscriptionUserId = null;
-                isInitialized.current = false;
             }
+            if (salesRealtimeCleanup) {
+                salesRealtimeCleanup();
+                salesRealtimeCleanup = null;
+            }
+            if (salesStatusCleanup) {
+                salesStatusCleanup();
+                salesStatusCleanup = null;
+            }
+            if (backupRequestsChannel) {
+                try { supabaseCloud.removeChannel(backupRequestsChannel); } catch { /* no-op */ }
+                backupRequestsChannel = null;
+            }
+            isInitialized.current = false;
             // Si no hay nube instalada, el motor local es el maestro
             isInitialSyncCompleted = true;
             window.dispatchEvent(new CustomEvent('sync_initial_completed'));
@@ -512,6 +586,16 @@ export function useCloudSync() {
         }
 
         if (isInitialized.current) return;
+
+        let retryTimer = null;
+        let disposed = false;
+        const scheduleInitRetry = () => {
+            if (retryTimer || disposed) return;
+            retryTimer = setTimeout(() => {
+                retryTimer = null;
+                if (!disposed && !isInitialized.current) initSync();
+            }, 15_000);
+        };
 
         const initSync = async () => {
             try {
@@ -528,19 +612,12 @@ export function useCloudSync() {
                     isInitialSyncCompleted = true;
                 } else {
                     const lastPullAt = localStorage.getItem(getLastPullKey());
-                    let initQuery = supabaseCloud
-                        .from('sync_documents')
-                        .select('collection, doc_id, data, updated_at')
-                        .eq('user_id', userId)
-                        .in('collection', ['store', 'local'])
-                        .in('doc_id', SYNC_KEYS);
-
-                    // En recargas posteriores, solo traer lo que cambió desde la última vez
-                    if (lastPullAt) {
-                        initQuery = initQuery.gt('updated_at', lastPullAt);
-                    }
-
-                    const { data: docs } = await initQuery;
+                    const docs = await fetchSyncDocuments({
+                        userId,
+                        since: lastPullAt,
+                        collections: ['store', 'local'],
+                        docIds: SYNC_KEYS,
+                    });
 
                     if (docs?.length > 0) {
                         for (const doc of docs) {
@@ -553,12 +630,23 @@ export function useCloudSync() {
                                 console.log(`[CloudSync] Saltando pull para ${doc.doc_id} por discrepancia local pendiente.`);
                             }
                         }
-                        isInitialSyncCompleted = true;
-                        localStorage.setItem(getLastPullKey(), new Date().toISOString());
+                        const maxUpdatedAt = docs.reduce((max, doc) => {
+                            const value = Date.parse(doc?.updated_at || '');
+                            return Number.isFinite(value) ? Math.max(max, value) : max;
+                        }, Date.parse(lastPullAt || '') || 0);
+                        if (maxUpdatedAt > 0) {
+                            localStorage.setItem(getLastPullKey(), new Date(maxUpdatedAt).toISOString());
+                        }
                     }
                 }
 
-                // Garantía final de que el motor está listo
+                // Pull incremental de ventas antes de habilitar cualquier push.
+                // Si falla, el catch deja el motor en estado fail-closed.
+                const { pullNewSales, subscribeSalesRealtime, applyIncomingSale, subscribeSalesStatusChanges, applySaleStatusChange } = await import('../utils/salesSyncService');
+                await pullNewSales(userId);
+
+                // Garantía final de que el motor está listo solo después de que
+                // catálogo/configuración y ventas respondieron correctamente.
                 isInitialSyncCompleted = true;
                 window.dispatchEvent(new CustomEvent('sync_initial_completed'));
                 console.log('[CloudSync] Motor de sincronización listo (Pull Finalizado).');
@@ -566,16 +654,20 @@ export function useCloudSync() {
                 // Procesar cualquier cambio que se haya intentado subir durante el arranque
                 processSyncQueue();
 
-                // Pull incremental de ventas (solo nuevas desde último sync)
-                const { pullNewSales, subscribeSalesRealtime, applyIncomingSale, subscribeSalesStatusChanges, applySaleStatusChange } = await import('../utils/salesSyncService');
-                await pullNewSales(userId);
-
                 // ── Suscripción Broadcast P2P (0 WAL egress) ─────────────────
                 // Reemplaza postgres_changes en sync_documents por broadcast
-                if (globalSubscription && globalSubscriptionUserId !== userId) {
-                    globalSubscription.teardown();
+                if (globalSubscriptionUserId && globalSubscriptionUserId !== userId) {
+                    globalSubscription?.teardown();
                     globalSubscription = null;
                     globalSubscriptionUserId = null;
+                    salesRealtimeCleanup?.();
+                    salesRealtimeCleanup = null;
+                    salesStatusCleanup?.();
+                    salesStatusCleanup = null;
+                    if (backupRequestsChannel) {
+                        try { supabaseCloud.removeChannel(backupRequestsChannel); } catch { /* no-op */ }
+                        backupRequestsChannel = null;
+                    }
                 }
                 if (!globalSubscription) {
                     globalSubscriptionUserId = userId;
@@ -616,35 +708,77 @@ export function useCloudSync() {
                 }
 
                 // Suscripción Broadcast para ventas en tiempo real (0 DB egress)
-                subscribeSalesRealtime(userId, applyIncomingSale);
+                salesRealtimeCleanup?.();
+                salesRealtimeCleanup = subscribeSalesRealtime(userId, applyIncomingSale);
 
                 // Suscripción postgres_changes a tabla 'sales' — capa más confiable para anulaciones
                 // Si el broadcast P2P falla, este canal garantiza que los cambios de status lleguen
-                subscribeSalesStatusChanges(userId, applySaleStatusChange);
+                salesStatusCleanup?.();
+                salesStatusCleanup = subscribeSalesStatusChanges(userId, applySaleStatusChange);
 
-                // Suscripción a solicitudes de backup del admin
-                supabaseCloud
+                // Suscripción a solicitudes de backup del admin, con cleanup explícito.
+                if (backupRequestsChannel) {
+                    try { supabaseCloud.removeChannel(backupRequestsChannel); } catch { /* no-op */ }
+                }
+                backupRequestsChannel = supabaseCloud
                     .channel(`backup-requests:${userId}`)
                     .on('broadcast', { event: 'request' }, async ({ payload }) => {
                         if (payload?.email?.toLowerCase() === session.user.email?.toLowerCase()) {
                             console.log('[CloudSync] Backup solicitado por admin — subiendo...');
                             await pushFullBackupToCloud();
                         }
-                    })
-                    .subscribe();
+                    });
+                backupRequestsChannel.subscribe();
 
             } catch (err) {
+                // Fail-closed: no permitir pushes ni marcar el motor como listo si
+                // el pull inicial o el pull de ventas falló.
                 console.error('[CloudSync] Error inicialización P2P:', err);
+                isInitialSyncCompleted = false;
                 isInitialized.current = false;
+                window.dispatchEvent(new CustomEvent('sync_initial_failed', {
+                    detail: { message: err?.message || 'INITIAL_SYNC_FAILED' },
+                }));
+                scheduleInitRetry();
             }
         };
 
+        const retryOnConnectivity = () => {
+            if (!isInitialized.current) initSync();
+        };
+        const retryOnVisibility = () => {
+            if (document.visibilityState === 'visible' && !isInitialized.current) initSync();
+        };
+        window.addEventListener('online', retryOnConnectivity);
+        document.addEventListener('visibilitychange', retryOnVisibility);
         initSync();
-    }, [isCloudConfigured]);
+
+        return () => {
+            disposed = true;
+            if (retryTimer) clearTimeout(retryTimer);
+            window.removeEventListener('online', retryOnConnectivity);
+            document.removeEventListener('visibilitychange', retryOnVisibility);
+            if (globalSubscription) {
+                globalSubscription.teardown();
+                globalSubscription = null;
+            }
+            globalSubscriptionUserId = null;
+            salesRealtimeCleanup?.();
+            salesRealtimeCleanup = null;
+            salesStatusCleanup?.();
+            salesStatusCleanup = null;
+            if (backupRequestsChannel) {
+                try { supabaseCloud.removeChannel(backupRequestsChannel); } catch { /* no-op */ }
+                backupRequestsChannel = null;
+            }
+            isInitialized.current = false;
+            isInitialSyncCompleted = false;
+        };
+    }, [cloudUserId, isCloudConfigured]);
 
     // Periodic fallback sales pull every 30 seconds
     useEffect(() => {
-        if (!isCloudConfigured) return;
+        if (!cloudUserId) return;
         
         const interval = setInterval(async () => {
             try {
@@ -659,7 +793,7 @@ export function useCloudSync() {
         }, 90000); // 90s — broadcast P2P es el canal primario, esto es solo fallback
         
         return () => clearInterval(interval);
-    }, [isCloudConfigured]);
+    }, [cloudUserId]);
 
     return {
         forcePullFromCloud,

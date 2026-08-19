@@ -23,9 +23,25 @@ CREATE TABLE IF NOT EXISTS public.device_backups (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Enable RLS for device_backups if it's new
+-- Backups por dispositivo: el dispositivo debe estar registrado para la cuenta
+-- autenticada. No usar USING (true), porque expone backups entre cuentas.
 ALTER TABLE public.device_backups ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Permitir todo a device_backups" ON public.device_backups;
-CREATE POLICY "Permitir todo a device_backups"
-    ON public.device_backups FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Owner can manage own device backups" ON public.device_backups;
+CREATE POLICY "Owner can manage own device backups"
+    ON public.device_backups
+    FOR ALL
+    TO authenticated
+    USING (EXISTS (
+        SELECT 1
+        FROM public.account_devices d
+        WHERE d.device_id = device_backups.device_id
+          AND d.user_id = auth.uid()
+    ))
+    WITH CHECK (EXISTS (
+        SELECT 1
+        FROM public.account_devices d
+        WHERE d.device_id = device_backups.device_id
+          AND d.user_id = auth.uid()
+    ));

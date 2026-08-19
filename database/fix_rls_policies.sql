@@ -1,6 +1,12 @@
+-- DEPRECATED: este script contenía políticas permisivas que podían abrir datos
+-- entre cuentas. No ejecutarlo. Usar database/harden_sync_rls.sql como migración
+-- final de seguridad.
+DO $$ BEGIN
+    RAISE EXCEPTION 'DEPRECATED_RLS_SCRIPT: ejecutar database/harden_sync_rls.sql';
+END $$;
+
 -- ============================================================================
--- FIX RLS POLICIES — Reemplazar políticas "permitir todo" por auth-based
--- Ejecutar en Supabase Dashboard → SQL Editor
+-- FIX RLS POLICIES — contenido histórico no ejecutable
 -- ============================================================================
 
 -- ── cloud_backups ───────────────────────────────────────────────────────────

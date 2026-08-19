@@ -24,6 +24,7 @@ let cashPollingInterval = null;
 let cashVisibilityBound = false;
 let cashVisibilityTimer = null;
 let cashVisibilityHandler = null;
+let cashOnlineHandler = null;
 let lastSyncTime = 0;
 const SYNC_DEBOUNCE = 3000; // No sincronizar más de una vez cada 3s
 
@@ -32,6 +33,7 @@ let cachedUserId = null;
 
 // Clave para reintentar el insert de apertura de caja offline
 const PENDING_CASH_KEY = 'poolbar_pending_cash_open';
+const PENDING_CASH_CLOSES_KEY = 'poolbar_pending_cash_closes';
 
 export const useCashStore = create((set, get) => ({
     activeCashSession: null,
@@ -50,6 +52,7 @@ export const useCashStore = create((set, get) => ({
 
             // 2. Intentar subir apertura pendiente (si hubo falla offline previa)
             await get()._retryPendingOpen();
+            await get()._retryPendingCloses();
 
             // 3. Sincronizar desde la nube para obtener el estado real
             // loading: false recién aquí — el Guard espera este momento para decidir
@@ -195,7 +198,7 @@ export const useCashStore = create((set, get) => ({
     // Reintento de insert de apertura de caja que falló por estar offline
     _retryPendingOpen: async () => {
         try {
-            const pending = await cashCache.getItem(PENDING_CASH_KEY);
+            const pending = await cashCache.getItem(scopedKey(PENDING_CASH_KEY));
             if (!pending) return;
             console.log('[Caja] Reintentando apertura pendiente...');
 
@@ -209,10 +212,20 @@ export const useCashStore = create((set, get) => ({
             };
             if (pending.user_id) cleanPayload.user_id = pending.user_id;
 
-            const { error } = await supabaseCloud.from('cash_sessions').insert(cleanPayload);
+            let { error } = await supabaseCloud.from('cash_sessions').insert(cleanPayload);
+            if (error?.code === '23505') {
+                // La respuesta original pudo perderse después del INSERT. Verificar
+                // por el ID fijo antes de dejar la apertura en error.
+                const { data: existing } = await supabaseCloud
+                    .from('cash_sessions')
+                    .select('id, status')
+                    .eq('id', cleanPayload.id)
+                    .maybeSingle();
+                if (existing?.id && existing.status === 'OPEN') error = null;
+            }
             if (!error) {
                 console.log('[Caja] Apertura pendiente sincronizada en la nube ✓');
-                await cashCache.removeItem(PENDING_CASH_KEY);
+                await cashCache.removeItem(scopedKey(PENDING_CASH_KEY));
                 // Notificar a otros dispositivos via broadcast
                 cashRealtimeChannel?.send({
                     type: 'broadcast',
@@ -227,6 +240,39 @@ export const useCashStore = create((set, get) => ({
         }
     },
 
+    _enqueuePendingClose: async (sessionId, payload) => {
+        const pendingKey = scopedKey(PENDING_CASH_CLOSES_KEY);
+        const pending = await cashCache.getItem(pendingKey) || [];
+        const filtered = pending.filter(item => item.sessionId !== sessionId);
+        await cashCache.setItem(pendingKey, [
+            ...filtered,
+            { sessionId, payload, created_at: new Date().toISOString() },
+        ]);
+    },
+
+    _retryPendingCloses: async () => {
+        const pendingKey = scopedKey(PENDING_CASH_CLOSES_KEY);
+        const pending = await cashCache.getItem(pendingKey) || [];
+        if (pending.length === 0) return;
+
+        const remaining = [];
+        for (const action of pending) {
+            try {
+                const userId = await getAuthUserId();
+                let query = supabaseCloud
+                    .from('cash_sessions')
+                    .update(action.payload)
+                    .eq('id', action.sessionId);
+                if (userId) query = query.eq('user_id', userId);
+                const { error } = await query;
+                if (error) throw error;
+            } catch (error) {
+                remaining.push({ ...action, last_error: error?.message || 'CASH_CLOSE_SYNC_ERROR' });
+            }
+        }
+        await cashCache.setItem(pendingKey, remaining);
+    },
+
     // Capa C: Al volver al primer plano — crítico para PWA en móvil
     _subscribeVisibility: () => {
         if (typeof document === 'undefined' || cashVisibilityBound) return;
@@ -237,6 +283,7 @@ export const useCashStore = create((set, get) => ({
                 if (cashVisibilityTimer) clearTimeout(cashVisibilityTimer);
                 cashVisibilityTimer = setTimeout(async () => {
                     await get()._retryPendingOpen(); // Reintento si hubo apertura offline
+                    await get()._retryPendingCloses();
                     await get().syncCashSession(true);
                 }, 500);
             }
@@ -244,12 +291,13 @@ export const useCashStore = create((set, get) => ({
         document.addEventListener('visibilitychange', cashVisibilityHandler);
 
         // Capa D: Al recuperar conexión a internet — reintento automático offline→online
-        const onlineHandler = async () => {
+        cashOnlineHandler = async () => {
             console.log('[Caja] Reconexión detectada — reintentando pendientes...');
             await get()._retryPendingOpen();
+            await get()._retryPendingCloses();
             await get().syncCashSession(true);
         };
-        window.addEventListener('online', onlineHandler);
+        window.addEventListener('online', cashOnlineHandler);
     },
 
     openCashSession: async (baseUsd, baseBs, openedBy, openedByRole, openedAt) => {
@@ -281,10 +329,10 @@ export const useCashStore = create((set, get) => ({
             const { error } = await supabaseCloud.from('cash_sessions').insert(supabasePayload);
             if (error) {
                 console.warn('[Caja] Error al subir apertura a nube:', error.message);
-                await cashCache.setItem(PENDING_CASH_KEY, supabasePayload);
+                await cashCache.setItem(scopedKey(PENDING_CASH_KEY), supabasePayload);
             } else {
                 console.log('[Caja] Apertura sincronizada en la nube ✓');
-                await cashCache.removeItem(PENDING_CASH_KEY);
+                await cashCache.removeItem(scopedKey(PENDING_CASH_KEY));
                 cashRealtimeChannel?.send({
                     type: 'broadcast',
                     event: 'cash_session_changed',
@@ -293,7 +341,7 @@ export const useCashStore = create((set, get) => ({
             }
         } catch (err) {
             console.warn('[Caja] Sin conexión — apertura guardada localmente para reintento:', err);
-            await cashCache.setItem(PENDING_CASH_KEY, supabasePayload);
+            await cashCache.setItem(scopedKey(PENDING_CASH_KEY), supabasePayload);
         }
 
         logEvent('VENTA', 'APERTURA_CAJA', `Caja abierta — Base: $${baseUsd} / USD ${baseBs}`, { nombre: openedBy, rol: openedByRole || 'DESCONOCIDO' }, { baseUsd, baseBs, sessionId: sessionPayload.id, openedByRole });
@@ -303,34 +351,36 @@ export const useCashStore = create((set, get) => ({
         const active = get().activeCashSession;
         if (!active) return;
 
-        // Limpiar local inmediatamente para desbloquear la UI al instante
+        const closePayload = {
+            closed_at: new Date().toISOString(),
+            status: 'CLOSED',
+            final_cash_usd: stats ? (stats.declaredCop || stats.declaredCOP || 0) : 0,
+        };
+
+        // Limpiar local inmediatamente para desbloquear la UI; si la nube falla,
+        // el payload completo queda en la cola de cierres antes de continuar.
         await cashCache.removeItem(scopedKey('active_cash_session'));
         set({ activeCashSession: null });
 
         try {
-            const finalCashCop = stats ? (stats.declaredCop || stats.declaredCOP || 0) : 0;
-            const { error } = await supabaseCloud
+            const userId = await getAuthUserId();
+            let query = supabaseCloud
                 .from('cash_sessions')
-                .update({
-                    closed_at: new Date().toISOString(),
-                    status: 'CLOSED',
-                    final_cash_usd: finalCashCop
-                })
+                .update(closePayload)
                 .eq('id', active.id);
+            if (userId) query = query.eq('user_id', userId);
+            const { error } = await query;
+            if (error) throw error;
 
-            if (error) {
-                console.warn('[Caja] Error al cerrar sesión en nube:', error.message);
-            } else {
-                console.log('[Caja] Cierre sincronizado en la nube ✓');
-                // Notificar a todos los dispositivos conectados via broadcast
-                cashRealtimeChannel?.send({
-                    type: 'broadcast',
-                    event: 'cash_session_changed',
-                    payload: { action: 'close' }
-                });
-            }
-        } catch (err) {
-            console.warn('[Caja] Sin conexión al cerrar caja:', err);
+            console.log('[Caja] Cierre sincronizado en la nube ✓');
+            cashRealtimeChannel?.send({
+                type: 'broadcast',
+                event: 'cash_session_changed',
+                payload: { action: 'close' },
+            });
+        } catch (error) {
+            console.warn('[Caja] Cierre pendiente de sincronización:', error?.message);
+            await get()._enqueuePendingClose(active.id, closePayload);
         }
 
         logEvent('VENTA', 'CIERRE_CAJA_SESION', `Caja cerrada por ${closedBy}`, { nombre: closedBy }, { sessionId: active.id, stats });
@@ -344,8 +394,12 @@ export const useCashStore = create((set, get) => ({
         if (cashRealtimeChannel) {
             try {
                 supabaseCloud.removeChannel(cashRealtimeChannel);
-            } catch (_) {
-                try { cashRealtimeChannel.unsubscribe(); } catch (__) {}
+            } catch {
+                try {
+                    cashRealtimeChannel.unsubscribe();
+                } catch {
+                    // El canal ya puede estar cerrado.
+                }
             }
             cashRealtimeChannel = null;
         }
@@ -357,6 +411,10 @@ export const useCashStore = create((set, get) => ({
             document.removeEventListener('visibilitychange', cashVisibilityHandler);
             cashVisibilityHandler = null;
             cashVisibilityBound = false;
+        }
+        if (cashOnlineHandler && typeof window !== 'undefined') {
+            window.removeEventListener('online', cashOnlineHandler);
+            cashOnlineHandler = null;
         }
     }
 }));

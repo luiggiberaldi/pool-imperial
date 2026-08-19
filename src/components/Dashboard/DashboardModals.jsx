@@ -64,16 +64,24 @@ export function DeleteHistoryModal({
     const annulledCount = (sales || []).filter(s => s?.status === 'ANULADA').length;
 
     const handlePurgeAnnulled = async () => {
-        const { purgeAllAnnulledSales } = await import('../../utils/voidSaleProcessor');
-        const res = await purgeAllAnnulledSales();
-        if (res.count > 0) {
-            setSales(res.sales);
-            showToast(`Se eliminaron ${res.count} ventas anuladas`, 'success');
-        } else {
-            showToast('No hay ventas anuladas para eliminar', 'info');
+        try {
+            const { purgeAllAnnulledSales } = await import('../../utils/voidSaleProcessor');
+            const res = await purgeAllAnnulledSales({
+                saleIds: (sales || []).filter(sale => sale?.status === 'ANULADA').map(sale => sale.id),
+            });
+            if (res.count > 0) {
+                setSales(res.sales);
+                showToast(`Se eliminaron ${res.count} ventas anuladas`, 'success');
+            } else {
+                showToast('No hay ventas anuladas para eliminar', 'info');
+            }
+        } catch (error) {
+            console.error('[DeleteHistory] Error purgando anuladas:', error);
+            showToast(error?.message || 'No se pudieron purgar las ventas anuladas', 'error');
+        } finally {
+            onClose();
+            setDeleteConfirmText('');
         }
-        onClose();
-        setDeleteConfirmText('');
     };
 
     const handleDelete = async () => {

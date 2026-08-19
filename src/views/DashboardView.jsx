@@ -14,7 +14,6 @@ import { DashboardHeroCard } from '../components/Dashboard/DashboardHeroCard';
 import { DashboardPaymentBreakdown } from '../components/Dashboard/DashboardPaymentBreakdown';
 import { TicketClientModal, DeleteHistoryModal, RecycleModal } from '../components/Dashboard/DashboardModals';
 import { generateTicketPDF, printThermalTicket } from '../utils/ticketGenerator';
-import { generateDailyClosePDF } from '../utils/dailyCloseGenerator';
 import { processVoidSale } from '../utils/voidSaleProcessor';
 import { useNotifications } from '../hooks/useNotifications';
 import AnimatedCounter from '../components/AnimatedCounter';
@@ -30,7 +29,8 @@ import { useAudit } from '../hooks/useAudit';
 import { supabaseCloud } from '../config/supabaseCloud';
 import { useConfirm } from '../hooks/useConfirm.jsx';
 import { shareSaleWhatsApp } from '../utils/dashboardActions';
-import { useDashboardMetrics, getLocalISODate } from '../hooks/useDashboardMetrics';
+import { useDashboardMetrics } from '../hooks/useDashboardMetrics';
+import { timestampToMs, getDateKeyInTimeZone } from '../utils/reportRangeEngine';
 import { useNotificationCenter } from '../hooks/useNotificationCenter';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import Skeleton from '../components/Skeleton';
@@ -82,7 +82,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
     // ── Métricas extraídas al hook ──
     const {
-        today, todaySales, todayAllSales, todayCashFlow, todayApertura, todayAdjustments,
+        todaySales, todayAllSales, todayCashFlow, todayApertura, todayAdjustments,
         todayTotalBs, todayTotalUsd, todayItemsSold,
         todayExpenses, todayExpensesUsd, todayProfit,
         todayTotalTax, todayTaxBreakdown,
@@ -174,7 +174,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
                 openingUsd: data.openingUsd,
                 openingBs: data.openingBs,
                 timestamp: new Date().toISOString(),
-                cajaCerrada: false
+                cajaCerrada: false,
+                cashSessionId: null,
             };
             const existingSales = await storageService.getItem(SALES_KEY, []);
             const updatedSales = [...existingSales, aperturaRecord];
@@ -249,24 +250,25 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
     const handleDailyClose = () => { triggerHaptic && triggerHaptic(); setIsCashReconOpen(true); };
     const handleConfirmCashRecon = async (reconData) => {
         const sessionOpenedAt = activeCashSession?.opened_at || null;
+        const sessionOpenedMs = timestampToMs(sessionOpenedAt);
         const isInSession = (s) => {
-            if (sessionOpenedAt) {
-                if (s.tipo === 'APERTURA_CAJA') {
-                    const sTime = new Date(s.timestamp).getTime();
-                    const sessTime = new Date(sessionOpenedAt).getTime();
-                    return sTime >= sessTime - 10000;
-                }
-                return s.timestamp >= sessionOpenedAt;
+            if (sessionOpenedMs !== null) {
+                const saleMs = timestampToMs(s.timestamp);
+                if (saleMs === null) return false;
+                if (s.tipo === 'APERTURA_CAJA') return saleMs >= sessionOpenedMs - 10000;
+                return saleMs >= sessionOpenedMs;
             }
-            const saleLocalDay = s.timestamp ? getLocalISODate(new Date(s.timestamp)) : getLocalISODate(new Date());
-            return saleLocalDay === today;
+            const saleLocalDay = s.timestamp
+                ? getDateKeyInTimeZone(s.timestamp)
+                : getDateKeyInTimeZone(Date.now());
+            return saleLocalDay === getDateKeyInTimeZone(Date.now());
         };
 
         const currentCierreId = Date.now();
         const validTipos = ['VENTA','VENTA_FIADA','COBRO_DEUDA','PAGO_PROVEEDOR','APERTURA_CAJA','AJUSTE_ENTRADA','AJUSTE_SALIDA'];
         let updatedSales = sales.map(s =>
             !s.cajaCerrada && validTipos.includes(s.tipo || 'VENTA') && isInSession(s)
-                ? { ...s, cajaCerrada: true, cierreId: currentCierreId }
+                ? { ...s, cajaCerrada: true, cierreId: currentCierreId, cashSessionId: activeCashSession?.id || s.cashSessionId || null }
                 : s
         );
 
@@ -277,6 +279,8 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
             cierreId: currentCierreId,
             timestamp: new Date().toISOString(),
             cajaCerrada: true,
+            cashSessionId: activeCashSession?.id || null,
+            closedAt: new Date().toISOString(),
             declaredCop: reconData.declaredCop || 0,
             declaredUsd: reconData.declaredUsd || 0,
             diffCop: reconData.diffCop || 0,
@@ -287,6 +291,7 @@ export default function DashboardView({ rates, triggerHaptic, onNavigate, theme,
 
         await storageService.setItem(SALES_KEY, updatedSales);
         setSales(updatedSales);
+        window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
         await closeCashSession(reconData, usuarioActivo?.email || 'admin');
         showToast('Cierre de caja completado (Historial conservado)', 'success');
         auditLog('VENTA', 'CIERRE_CAJA', 'Cierre de caja completado');

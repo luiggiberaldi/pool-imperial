@@ -18,6 +18,7 @@ import { subscribeResilient } from './realtimeReconnect';
 const SALES_KEY = 'bodega_sales_v1';
 const LAST_SALES_PULL_KEY_BASE = '_cloud_last_sales_pull_at';
 const getLastSalesPullKey = () => scopedKey(LAST_SALES_PULL_KEY_BASE);
+const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value || {}, key);
 
 let salesBroadcastChannel = null;
 let salesBroadcastUserId = null;
@@ -111,37 +112,82 @@ export async function broadcastVoidSale(sale, userId) {
 }
 
 /**
- * Reasigna correlativos duplicados en ventas sincronizadas.
- * Si una venta entrante tiene un saleNumber que ya existe localmente,
- * le asigna el siguiente número disponible.
+ * Identidad estable para mergear una venta local con su copia canónica.
+ * El ID local y el ID del servidor pueden ser distintos después de un timeout;
+ * la idempotency_key es la identidad de negocio que une ambos registros.
  */
-function fixDuplicateNumbers(sales) {
-    const usedNumbers = new Set();
-    let maxNum = 0;
-    // Primera pasada: registrar números existentes
-    for (const s of sales) {
-        const n = Number(s.saleNumber);
-        if (Number.isInteger(n) && n > 0 && n < 90000) {
-            if (!usedNumbers.has(n)) {
-                usedNumbers.add(n);
-                if (n > maxNum) maxNum = n;
-            }
-        }
+function getSaleIdentity(sale) {
+    return sale?.idempotency_key || sale?.idempotencyKey || null;
+}
+
+function findSaleIndex(sales, incoming) {
+    const incomingKey = getSaleIdentity(incoming);
+    const incomingServerId = incoming?.serverSaleId || incoming?.server_sale_id;
+    const incomingLocalId = incoming?.localId || incoming?.local_sale_id;
+
+    return sales.findIndex(existing =>
+        existing?.id === incoming?.id
+        || (incomingServerId && (existing.id === incomingServerId || existing.serverSaleId === incomingServerId || existing.server_sale_id === incomingServerId))
+        || (incomingLocalId && (existing.id === incomingLocalId || existing.localId === incomingLocalId || existing.local_sale_id === incomingLocalId))
+        || (incomingKey && getSaleIdentity(existing) === incomingKey)
+    );
+}
+
+function mergeSale(existing, incoming) {
+    const incomingId = incoming?.id;
+    const isDifferentId = existing?.id && incomingId && existing.id !== incomingId;
+    const serverId = incoming?.serverSaleId
+        || incoming?.server_sale_id
+        || (isDifferentId ? incomingId : existing?.serverSaleId || existing?.server_sale_id);
+
+    const merged = {
+        ...existing,
+        ...incoming,
+        ...(serverId ? { serverSaleId: serverId, server_sale_id: serverId } : {}),
+        idempotency_key: getSaleIdentity(existing) || getSaleIdentity(incoming) || undefined,
+    };
+
+    // Mantener el ID local como clave de UI; el servidor queda explícito aparte.
+    if (existing?.localId || existing?.local_sale_id) {
+        merged.id = existing.id;
+        merged.localId = existing.localId || existing.id;
+        merged.local_sale_id = existing.local_sale_id || existing.localId || existing.id;
     }
-    // Segunda pasada: reasignar duplicados
-    const seen = new Set();
-    for (const s of sales) {
-        const n = Number(s.saleNumber);
-        if (Number.isInteger(n) && n > 0 && n < 90000) {
-            if (seen.has(n)) {
-                maxNum++;
-                s.saleNumber = maxNum;
-                usedNumbers.add(maxNum);
-            }
-            seen.add(n);
+    return merged;
+}
+
+async function fetchSaleDocuments(userId, since) {
+    const pageSize = 500;
+    const documents = [];
+    let offset = 0;
+    let hasMore = true;
+    const sinceMs = since ? Date.parse(since) : NaN;
+
+    while (hasMore) {
+        let query = supabaseCloud
+            .from('sync_documents')
+            .select('doc_id, data, updated_at')
+            .eq('user_id', userId)
+            .eq('collection', 'sale')
+            .order('updated_at', { ascending: true })
+            .order('doc_id', { ascending: true })
+            .range(offset, offset + pageSize - 1);
+
+        if (Number.isFinite(sinceMs)) {
+            query = query.gte(
+                'updated_at',
+                new Date(Math.max(0, sinceMs - 1000)).toISOString()
+            );
         }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        const page = data || [];
+        documents.push(...page);
+        hasMore = page.length === pageSize;
+        offset += pageSize;
     }
-    return sales;
+    return documents;
 }
 
 /**
@@ -153,24 +199,22 @@ export async function pullNewSales(userId) {
 
     try {
         const sinceTimestamp = localStorage.getItem(getLastSalesPullKey());
+        const sinceMs = sinceTimestamp ? Date.parse(sinceTimestamp) : NaN;
 
-        let query = supabaseCloud
-            .from('sync_documents')
-            .select('doc_id, data, updated_at')
-            .eq('user_id', userId)
-            .eq('collection', 'sale')
-            .order('updated_at', { ascending: true });
-
-        if (sinceTimestamp) {
-            query = query.gt('updated_at', sinceTimestamp);
+        // Solapamiento + paginación: no perder filas con el mismo timestamp ni
+        // depender del límite implícito de PostgREST.
+        const docs = await fetchSaleDocuments(userId, sinceTimestamp);
+        if (!docs?.length) {
+            // No avanzar el cursor cuando ya existía uno: un documento atrasado
+            // debe seguir siendo elegible en el próximo intento.
+            if (!Number.isFinite(sinceMs)) {
+                localStorage.setItem(getLastSalesPullKey(), new Date().toISOString());
+            }
+            return 0;
         }
 
-        const { data: docs, error } = await query;
-        if (error || !docs?.length) return 0;
-
         const existingSales = await storageService.getItem(SALES_KEY, []);
-        const existingMap = new Map(existingSales.map(s => [s.id, s]));
-
+        const mergedSales = [...existingSales];
         const newSales = [];
         let cierreUpdates = 0;
 
@@ -178,45 +222,39 @@ export async function pullNewSales(userId) {
             const sale = doc.data?.payload;
             if (!sale) continue;
 
-            const existing = existingMap.get(sale.id);
-            if (!existing) {
+            const existingIndex = findSaleIndex(mergedSales, sale);
+            if (existingIndex < 0) {
                 newSales.push(sale);
-            } else {
-                let changed = false;
-                const updated = { ...existing };
-                if (sale.cajaCerrada && !existing.cajaCerrada) {
-                    updated.cajaCerrada = sale.cajaCerrada;
-                    updated.cierreId = sale.cierreId;
-                    changed = true;
-                }
-                if (sale.status !== existing.status) {
-                    updated.status = sale.status;
-                    changed = true;
-                }
-                if (changed) {
-                    existingMap.set(sale.id, updated);
-                    cierreUpdates++;
-                }
+                mergedSales.push(sale);
+                continue;
+            }
+
+            const mergedSale = mergeSale(mergedSales[existingIndex], sale);
+            if (JSON.stringify(mergedSale) !== JSON.stringify(mergedSales[existingIndex])) {
+                mergedSales[existingIndex] = mergedSale;
+                cierreUpdates++;
             }
         }
 
         if (newSales.length > 0 || cierreUpdates > 0) {
-            let merged = newSales.length > 0
-                ? [...newSales, ...Array.from(existingMap.values())]
-                : Array.from(existingMap.values());
-            merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            merged = fixDuplicateNumbers(merged);
-            await storageService.setItem(SALES_KEY, merged);
+            mergedSales.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            await storageService.setItem(SALES_KEY, mergedSales);
             window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
             if (newSales.length > 0) console.log(`[SalesSync] Merged ${newSales.length} venta(s) nueva(s) desde la nube`);
-            if (cierreUpdates > 0) console.log(`[SalesSync] Actualizadas ${cierreUpdates} venta(s) con marcas de cierre desde la nube`);
+            if (cierreUpdates > 0) console.log(`[SalesSync] Actualizadas ${cierreUpdates} venta(s) desde la nube`);
         }
 
-        localStorage.setItem(getLastSalesPullKey(), new Date().toISOString());
+        const maxUpdatedAtMs = docs.reduce((max, doc) => {
+            const updatedAtMs = Date.parse(doc?.updated_at || '');
+            return Number.isFinite(updatedAtMs) ? Math.max(max, updatedAtMs) : max;
+        }, Number.isFinite(sinceMs) ? sinceMs : 0);
+        if (maxUpdatedAtMs > 0) {
+            localStorage.setItem(getLastSalesPullKey(), new Date(maxUpdatedAtMs).toISOString());
+        }
         return newSales.length + cierreUpdates;
     } catch (e) {
         console.warn('[SalesSync] pullNewSales falló:', e?.message);
-        return 0;
+        throw e;
     }
 }
 
@@ -233,7 +271,15 @@ export async function syncCierreMarks(affectedSales, userId) {
         await ch.send({
             type: 'broadcast',
             event: 'cierre_marks',
-            payload: affectedSales.map(s => ({ id: s.id, cajaCerrada: s.cajaCerrada, cierreId: s.cierreId })),
+            payload: affectedSales.map(s => ({
+                id: s.id,
+                cajaCerrada: s.cajaCerrada,
+                cierreId: s.cierreId,
+                closureId: s.closureId || null,
+                cierre_id: s.cierre_id || null,
+                closure_id: s.closure_id || null,
+                cashSessionId: s.cashSessionId || s.cash_session_id || null,
+            })),
         });
     } catch (e) {
         console.warn('[SalesSync] Broadcast cierre marks falló:', e?.message);
@@ -265,43 +311,32 @@ export async function syncCierreMarks(affectedSales, userId) {
 
 /**
  * Aplica una venta recibida por Broadcast/Realtime al estado local.
+ * Mergea por ID canónico, ID local o idempotency_key para no duplicar una
+ * venta que primero llegó offline y luego llegó desde Supabase.
  */
 export async function applyIncomingSale(sale) {
-    if (!sale?.id) return;
+    if (!sale?.id && !getSaleIdentity(sale)) return;
     try {
         const existingSales = await storageService.getItem(SALES_KEY, []);
-        const existingIdx = existingSales.findIndex(s => s.id === sale.id);
+        const existingIdx = findSaleIndex(existingSales, sale);
 
         if (existingIdx >= 0) {
-            const existing = existingSales[existingIdx];
-            let changed = false;
-            const updated = { ...existing };
-            
-            if (sale.cajaCerrada && !existing.cajaCerrada) {
-                updated.cajaCerrada = sale.cajaCerrada;
-                updated.cierreId = sale.cierreId;
-                changed = true;
-            }
-            if (sale.status !== existing.status) {
-                updated.status = sale.status;
-                changed = true;
-            }
-            
-            if (changed) {
-                existingSales[existingIdx] = updated;
-                await storageService.setItem(SALES_KEY, existingSales);
-                window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
-                console.log(`[SalesSync] Venta ${sale.id} actualizada en tiempo real (status: ${updated.status})`);
-            }
+            const updated = mergeSale(existingSales[existingIdx], sale);
+            if (JSON.stringify(updated) === JSON.stringify(existingSales[existingIdx])) return;
+            existingSales[existingIdx] = updated;
+            await storageService.setItem(SALES_KEY, existingSales);
+            window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
+            console.log(`[SalesSync] Venta ${sale.id || getSaleIdentity(sale)} actualizada en tiempo real`);
             return;
         }
 
-        let merged = [sale, ...existingSales]
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        merged = fixDuplicateNumbers(merged);
+        const merged = [
+            { ...sale, serverSaleId: sale.serverSaleId || sale.server_sale_id || sale.id },
+            ...existingSales,
+        ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         await storageService.setItem(SALES_KEY, merged);
         window.dispatchEvent(new CustomEvent('app_storage_update', { detail: { key: SALES_KEY } }));
-        console.log(`[SalesSync] Venta recibida en tiempo real: ${sale.id}`);
+        console.log(`[SalesSync] Venta recibida en tiempo real: ${sale.id || getSaleIdentity(sale)}`);
     } catch (e) {
         console.warn('[SalesSync] Error aplicando venta entrante:', e?.message);
     }
@@ -319,9 +354,22 @@ export async function applyCierreMarks(marks) {
 
         const updated = existingSales.map(s => {
             const mark = marksMap.get(s.id);
-            if (mark && !s.cajaCerrada) {
+            if (mark && (
+                s.cajaCerrada !== mark.cajaCerrada
+                || String(s.cierreId ?? s.closureId ?? s.cierre_id ?? s.closure_id ?? '')
+                    !== String(mark.cierreId ?? mark.closureId ?? mark.cierre_id ?? mark.closure_id ?? '')
+                || (hasOwn(mark, 'cashSessionId') && s.cashSessionId !== mark.cashSessionId)
+            )) {
                 changed = true;
-                return { ...s, cajaCerrada: mark.cajaCerrada, cierreId: mark.cierreId };
+                return {
+                    ...s,
+                    cajaCerrada: mark.cajaCerrada,
+                    cierreId: mark.cierreId ?? null,
+                    closureId: mark.closureId ?? null,
+                    cierre_id: mark.cierre_id ?? null,
+                    closure_id: mark.closure_id ?? null,
+                    cashSessionId: mark.cashSessionId || s.cashSessionId || null,
+                };
             }
             return s;
         });
@@ -430,7 +478,9 @@ export async function applySaleStatusChange(saleId, newStatus) {
     if (!saleId || !newStatus) return;
     try {
         const existingSales = await storageService.getItem(SALES_KEY, []);
-        const idx = existingSales.findIndex(s => s.id === saleId);
+        const idx = existingSales.findIndex(s =>
+            s.id === saleId || s.serverSaleId === saleId || s.server_sale_id === saleId
+        );
         if (idx < 0) {
             console.log(`[SalesSync] Venta ${saleId} no encontrada localmente — se actualizará en el próximo pull`);
             return;

@@ -6,6 +6,7 @@ import { processSaleTransaction } from '../utils/checkoutProcessor';
 import { useTablesStore } from './store/useTablesStore';
 import { useOrdersStore } from './store/useOrdersStore';
 import { useAuthStore } from './store/authStore';
+import { useCashStore } from './store/cashStore';
 import { calculateSessionCostBreakdown, formatHoursPaid, calculateSeatCostBreakdown, calculateFullTableBreakdown, buildTableSyntheticCart, parseSessionNotes, serializeSessionNotes } from '../utils/tableBillingEngine';
 import { FinancialEngine } from '../core/FinancialEngine';
 
@@ -25,6 +26,7 @@ export function useSalesCheckout({
         const opts = {
             cart, cartTotalUsd, cartTotalBs: 0, cartSubtotalUsd, payments, changeBreakdown,
             selectedCustomerId: '', customers, products, effectiveRate, tasaCop, copEnabled,
+            cashSessionId: useCashStore.getState().activeCashSession?.id || null,
             discountData: discountData ? { ...discountData, amountBs: 0 } : null, useAutoRate: false
         };
         const result = await processSaleTransaction(opts);
@@ -51,8 +53,9 @@ export function useSalesCheckout({
     const handleCheckoutWithCustomer = useCallback(async (payments, changeBreakdown, selectedCustomerId, splitMeta = null) => {
         triggerHaptic && triggerHaptic();
         const opts = {
-            cart, cartTotalUsd, cartTotalBs: 0, cartSubtotalUsd, payments, changeBreakdown,
-            selectedCustomerId, customers, products, effectiveRate, tasaCop, copEnabled,
+            cart, cartTotalUsd, cartTotalBs: 0, cartSubtotalUsd, payments, changeBreakdown, selectedCustomerId, customers, products,
+            cashSessionId: useCashStore.getState().activeCashSession?.id || null,
+            effectiveRate, tasaCop, copEnabled,
             discountData: discountData ? { ...discountData, amountBs: 0 } : null, useAutoRate: false, splitMeta
         };
         const result = await processSaleTransaction(opts);
@@ -89,6 +92,7 @@ export function useSalesCheckout({
         const includeServiceCharge = !!tableCheckoutData.includeServiceCharge;
         const paidHoursOffsets = useTablesStore.getState().paidHoursOffsets || {};
         const paidRoundsOffsets = useTablesStore.getState().paidRoundsOffsets || {};
+        const paidElapsedOffsets = useTablesStore.getState().paidElapsedOffsets || {};
         const hoursOff = paidHoursOffsets[session?.id] || 0;
         const roundsOff = paidRoundsOffsets[session?.id] || 0;
 
@@ -98,7 +102,8 @@ export function useSalesCheckout({
             hoursOffset: hoursOff,
             roundsOffset: roundsOff,
             paidHoursOffsets,
-            paidRoundsOffsets
+            paidRoundsOffsets,
+            paidElapsedOffsets
         }, config, products);
         const syntheticCart = resultCart.syntheticCart || [];
 
@@ -198,6 +203,7 @@ export function useSalesCheckout({
             ? `${tableCheckoutData.table?.name || 'Mesa'} (${seats.find(s => s.id === seatId)?.label || 'Persona'})`
             : (tableCheckoutData.table?.name || null);
         opts.tableSessionId = session?.id || null;
+        opts.cashSessionId = useCashStore.getState().activeCashSession?.id || null;
 
         let meseroUser = null;
         if (tableCheckoutData.session?.opened_by) {
@@ -208,7 +214,9 @@ export function useSalesCheckout({
                     const { supabaseCloud } = await import('../config/supabaseCloud');
                     const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', tableCheckoutData.session.opened_by).single();
                     if (data) openerUser = data;
-                } catch (_) {}
+                } catch (error) {
+                        console.warn('[Checkout] No se pudo resolver el usuario asociado:', error?.message);
+                    }
             }
             const role = (openerUser?.role || openerUser?.rol || '').toUpperCase();
             if (role === 'MESERO' || role === 'BARRA') {
@@ -229,7 +237,9 @@ export function useSalesCheckout({
                         const { supabaseCloud } = await import('../config/supabaseCloud');
                         const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', associatedOrder.created_by).single();
                         if (data) orderCreator = data;
-                    } catch (_) {}
+                    } catch (error) {
+                        console.warn('[Checkout] No se pudo resolver el usuario asociado:', error?.message);
+                    }
                 }
                 const role = (orderCreator?.role || orderCreator?.rol || '').toUpperCase();
                 if (role === 'MESERO' || role === 'BARRA') {
@@ -251,7 +261,9 @@ export function useSalesCheckout({
                                 const { supabaseCloud } = await import('../config/supabaseCloud');
                                 const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', item.added_by).single();
                                 if (data) itemCreator = data;
-                            } catch (_) {}
+                            } catch (error) {
+                        console.warn('[Checkout] No se pudo resolver el usuario asociado:', error?.message);
+                    }
                         }
                         const role = (itemCreator?.role || itemCreator?.rol || '').toUpperCase();
                         if (role === 'MESERO' || role === 'BARRA') {
@@ -418,7 +430,9 @@ export function useSalesCheckout({
         try {
             const { useCustomersStore } = await import('./store/useCustomersStore');
             await useCustomersStore.getState().refresh();
-        } catch (_) {}
+        } catch (error) {
+                        console.warn('[Checkout] No se pudo resolver el usuario asociado:', error?.message);
+                    }
         return newCustomer;
     }, [customers, setCustomers]);
 

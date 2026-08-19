@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, LockIcon, Printer, DollarSign, CheckCircle2, Trash2, Download } from 'lucide-react';
-import { formatCop, isNonProductSaleItem } from '../../utils/calculatorUtils';
+import { formatCop } from '../../utils/calculatorUtils';
+import { aggregateProductSales } from '../../utils/reportsProcessor';
 import { getPaymentLabel, getPaymentIcon, toTitleCase, PAYMENT_ICONS } from '../../config/paymentMethods';
 import { generateDailyClosePDF } from '../../utils/dailyCloseGenerator';
 import { printThermalDailyClose } from '../../utils/ticketGenerator';
+import { timestampToMs, REPORT_TIMEZONE } from '../../utils/reportRangeEngine';
 
-export default function CierreHistoryCard({ cierre, products: _products, cierreNum, isAdmin, onDeleteCierre }) {
+export default function CierreHistoryCard({ cierre, cierreNum, isAdmin, onDeleteCierre }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     const totalServicioVoluntario = React.useMemo(() => {
@@ -23,26 +25,19 @@ export default function CierreHistoryCard({ cierre, products: _products, cierreN
         return total;
     }, [cierre]);
 
-    const dateLabel = new Date(cierre.cierreId).toLocaleString('es-CO', { 
-        weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit' 
-    });
+    const closureDateMs = timestampToMs(cierre.closedAt || cierre.closed_at || cierre.cierreId);
+    const dateLabel = closureDateMs === null
+        ? 'Fecha de cierre no disponible'
+        : new Date(closureDateMs).toLocaleString('es-CO', {
+            timeZone: REPORT_TIMEZONE,
+            weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
 
     const handlePrintPDF = (e) => {
         e.stopPropagation();
         
-        const todayProductMap = {};
-        cierre.salesForStats.forEach(s => {
-            if (s.items) {
-                s.items.forEach(item => {
-                    if (isNonProductSaleItem(item)) return;
-                    if (!todayProductMap[item.name]) todayProductMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
-                    todayProductMap[item.name].qty += item.qty;
-                    todayProductMap[item.name].revenue += item.priceUsd * item.qty;
-                });
-            }
-        });
-        const todayTopProducts = Object.values(todayProductMap).sort((a, b) => b.qty - a.qty);
+        const todayTopProducts = aggregateProductSales(cierre.salesForStats);
 
         generateDailyClosePDF({
             sales: cierre.salesForCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),
@@ -73,18 +68,7 @@ export default function CierreHistoryCard({ cierre, products: _products, cierreN
     const handlePrintReceipt = (e) => {
         e.stopPropagation();
         
-        const todayProductMap = {};
-        cierre.salesForStats.forEach(s => {
-            if (s.items) {
-                s.items.forEach(item => {
-                    if (isNonProductSaleItem(item)) return;
-                    if (!todayProductMap[item.name]) todayProductMap[item.name] = { name: item.name, qty: 0, revenue: 0 };
-                    todayProductMap[item.name].qty += item.qty;
-                    todayProductMap[item.name].revenue += item.priceUsd * item.qty;
-                });
-            }
-        });
-        const todayTopProducts = Object.values(todayProductMap).sort((a, b) => b.qty - a.qty);
+        const todayTopProducts = aggregateProductSales(cierre.salesForStats);
 
         printThermalDailyClose({
             sales: cierre.salesForCashFlow.filter(s => s.tipo !== 'APERTURA_CAJA'),

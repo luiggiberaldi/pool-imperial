@@ -2,8 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 
 // Instancia única para toda la app (auth, sync, backups, licenses)
 // Las credenciales vienen del entorno (.env / Vercel env vars) — NUNCA hardcodeadas
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const runtimeEnv = import.meta.env || {};
+// El fallback solo permite cargar módulos puros en Node/tests; en la app real
+// las variables Vite siguen siendo obligatorias para conectar con Supabase.
+const supabaseUrl = runtimeEnv.VITE_SUPABASE_URL || 'http://127.0.0.1:54321';
+const supabaseKey = runtimeEnv.VITE_SUPABASE_ANON_KEY || 'test-anon-key';
 
 let _instance = null;
 function getSupabase() {

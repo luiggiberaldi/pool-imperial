@@ -97,38 +97,84 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
 
         console.log(`[TablesSync] Procesando ${queue.length} acciones de mesa pendientes...`);
         const remainingQueue = [];
+        const resolvedTempIds = new Map();
 
-        for (const action of queue) {
+        for (const queuedAction of queue) {
+            const resolvedSessionId = queuedAction.sessionId
+                && resolvedTempIds.get(queuedAction.sessionId);
+            const action = resolvedSessionId
+                ? { ...queuedAction, sessionId: resolvedSessionId }
+                : queuedAction;
+            let success = false;
+
             try {
-                let success = false;
                 if (action.type === 'OPEN_SESSION') {
-                    const { error } = await supabaseCloud.from('table_sessions').insert(action.payload);
-                    if (!error) success = true;
-                } else if (action.type === 'UPDATE_SESSION') {
-                    if (String(action.sessionId).startsWith('temp-')) {
+                    const { data, error } = await supabaseCloud
+                        .from('table_sessions')
+                        .insert(action.payload)
+                        .select()
+                        .single();
+                    if (!error) {
                         success = true;
+                        if (queuedAction.sessionId && String(queuedAction.sessionId).startsWith('temp-') && data?.id) {
+                            resolvedTempIds.set(queuedAction.sessionId, data.id);
+                            set(state => ({
+                                activeSessions: state.activeSessions.map(session =>
+                                    session.id === queuedAction.sessionId ? data : session
+                                ),
+                            }));
+                        }
+                    }
+                } else if (action.type === 'UPDATE_SESSION') {
+                    // No descartar updates dependientes de un alta offline que aún
+                    // no tenga ID canónico; se reintentará después del OPEN.
+                    if (String(action.sessionId || '').startsWith('temp-')) {
+                        success = false;
                     } else {
-                        const { error } = await supabaseCloud.from('table_sessions').update(action.payload).eq('id', action.sessionId);
+                        let { error } = await supabaseCloud
+                            .from('table_sessions')
+                            .update(action.payload)
+                            .eq('id', action.sessionId);
+                        const errorText = String(error?.message || error?.details || '').toLowerCase();
+                        if (error && (errorText.includes('transfer_metadata') || errorText.includes('paused_at')) && action.payload) {
+                            const legacyPayload = { ...action.payload };
+                            if (errorText.includes('transfer_metadata')) delete legacyPayload.transfer_metadata;
+                            if (errorText.includes('paused_at')) delete legacyPayload.paused_at;
+                            ({ error } = await supabaseCloud
+                                .from('table_sessions')
+                                .update(legacyPayload)
+                                .eq('id', action.sessionId));
+                        }
                         if (!error) {
                             success = true;
                             set(state => ({
-                                activeSessions: state.activeSessions.map(s =>
-                                    s.id === action.sessionId ? { ...s, _pendingSync: false } : s
-                                )
+                                activeSessions: state.activeSessions.map(session =>
+                                    session.id === action.sessionId ? { ...session, _pendingSync: false } : session
+                                ),
                             }));
                         }
                     }
                 } else if (action.type === 'CLOSE_SESSION') {
-                    if (String(action.sessionId).startsWith('temp-')) {
-                        success = true;
+                    if (String(action.sessionId || '').startsWith('temp-')) {
+                        success = false;
                     } else {
-                        const { error } = await supabaseCloud.from('table_sessions').update(action.payload).eq('id', action.sessionId);
+                        const { error } = await supabaseCloud
+                            .from('table_sessions')
+                            .update(action.payload)
+                            .eq('id', action.sessionId);
                         if (!error) success = true;
                     }
                 }
-                if (!success) remainingQueue.push(action);
-            } catch (e) {
-                remainingQueue.push(action);
+            } catch (error) {
+                console.warn('[TablesSync] Acción pendiente no aplicada:', error?.message);
+            }
+
+            if (!success) {
+                // Si OPEN resolvió el ID, conservar el ID canónico en las acciones
+                // restantes; si no, mantener el temporal para el próximo intento.
+                remainingQueue.push(resolvedSessionId
+                    ? { ...queuedAction, sessionId: resolvedSessionId }
+                    : queuedAction);
             }
         }
 

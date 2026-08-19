@@ -248,7 +248,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
         handleSetSearchTerm('');
         setHierarchyPending(null);
         setTimeout(() => { searchInputRef.current?.blur(); setCartSelectedIndex(0); }, 50);
-    }, [triggerHaptic, effectiveRate, playAdd, playError, cartRef, setCart]);
+    }, [triggerHaptic, effectiveRate, playAdd, playError, cartRef, setCart, products]);
 
     const updateQty = (id, delta) => {
         triggerHaptic && triggerHaptic();
@@ -449,6 +449,7 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             cartSubtotalUsd: cartSubtotalUsd + tdcSurcharge,
                             payments, changeBreakdown: change,
                             selectedCustomerId, customers, products, effectiveRate: 1, tasaCop: tasaCop, copEnabled: copEnabled,
+                            cashSessionId: activeCashSession?.id || null,
                             discountData: discountData ? { ...discountData, amountBs: 0 } : null, useAutoRate: false, splitMeta,
                             totalTax,
                             taxBreakdown
@@ -521,10 +522,11 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                         if (seatId) {
                             const seats = tableCheckoutData.session?.seats || [];
                             const config = useTablesStore.getState().config;
-                            const { paidHoursOffsets, paidRoundsOffsets } = useTablesStore.getState();
+                            const { paidHoursOffsets, paidRoundsOffsets, paidElapsedOffsets } = useTablesStore.getState();
                             const _ho = (paidHoursOffsets || {})[tableCheckoutData.session?.id] || 0;
                             const _ro = (paidRoundsOffsets || {})[tableCheckoutData.session?.id] || 0;
-                            const fb = calculateFullTableBreakdown(tableCheckoutData.session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, tableCheckoutData.table?.type === 'NORMAL', _ho, _ro);
+                            const _eo = (paidElapsedOffsets || {})[tableCheckoutData.session?.id] || 0;
+                            const fb = calculateFullTableBreakdown(tableCheckoutData.session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, tableCheckoutData.table?.type === 'NORMAL', _ho, _ro, tableCheckoutData.table?.type, _eo);
                             const seatBd = fb?.seats.find(s => s.seat.id === seatId);
                             if (seatBd) {
                                 baseTotal = seatTotal != null ? seatTotal : seatBd.subtotal;
@@ -544,10 +546,11 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                             const seats = tableCheckoutData.session?.seats || [];
                             if (seats.length > 0) {
                                 const config = useTablesStore.getState().config;
-                                const { paidHoursOffsets, paidRoundsOffsets } = useTablesStore.getState();
+                                const { paidHoursOffsets, paidRoundsOffsets, paidElapsedOffsets } = useTablesStore.getState();
                                 const _ho = (paidHoursOffsets || {})[tableCheckoutData.session?.id] || 0;
                                 const _ro = (paidRoundsOffsets || {})[tableCheckoutData.session?.id] || 0;
-                                const fb = calculateFullTableBreakdown(tableCheckoutData.session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, tableCheckoutData.table?.type === 'NORMAL', _ho, _ro);
+                                const _eo = (paidElapsedOffsets || {})[tableCheckoutData.session?.id] || 0;
+                                const fb = calculateFullTableBreakdown(tableCheckoutData.session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, tableCheckoutData.table?.type === 'NORMAL', _ho, _ro, tableCheckoutData.table?.type, _eo);
                                 if (fb && fb.grandTotal > 0) baseTotal = fb.grandTotal;
                             }
                         }
@@ -587,11 +590,12 @@ export default function SalesView({ rates: _rates, triggerHaptic, onNavigate, is
                 const discData = tableCheckoutData.discountData || { active: false, amountUsd: 0, amountBs: 0, type: 'percentage', value: 0 };
                 
                 const tableConfig = useTablesStore.getState().config;
-                const { paidHoursOffsets, paidRoundsOffsets } = useTablesStore.getState();
+                const { paidHoursOffsets, paidRoundsOffsets, paidElapsedOffsets } = useTablesStore.getState();
                 const tableCheckoutParams = {
                     ...tableCheckoutData,
                     paidHoursOffsets,
-                    paidRoundsOffsets
+                    paidRoundsOffsets,
+                    paidElapsedOffsets
                 };
                 const { syntheticCart } = buildTableSyntheticCart(tableCheckoutParams, tableConfig, products);
                 

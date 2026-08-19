@@ -11,7 +11,7 @@ import { useProductContext } from '../context/ProductContext';
 import { FinancialEngine } from '../core/FinancialEngine';
 
 export default function CashierCheckoutView({ triggerHaptic, isActive }) {
-    const { tables, activeSessions, config, closeSession, cancelCheckoutRequest, syncTablesAndSessions, paidHoursOffsets, paidRoundsOffsets, cancelSeatCheckoutRequest, pausedSessions } = useTablesStore();
+    const { tables, activeSessions, config, closeSession, cancelCheckoutRequest, syncTablesAndSessions, paidHoursOffsets, paidRoundsOffsets, paidElapsedOffsets, cancelSeatCheckoutRequest, pausedSessions } = useTablesStore();
     const { orders: allOrders, orderItems: allItems } = useOrdersStore();
     const { currentUser } = useAuthStore();
     const { effectiveRate, products } = useProductContext();
@@ -133,7 +133,8 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                 const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
                                 const hoursOffset = (paidHoursOffsets || {})[session.id] || 0;
                                 const roundsOffset = (paidRoundsOffsets || {})[session.id] || 0;
-                                const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
+                                const elapsedOffset = (paidElapsedOffsets || {})[session.id] || 0;
+                                const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type, elapsedOffset) : 0;
                                 
                                 const taxRate = config?.tableTaxType === 'iva_19'
                                     ? (config?.taxRateIva ?? 19) / 100
@@ -166,6 +167,7 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                         roundsOffset,
                                         paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
                                         paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
+                                        paidElapsedOffsets: session ? { [session.id]: elapsedOffset } : {},
                                         isPartial: isAnyAbono
                                     };
                                     const result = buildTableSyntheticCart(tableCheckoutData, config, products);
@@ -186,7 +188,8 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                 const isTimeFree = table.type === 'NORMAL';
                                 const hoursOffset = (paidHoursOffsets || {})[session.id] || 0;
                                 const roundsOffset = (paidRoundsOffsets || {})[session.id] || 0;
-                                const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats) : 0;
+                                const elapsedOffset = (paidElapsedOffsets || {})[session.id] || 0;
+                                const timeCost = !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type, elapsedOffset) : 0;
 
                                 try {
                                     const tableCheckoutData = {
@@ -201,6 +204,7 @@ export default function CashierCheckoutView({ triggerHaptic, isActive }) {
                                         roundsOffset,
                                         paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
                                         paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
+                                        paidElapsedOffsets: session ? { [session.id]: elapsedOffset } : {},
                                         seatId: req.seatId
                                     };
                                     const result = buildTableSyntheticCart(tableCheckoutData, config, products);

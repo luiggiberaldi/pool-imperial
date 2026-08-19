@@ -13,6 +13,7 @@ import { FinancialEngine } from '../core/FinancialEngine';
 import { round2, divR, subR } from '../utils/dinero';
 import { openCashDrawerWebSerial, getWebSerialConfig } from '../services/webSerialPrinter';
 import { supabaseCloud } from '../config/supabaseCloud';
+import { useCashStore } from '../hooks/store/cashStore';
 
 // Formatea un número como peso colombiano: $ 12.500
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
@@ -20,11 +21,12 @@ const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
 }).format(Math.round(val || 0));
 
 export default function CashierPaymentModal({ session, table, seatId = null, config, currentUser, onClose, onSuccess }) {
-    const { closeSession, resetSessionAfterPayment, paidHoursOffsets, paidRoundsOffsets } = useTablesStore();
+    const { closeSession, resetSessionAfterPayment, paidHoursOffsets, paidRoundsOffsets, paidElapsedOffsets } = useTablesStore();
     const { cancelOrderBySessionId } = useOrdersStore();
     const { orders: allOrders, orderItems: allItems } = useOrdersStore();
     const cachedUsers = useAuthStore(s => s.cachedUsers);
     const { products, tasaCop } = useProductContext();
+    const activeCashSession = useCashStore(state => state.activeCashSession);
 
     const [method, setMethod] = useState('EFECTIVO');
     const [receivedCOP, setReceivedCOP] = useState('');
@@ -95,7 +97,8 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    // Calculate total    const isAbono = session?.notes && session.notes.includes('|||ABONO:');
+    // Calculate total
+    const isAbono = Boolean(session?.notes && session.notes.includes('|||ABONO:'));
     const isAbonoMonto = session?.notes && session.notes.includes('|||ABONO_MONTO:');
     const isAnyAbono = isAbono || isAbonoMonto;
     let abonoItems = [];
@@ -103,11 +106,15 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
     if (isAbono) {
         try {
             abonoItems = JSON.parse(session.notes.split('|||ABONO:')[1].split('|||')[0].trim());
-        } catch (_) {}
+        } catch (error) {
+            console.warn('[CashierPaymentModal] Optional lookup failed:', error?.message);
+        }
     } else if (isAbonoMonto) {
         try {
             abonoMonto = JSON.parse(session.notes.split('|||ABONO_MONTO:')[1].split('|||')[0].trim());
-        } catch (_) {}
+        } catch (error) {
+            console.warn('[CashierPaymentModal] Optional lookup failed:', error?.message);
+        }
     }
 
     const order = allOrders.find(o => o.table_session_id === session.id);
@@ -124,7 +131,8 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
     const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
     const hoursOffset = (paidHoursOffsets || {})[session?.id] || 0;
     const roundsOffset = (paidRoundsOffsets || {})[session?.id] || 0;
-    const timeCost = !seatId && !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
+    const elapsedOffset = (paidElapsedOffsets || {})[session?.id] || 0;
+    const timeCost = !seatId && !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type, elapsedOffset) : 0;
     
     const taxRate = config?.tableTaxType === 'iva_19'
         ? (config?.taxRateIva ?? 19) / 100
@@ -157,6 +165,7 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
             roundsOffset,
             paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
             paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
+            paidElapsedOffsets: session ? { [session.id]: elapsedOffset } : {},
             isPartial: isAnyAbono,
             seatId
         };
@@ -211,7 +220,7 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                 table,
                 session,
                 elapsed,
-                timeCost: !seatId && !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0,
+                timeCost: !seatId && !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type, elapsedOffset) : 0,
                 totalConsumption,
                 currentItems,
                 config,
@@ -288,7 +297,9 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                         const { supabaseCloud } = await import('../config/supabaseCloud');
                         const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', session.opened_by).single();
                         if (data) openerUser = data;
-                    } catch (_) {}
+                    } catch (error) {
+            console.warn('[CashierPaymentModal] Optional lookup failed:', error?.message);
+        }
                 }
                 const role = (openerUser?.role || openerUser?.rol || '').toUpperCase();
                 if (role === 'MESERO' || role === 'BARRA') {
@@ -304,7 +315,9 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                             const { supabaseCloud } = await import('../config/supabaseCloud');
                             const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', associatedOrder.created_by).single();
                             if (data) orderCreator = data;
-                        } catch (_) {}
+                        } catch (error) {
+            console.warn('[CashierPaymentModal] Optional lookup failed:', error?.message);
+        }
                     }
                     const role = (orderCreator?.role || orderCreator?.rol || '').toUpperCase();
                     if (role === 'MESERO' || role === 'BARRA') {
@@ -324,7 +337,9 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                                     const { supabaseCloud } = await import('../config/supabaseCloud');
                                     const { data } = await supabaseCloud.from('staff_users').select('id, name, role').eq('id', item.added_by).single();
                                     if (data) itemCreator = data;
-                                } catch (_) {}
+                                } catch (error) {
+            console.warn('[CashierPaymentModal] Optional lookup failed:', error?.message);
+        }
                             }
                             const role = (itemCreator?.role || itemCreator?.rol || '').toUpperCase();
                             if (role === 'MESERO' || role === 'BARRA') {
@@ -352,7 +367,8 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                 seatId: seatId || null,
                 isPartial: isAnyAbono,
                 skipStockDeduction: true,
-                tasaCop: tasaCop
+                tasaCop: tasaCop,
+                cashSessionId: activeCashSession?.id || null,
             });
 
             if (!saleResult.success) {
@@ -401,7 +417,8 @@ export default function CashierPaymentModal({ session, table, seatId = null, con
                                 } else {
                                     await ordersStore.updateItemQty(item.id, remainingQty);
                                 }
-                            } catch (_) {
+                            } catch (error) {
+                                console.warn('[CashierPaymentModal] No se pudo actualizar un item del abono:', error?.message);
                                 allItemsRemoved = false;
                             }
                         }

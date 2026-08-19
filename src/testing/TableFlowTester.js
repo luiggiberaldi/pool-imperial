@@ -18,7 +18,15 @@ import {
     calculateTimeCostBs,
     formatHoursPaid,
     buildFrozenTimeCharge,
+    buildPoolToNormalPreview,
 } from '../utils/tableBillingEngine';
+import {
+    TRANSFER_TYPES,
+    validateTableTransfer,
+    buildTableTransferSessionPatch,
+    buildConsumptionMergePayload,
+    remapOrderItemSeatId,
+} from '../utils/tableTransferEngine';
 
 // ── Test State ──
 const state = {
@@ -1846,6 +1854,177 @@ function scenarioV() {
     return { passed, failed };
 }
 
+// ════════════════════════════════════════════
+// SCENARIO W: Transferencias completas y fusiones
+// ════════════════════════════════════════════
+function scenarioW() {
+    section('ESCENARIO W: Transferencias Pool, Normal y fusiones');
+    const config = { ...TEST_CONFIG };
+
+    let passed = 0, failed = 0;
+    const check = (condition, passMsg, failMsg) => { if (assert(condition, passMsg, failMsg)) passed++; else failed++; };
+    const expectThrow = (fn, label) => {
+        try {
+            fn();
+            check(false, '', `${label}: debía rechazar la operación`);
+        } catch (error) {
+            check(true, `${label}: rechazado correctamente`, `${label}: ${error.message}`);
+        }
+    };
+
+    const sourceSession = {
+        id: 'transfer-source',
+        table_id: 'source-table',
+        status: 'ACTIVE',
+        game_mode: 'NORMAL',
+        hours_paid: 1,
+        extended_times: 1,
+        paid_at: new Date('2026-08-01T10:00:00.000Z').toISOString(),
+        paused_at: new Date('2026-08-01T10:30:00.000Z').toISOString(),
+        seats: [{ id: 'seat-1', label: 'Ana', paid: false, timeCharges: [{ type: 'hora', amount: 1, id: 'tc-1' }] }],
+        guest_count: 1,
+    };
+    const sourceTable = { id: 'source-table', type: 'POOL' };
+    const nowISO = '2026-08-18T12:00:00.000Z';
+
+    // Matriz de destino libre: Pool→Pool, Normal→Normal y ambos cruces.
+    const matrix = [
+        { sourceType: 'POOL', targetType: 'POOL', label: 'Pool→Pool', expectedKeys: ['table_id'] },
+        { sourceType: 'NORMAL', targetType: 'NORMAL', label: 'Normal→Normal', expectedKeys: ['table_id'] },
+        { sourceType: 'POOL', targetType: 'NORMAL', label: 'Pool→Normal', expectedKeys: ['table_id', 'started_at', 'game_mode', 'hours_paid', 'extended_times', 'seats', 'paused_at'] },
+        { sourceType: 'NORMAL', targetType: 'POOL', label: 'Normal→Pool', expectedKeys: ['table_id', 'started_at', 'game_mode', 'hours_paid', 'extended_times', 'paid_at', 'paused_at'] },
+    ];
+    matrix.forEach(({ sourceType, targetType, label, expectedKeys }) => {
+        const patch = buildTableTransferSessionPatch({
+            sourceSession,
+            targetTableId: 'target-table',
+            sourceType,
+            targetType,
+            nowISO,
+            ...(sourceType === 'NORMAL' && targetType === 'POOL'
+                ? {
+                    poolMode: { type: 'PREPAID', hoursPaid: 0.5 },
+                    preserveSeatTimeCharges: true,
+                }
+                : {}),
+        });
+        check(
+            expectedKeys.every(key => Object.prototype.hasOwnProperty.call(patch, key)),
+            `${label}: patch completo`,
+            `${label}: faltan campos en el patch (${expectedKeys.filter(key => !Object.prototype.hasOwnProperty.call(patch, key)).join(', ')})`
+        );
+        if (sourceType === 'POOL' && targetType === 'NORMAL') {
+            check(patch.seats[0].timeCharges.length === 0, `${label}: congela y limpia cargos de asiento`, `${label}: dejó cargos de tiempo vivos`);
+        }
+        if (sourceType === 'NORMAL' && targetType === 'POOL') {
+            check(patch.started_at === nowISO, `${label}: reloj reinicia en el instante del traslado`, `${label}: started_at incorrecto`);
+            check(patch.paid_at === null, `${label}: limpia paid_at`, `${label}: paid_at conserva un pago anterior`);
+            check(patch.seats === undefined, `${label}: conserva seats y sus cargos`, `${label}: alteró seats inesperadamente`);
+        }
+    });
+
+    // Validaciones: no auto-transferir CHECKOUT, no fusionar destinos en caja ni
+    // aceptar operaciones imposibles por tipo, mesa o sesión duplicada.
+    const activeTarget = { id: 'target-session', table_id: 'target-table', status: 'ACTIVE' };
+    const baseTables = { sourceTable, targetTable: { id: 'target-table', type: 'POOL' } };
+    expectThrow(
+        () => validateTableTransfer({ ...baseTables, sourceSession, allSessions: [sourceSession, activeTarget], transferType: TRANSFER_TYPES.ALL }),
+        'ALL hacia destino ocupado'
+    );
+    expectThrow(
+        () => validateTableTransfer({ ...baseTables, sourceSession, allSessions: [sourceSession], transferType: TRANSFER_TYPES.CONSUMPTION }),
+        'CONSUMPTION hacia destino libre'
+    );
+    expectThrow(
+        () => validateTableTransfer({ ...baseTables, sourceSession: { ...sourceSession, status: 'CHECKOUT' }, allSessions: [sourceSession], transferType: TRANSFER_TYPES.ALL }),
+        'origen en CHECKOUT'
+    );
+    expectThrow(
+        () => validateTableTransfer({ sourceTable, targetTable: { id: 'missing', type: 'POOL' }, sourceSession, allSessions: [sourceSession], transferType: 'INVALID' }),
+        'tipo de transferencia inválido'
+    );
+    expectThrow(
+        () => validateTableTransfer({ sourceTable, targetTable: sourceTable, sourceSession, allSessions: [sourceSession], transferType: TRANSFER_TYPES.ALL }),
+        'transferencia a la misma mesa'
+    );
+    expectThrow(
+        () => validateTableTransfer({ ...baseTables, sourceSession, allSessions: [sourceSession, { ...activeTarget, status: 'CHECKOUT' }], transferType: TRANSFER_TYPES.CONSUMPTION }),
+        'destino en CHECKOUT'
+    );
+
+    // Fusión Pool→Pool: los cargos por asiento se congelan una sola vez como
+    // consumo; además se remapean colisiones de IDs y se conservan abonos/notas.
+    const targetSession = {
+        id: 'target-session',
+        table_id: 'target-table',
+        status: 'ACTIVE',
+        seats: [{ id: 'seat-1', label: 'Luis', paid: false, timeCharges: [] }],
+        guest_count: 1,
+        notes: 'Destino |||RETIRED_PAID_SHARED:2||| |||HISTORIAL_ABONOS:[{"id":"target-abono","itemsRemoved":false,"amount":10}]',
+    };
+    const sourceForMerge = {
+        ...sourceSession,
+        id: 'source-merge',
+        notes: 'Origen |||RETIRED_PAID_SHARED:3||| |||HISTORIAL_ABONOS:[{"id":"source-abono","itemsRemoved":false,"amount":5}]',
+        seats: [{ id: 'seat-1', label: 'Ana', paid: false, timeCharges: [{ type: 'hora', amount: 1, id: 'tc-1' }, { type: 'pina', amount: 1, id: 'tc-2' }] }],
+    };
+    const mergePlan = buildConsumptionMergePayload({
+        targetSession,
+        sourceSession: sourceForMerge,
+        sourceType: 'POOL',
+        targetType: 'POOL',
+    });
+    const movedSourceSeat = mergePlan.payload.seats.find(seat => seat.label === 'Ana');
+    check(mergePlan.payload.seats.length === 2, 'Fusión: conserva ambos grupos de clientes', `Fusión: seats=${mergePlan.payload.seats.length}`);
+    check(movedSourceSeat?.id !== 'seat-1', 'Fusión: remapea colisión de seat_id', `Fusión: seat_id colisionó (${movedSourceSeat?.id})`);
+    check(movedSourceSeat?.timeCharges?.length === 0, 'Fusión Pool: limpia cargos ya materializados', 'Fusión Pool: cargos de tiempo quedarían duplicados');
+    check(remapOrderItemSeatId({ seat_id: 'seat-1' }, mergePlan.seatIdMap) === movedSourceSeat?.id, 'Fusión: remapea seat_id de los ítems', 'Fusión: ítem quedó apuntando al asiento equivocado');
+    check(mergePlan.payload.notes.includes('RETIRED_PAID_SHARED:5'), 'Fusión: suma shared ya pagado', `Fusión: notas perdió RETIRED_PAID_SHARED (${mergePlan.payload.notes})`);
+    check(mergePlan.payload.notes.includes('target-abono') && mergePlan.payload.notes.includes('source-abono'), 'Fusión: conserva historial de abonos', 'Fusión: perdió historial de abonos');
+
+    const preview = buildPoolToNormalPreview({
+        session: { ...sourceForMerge, paid_at: null },
+        elapsedMinutes: 60,
+        config,
+        orderItems: [{ product_id: 'drink', unit_price_usd: 6, qty: 1 }],
+        hasOrder: true,
+    });
+    check(preview.frozenTimeTotal === 14, `Preview Pool→Normal: cargo fijo único ($14)`, `Preview Pool→Normal: total incorrecto ($${preview.frozenTimeTotal})`);
+    check(preview.sourceTimeTotal === 7 && preview.sourceSeatTimeTotal === 7, 'Preview: separa sesión y cargos de asiento', `Preview: desglose incorrecto (${preview.sourceTimeTotal} + ${preview.sourceSeatTimeTotal})`);
+    check(preview.currentConsumptionTotal === 6 && preview.targetWillChargeTime === false, 'Preview: conserva consumo y deja Normal sin tiempo', 'Preview: datos de destino incorrectos');
+
+    const frozenPool = buildFrozenTimeCharge({ ...sourceForMerge, paid_at: null }, 60, config, 'POOL', 0, 0);
+    check(frozenPool?.total === 14, `Fusión Pool: congela sesión + seats una vez ($14)`, `Fusión Pool: congelado incorrecto ($${frozenPool?.total})`);
+    const mergedBreakdown = calculateFullTableBreakdown(
+        { ...targetSession, notes: null, game_mode: 'NORMAL', hours_paid: 0, extended_times: 0 },
+        mergePlan.payload.seats,
+        0,
+        config,
+        [{ id: 'frozen', product_id: frozenPool.productInfo.id, product_name: frozenPool.productInfo.name, unit_price_usd: frozenPool.total, qty: 1 }],
+        null,
+        null,
+        false,
+        0,
+        0,
+        'POOL'
+    );
+    check(mergedBreakdown.sharedTimeTotal === 0, 'Fusión Pool: el cargo congelado no vuelve a ser tiempo', `Fusión Pool: sharedTime=${mergedBreakdown.sharedTimeTotal}`);
+    check(mergedBreakdown.grandTotal === 14, 'Fusión Pool: total final conserva exactamente $14', `Fusión Pool: total final $${mergedBreakdown.grandTotal}`);
+
+    const normalMergePlan = buildConsumptionMergePayload({
+        targetSession,
+        sourceSession: { ...sourceForMerge, seats: [{ id: 'bar-seat', label: 'Bar', paid: false, timeCharges: [{ type: 'hora', amount: 0.5, id: 'bar-time' }] }] },
+        sourceType: 'NORMAL',
+        targetType: 'POOL',
+        preserveSeatTimeCharges: true,
+    });
+    const barSeat = normalMergePlan.payload.seats.find(seat => seat.label === 'Bar');
+    check(barSeat?.timeCharges?.length === 1, 'Fusión Normal: conserva cargos manuales de asiento', 'Fusión Normal: perdió cargos manuales de asiento');
+
+    log(`Escenario W completado: ${passed} pasaron, ${failed} fallaron`, failed > 0 ? 'error' : 'success');
+    return { passed, failed };
+}
+
 // ── Suite definitions ──
 const ALL_SUITES = [
     { key: 'scenario_a', name: 'Abrir → Cobrar → Liberar', fn: scenarioA },
@@ -1870,6 +2049,7 @@ const ALL_SUITES = [
     { key: 'scenario_t', name: 'Registro en Reportes — Cobro/Recobro/Re-recobro', fn: scenarioT },
     { key: 'scenario_u', name: 'Datos de Ticket — Compra y Recompra', fn: scenarioU },
     { key: 'scenario_v', name: 'Transferencia Pool ↔ Normal (congelar tiempo)', fn: scenarioV },
+    { key: 'scenario_w', name: 'Transferencias completas y fusiones', fn: scenarioW },
 ];
 
 // ── Public API ──

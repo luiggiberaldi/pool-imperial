@@ -3,16 +3,26 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useBackdropClose } from '../hooks/useBackdropClose';
 
-export const Modal = ({ isOpen, onClose, title, children, className = '', maxWidthClass = 'max-w-sm md:max-w-md' }) => {
+export const Modal = ({
+  isOpen,
+  onClose,
+  title,
+  children,
+  className = '',
+  maxWidthClass = 'max-w-sm md:max-w-md',
+  bodyClassName = '',
+}) => {
   // Cierre agnóstico a mouse/táctil: solo cierra si el gesto empezó y terminó
   // sobre el backdrop (pointerdown→pointerup). Reemplaza las guardas de Date.now().
   const backdropClose = useBackdropClose(onClose);
 
   if (!isOpen) return null;
 
+  const bodyClasses = bodyClassName || 'p-6 max-h-[85vh] overflow-y-auto custom-scrollbar pb-10';
+
   return createPortal(
     // ✅ z-[100] asegura que esté por encima de la barra de navegación (z-30)
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
 
       {/* Backdrop con desenfoque */}
       <div
@@ -26,18 +36,19 @@ export const Modal = ({ isOpen, onClose, title, children, className = '', maxWid
       >
 
         {/* Cabecera */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
-          <h3 className="font-black text-slate-800 dark:text-white text-lg tracking-tight">{title}</h3>
+        <div className="shrink-0 px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50">
+          <h3 className="font-black text-slate-800 dark:text-white text-base sm:text-lg tracking-tight pr-3">{title}</h3>
           <button
             onClick={onClose}
-            className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 hover:text-red-500 transition-colors"
+            className="shrink-0 p-1.5 bg-slate-200 dark:bg-slate-700 rounded-full text-slate-500 hover:text-red-500 transition-colors"
           >
             <X size={16} strokeWidth={3} />
           </button>
         </div>
 
-        {/* Body con Scroll Mejorado */}
-        <div className="p-6 max-h-[85vh] overflow-y-auto custom-scrollbar pb-10">
+        {/* El contenido puede pedir una altura responsive; el scroll queda como
+            fallback únicamente cuando el viewport no alcanza. */}
+        <div className={bodyClasses}>
           {children}
         </div>
       </div>

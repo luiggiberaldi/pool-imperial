@@ -10,7 +10,7 @@
  *         to eliminate IEEE 754 floating-point drift.
  */
 
-import { round2, mulR, divR, subR, sumR } from '../utils/dinero';
+import { round2, mulR, subR, sumR } from '../utils/dinero';
 import { useTablesStore } from '../hooks/store/useTablesStore';
 
 export function getTaxRates() {
@@ -84,9 +84,12 @@ export class FinancialEngine {
             const nameLower = (item.name || '').toLowerCase();
             // Exclude voluntary tips, card surcharges, and partial abonos from store net profit calculations
             if (
-                nameLower.includes('servicio voluntario') || 
-                nameLower.includes('recargo tdc') || 
-                nameLower.includes('abono parcial') || 
+                item.isTip === true ||
+                item.isServiceCharge === true ||
+                nameLower.includes('propina') ||
+                nameLower.includes('servicio voluntario') ||
+                nameLower.includes('recargo tdc') ||
+                nameLower.includes('abono parcial') ||
                 item.id === 'abono-monto-libre'
             ) {
                 return 0;

@@ -513,7 +513,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
         try {
             await generatePartialSessionTicketPDF({
                 table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config,
-                hoursOffset, roundsOffset, products
+                hoursOffset, roundsOffset, elapsedOffset, products
             });
             showToast('Pre-cuenta enviada a la impresora', 'success');
         } catch (err) {
@@ -522,8 +522,8 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
     };
 
     // variables de offset de tiempo ya estan declaradas al inicio
-    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type) : 0;
-    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats, table.type) : null;
+    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table.type, elapsedOffset) : 0;
+    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats, table.type, elapsedOffset) : null;
     const isMixedMode = costBreakdown ? (costBreakdown.hasPinas && costBreakdown.hasHours) : false;
     const hasHoursActive = (costBreakdown ? costBreakdown.hasHours : (session?.hours_paid > 0)) || seatHasHours;
     const taxRate = config?.tableTaxType === 'iva_19'
@@ -558,7 +558,8 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                 hoursOffset,
                 roundsOffset,
                 paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
-                paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {}
+                paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
+                paidElapsedOffsets: session ? { [session.id]: elapsedOffset } : {}
             };
             const result = buildTableSyntheticCart(tableCheckoutData, config, products);
             if (result && result.syntheticCart) {
@@ -582,7 +583,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
         }
 
         return totalBuilt;
-    }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, products]);
+    }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, elapsedOffset, products]);
     // Mesa pagada sin cerrar y sin cargos nuevos agregados (ni tiempo ni consumo)
     const isPaidIdle = isPlaying && !!session?.paid_at && grandTotal === 0;
     // Calculado a partir de segundos
@@ -622,7 +623,7 @@ export default function TableCard({ table, session, onStartTransfer, initialOpen
                                 >
                                     <Printer size={12} />
                                 </button>
-                                {onStartTransfer && (
+                                {onStartTransfer && !isCheckoutPending && (
                                     <button
                                         onClick={onStartTransfer}
                                         className="w-6 h-6 rounded-full flex items-center justify-center bg-white/20 hover:bg-white/40 text-white transition-all active:scale-95 shrink-0"

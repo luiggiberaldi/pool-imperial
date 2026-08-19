@@ -10,7 +10,9 @@
     "prettier": "prettier --write .",
     "linc": "eslint .",
     "save-seed": "node scripts/save-seed.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:table-transfers": "node src/testing/tableTransferEngine.test.js && node --loader ./src/testing/nodeExtensionlessLoader.mjs src/testing/repeatedTableTransfer.test.js",
+    "test:reports": "node --loader ./src/testing/nodeExtensionlessLoader.mjs src/testing/reportRangeEngine.test.js && node --loader ./src/testing/nodeExtensionlessLoader.mjs src/testing/reportsProcessor.test.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",

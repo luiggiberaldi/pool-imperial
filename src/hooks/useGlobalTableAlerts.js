@@ -104,8 +104,9 @@ export function useGlobalTableAlerts() {
                             const elapsed = getSessionElapsedMinutes(session, pausedSessions);
                             const hoursOff = (paidHoursOffsets || {})[session.id] || 0;
                             const roundsOff = (paidRoundsOffsets || {})[session.id] || 0;
+                            const elapsedOff = (paidElapsedOffsets || {})[session.id] || 0;
                             const isTimeFree = table.type === 'NORMAL';
-                            const timeCost = isTimeFree ? 0 : calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, hoursOff, roundsOff, session.seats, table.type);
+                            const timeCost = isTimeFree ? 0 : calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, hoursOff, roundsOff, session.seats, table.type, elapsedOff);
 
                             // Calculate actual checkout grand total (including products, seats, taxes, and tip)
                             const taxRate = config?.tableTaxType === 'iva_19'
@@ -145,7 +146,8 @@ export function useGlobalTableAlerts() {
                                         hoursOffset: hoursOff,
                                         roundsOffset: roundsOff,
                                         paidHoursOffsets: { [session.id]: hoursOff },
-                                        paidRoundsOffsets: { [session.id]: roundsOff }
+                                        paidRoundsOffsets: { [session.id]: roundsOff },
+                                        paidElapsedOffsets: { [session.id]: elapsedOff }
                                     };
                                     const result = buildTableSyntheticCart(tableCheckoutData, config, products);
                                     if (result && result.syntheticCart) {

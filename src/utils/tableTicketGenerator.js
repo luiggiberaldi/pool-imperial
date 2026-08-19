@@ -18,7 +18,7 @@ const itemRow = (label, price, extraClass = '') =>
  * Genera e imprime una pre-cuenta para mesa de pool.
  * - Sin impresora térmica: genera PDF via ventana directa anclada a 58mm.
  */
-export async function generatePartialSessionTicketPDF({ table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0, products = [] }) {
+export async function generatePartialSessionTicketPDF({ table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0, elapsedOffset = 0, products = [] }) {
     // Impresión exclusiva a través de diálogo del sistema (HTML / PDF)
 
     const seats = session?.seats || [];
@@ -106,7 +106,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
         push(`<div class="section-title">Abono Solicitado</div>`);
         push(itemRow(`Abono por Monto Libre`, formatCOP(abonoMonto?.amount || 0)));
     } else if (isMultiClient) {
-        const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset, table.type);
+        const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset, table.type, elapsedOffset);
         if (breakdown) {
             if (breakdown.sharedTotal > 0) {
                 push(`<div class="section-title accent">COMPARTIDO</div>`);
@@ -121,7 +121,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
                 const isLibreShared = table.type === 'POOL' && session.game_mode === 'NORMAL' && totalHours === 0 && !seatHasHours;
                 if (isLibreShared && elapsed > 0) {
                     const ph = config?.pricePerHour || 0;
-                    const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset);
+                    const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset, elapsedOffset);
                     const billableHours = billedMinutes / 60;
                     push(itemRow(`${formatElapsedTime(billedMinutes)} x ${formatCOP(ph)}`, formatCOP(billableHours * ph)));
                 }
@@ -185,7 +185,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
             const pricePerHour = config?.pricePerHour || 0;
             push(`<div class="section-title">Tiempo de Mesa</div>`);
             if (isLibre) {
-                const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset);
+                const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset, elapsedOffset);
                 const billableHours = billedMinutes / 60;
                 const fullCost = round2(billableHours * pricePerHour);
                 const paidCost = round2(hoursOffset * pricePerHour);
@@ -232,7 +232,7 @@ export async function generatePartialSessionTicketPDF({ table, session, elapsed,
 
     try {
         const { syntheticCart } = buildTableSyntheticCart(
-            { table, session, elapsed, currentItems, grandTotal, paidHoursOffsets: { [session?.id]: hoursOffset }, paidRoundsOffsets: { [session?.id]: roundsOffset } },
+            { table, session, elapsed, currentItems, grandTotal, paidHoursOffsets: { [session?.id]: hoursOffset }, paidRoundsOffsets: { [session?.id]: roundsOffset }, paidElapsedOffsets: { [session?.id]: elapsedOffset } },
             config,
             products || []
         );

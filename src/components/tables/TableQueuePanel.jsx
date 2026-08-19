@@ -26,6 +26,7 @@ export function TableQueuePanel({ onCheckoutTable }) {
     const activeCashSession = useCashStore(s => s.activeCashSession);
     const paidHoursOffsets = useTablesStore(s => s.paidHoursOffsets);
     const paidRoundsOffsets = useTablesStore(s => s.paidRoundsOffsets);
+    const paidElapsedOffsets = useTablesStore(s => s.paidElapsedOffsets);
     const cachedUsers = useAuthStore(s => s.cachedUsers);
     const { products } = useProductContext();
 
@@ -114,7 +115,8 @@ export function TableQueuePanel({ onCheckoutTable }) {
                     const elapsed = isAnyAbono ? 0 : getSessionElapsedMinutes(session, pausedSessions);
                     
                     const isTimeFree = isAnyAbono ? true : table.type === 'NORMAL';
-                    const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, (paidHoursOffsets || {})[session.id] || 0, (paidRoundsOffsets || {})[session.id] || 0, session.seats, table.type) : 0;
+                    const elapsedOffset = (paidElapsedOffsets || {})[session.id] || 0;
+                    const timeCost = !isAnyAbono && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session.hours_paid, session.extended_times, session.paid_at, (paidHoursOffsets || {})[session.id] || 0, (paidRoundsOffsets || {})[session.id] || 0, session.seats, table.type, elapsedOffset) : 0;
                     const taxRate = config?.tableTaxType === 'iva_19'
                         ? (config?.taxRateIva ?? 19) / 100
                         : config?.tableTaxType === 'impoconsumo_8'
@@ -145,6 +147,7 @@ export function TableQueuePanel({ onCheckoutTable }) {
                             roundsOffset: (paidRoundsOffsets || {})[session.id] || 0,
                             paidHoursOffsets: { [session.id]: (paidHoursOffsets || {})[session.id] || 0 },
                             paidRoundsOffsets: { [session.id]: (paidRoundsOffsets || {})[session.id] || 0 },
+                            paidElapsedOffsets: { [session.id]: elapsedOffset },
                             isPartial: isAnyAbono
                         };
                         const result = buildTableSyntheticCart(tableCheckoutData, config, products);
@@ -207,7 +210,8 @@ export function TableQueuePanel({ onCheckoutTable }) {
                     if (item.type === 'SEAT' && item.seat) {
                         const _ho = (paidHoursOffsets || {})[session.id] || 0;
                         const _ro = (paidRoundsOffsets || {})[session.id] || 0;
-                        const fb = calculateFullTableBreakdown(session, session.seats || [], elapsed, config, currentItems, null, session.seats?.filter(s => !s.paid).length || null, table.type === 'NORMAL', _ho, _ro);
+                            const _eo = (paidElapsedOffsets || {})[session.id] || 0;
+                            const fb = calculateFullTableBreakdown(session, session.seats || [], elapsed, config, currentItems, null, session.seats?.filter(s => !s.paid).length || null, table.type === 'NORMAL', _ho, _ro, table.type, _eo);
                         seatBd = fb?.seats.find(s => s.seat.id === item.seat.id);
                         if (seatBd) {
                             seatDisplayInfo = {
@@ -231,6 +235,7 @@ export function TableQueuePanel({ onCheckoutTable }) {
                                 roundsOffset: _ro,
                                 paidHoursOffsets: { [session.id]: _ho },
                                 paidRoundsOffsets: { [session.id]: _ro },
+                                paidElapsedOffsets: { [session.id]: _eo },
                                 isPartial: false,
                                 seatId: item.seat.id,
                                 seatDisplayInfo

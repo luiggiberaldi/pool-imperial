@@ -52,6 +52,7 @@ export async function processSaleTransaction({
     cartSubtotalUsd,
     totalTax,
     taxBreakdown,
+    cashSessionId = null,
     tasaCop,
     ivaRate = 19,
 }) {
@@ -93,7 +94,9 @@ export async function processSaleTransaction({
             if (dup) {
                 return { success: false, duplicate: true, error: `Esta mesa ya fue cobrada${dup.saleNumber ? ` (venta #${dup.saleNumber})` : ''} hace un momento. Si necesitas cobrarla de nuevo, libera la mesa primero.` };
             }
-        } catch (_) { /* si falla la lectura local, no bloquear el cobro */ }
+        } catch (error) {
+            console.warn('[Checkout] No se pudo verificar duplicados localmente:', error?.message);
+        }
         _tableCheckoutLocks.set(_lockKey, Date.now());
     }
 
@@ -196,14 +199,21 @@ export async function processSaleTransaction({
         meseroId: isValidUUID(meseroId) ? meseroId : null,
         meseroNombre: capitalizeName(meseroNombre) || null,
         tableName: tableName || null,
+        cashSessionId: isValidUUID(cashSessionId) ? cashSessionId : null,
         customerId: isValidUUID(selectedCustomerId) ? selectedCustomerId : null
     };
 
     let saleMode = 'online';
     let finalSaleId = null;
+    let finalSaleNumber = null;
 
     const idempotencyKey = crypto.randomUUID();
+    const localSaleId = crypto.randomUUID();
+    const ownerUserId = useAuthStore.getState().cloudSession?.user?.id || null;
     rpcPayload.idempotency_key = idempotencyKey;
+    rpcPayload.localId = localSaleId;
+    rpcPayload.local_sale_id = localSaleId;
+    rpcPayload.owner_user_id = ownerUserId;
 
     if (!hasRpcCompatibleItems) {
         console.log('[Checkout] Carrito sin UUIDs válidos — usando MODO OFFLINE directamente.');
@@ -215,6 +225,18 @@ export async function processSaleTransaction({
             const { data, error } = await Promise.race([rpcPromise, timeoutPromise]);
             if (error) throw error;
             finalSaleId = data.sale_id;
+            finalSaleNumber = data.sale_number ?? null;
+            if (finalSaleId && isValidUUID(cashSessionId)) {
+                const { error: cashLinkError } = await supabase
+                    .from('sales')
+                    .update({ cash_session_id: cashSessionId })
+                    .eq('id', finalSaleId);
+                if (cashLinkError) {
+                    // La venta local y sync_documents conservan el vínculo como
+                    // fallback; no convertir un fallo de metadata en doble cobro.
+                    console.warn('[Checkout] No se pudo vincular la venta con la caja:', cashLinkError.message);
+                }
+            }
         } catch (err) {
             if (err.message === 'TIMEOUT') {
                 console.warn('[Checkout] RPC timeout — cola de verificación pendiente', err);
@@ -237,9 +259,15 @@ export async function processSaleTransaction({
     const finalTaxAmount = totalTax !== undefined ? totalTax : Math.round(totalCOP - (totalCOP / (1 + ((ivaRate || 19) / 100))));
 
     const sale = {
-        id: finalSaleId || crypto.randomUUID(),
+        id: finalSaleId || localSaleId,
+        localId: localSaleId,
+        local_sale_id: localSaleId,
+        idempotency_key: idempotencyKey,
+        owner_user_id: ownerUserId,
+        ...(finalSaleId ? { serverSaleId: finalSaleId, server_sale_id: finalSaleId } : {}),
         tipo: fiadoAmount > 0 ? 'VENTA_FIADA' : 'VENTA',
         status: saleMode === 'online' ? 'COMPLETADA' : (saleMode === 'pending_verification' ? 'PENDIENTE_VERIFICACION' : 'PENDIENTE_SYNC'),
+        sync_status: saleMode === 'online' ? 'synced' : 'pending',
         vendedorId: currentUser?.id || null,
         vendedorNombre: capitalizeName(currentUser?.nombre || currentUser?.name || 'Sistema'),
         vendedorRol: currentUser?.rol || currentUser?.role || null,
@@ -248,8 +276,23 @@ export async function processSaleTransaction({
         tableName: tableName || null,
         tableSessionId: tableSessionId || null,
         seatId: seatId || null,
+        cashSessionId: cashSessionId || null,
         // Campos de items — priceUsd almacena precio COP (campo heredado)
-        items: cart.map(i => ({ id: i.id, name: i.name, qty: i.qty, priceUsd: i.priceUsd, costUsd: i.costUsd || 0, isWeight: i.isWeight, taxType: i.taxType || 'exento', taxMode: i.taxMode || 'inclusive', isTip: i.isTip || false, isServiceCharge: i.isServiceCharge || false, ...(i.gameMeta ? { gameMeta: i.gameMeta } : {}) })),
+        items: cart.map(i => ({
+            id: i.id,
+            productId: i._originalId || i.productId || i.id,
+            _originalId: i._originalId || i.productId || null,
+            name: i.name,
+            qty: i.qty,
+            priceUsd: i.priceUsd,
+            costUsd: i.costUsd || 0,
+            isWeight: i.isWeight,
+            taxType: i.taxType || 'exento',
+            taxMode: i.taxMode || 'inclusive',
+            isTip: i.isTip || false,
+            isServiceCharge: i.isServiceCharge || false,
+            ...(i.gameMeta ? { gameMeta: i.gameMeta } : {})
+        })),
         cartSubtotalUsd: subtotalCOP,   // heredado — ahora COP
         discountType: discountData?.type || null,
         discountValue: discountData?.value || 0,
@@ -282,7 +325,11 @@ export async function processSaleTransaction({
         .map(s => Number(s.saleNumber))
         .filter(n => Number.isInteger(n) && n > 0 && n < 90000);
     const saleNumber = (numericNums.length > 0 ? Math.max(...numericNums) : 0) + 1;
-    const finalPersistedSale = Object.freeze({ ...sale, saleNumber });
+    const finalPersistedSale = Object.freeze({
+        ...sale,
+        saleNumber: finalSaleNumber ?? saleNumber,
+        ...(finalSaleNumber !== null ? { serverSaleNumber: finalSaleNumber, server_sale_number: finalSaleNumber } : {}),
+    });
 
     await storageService.setItem(SALES_KEY, [finalPersistedSale, ...existingSales]);
 
@@ -362,7 +409,9 @@ export async function processSaleTransaction({
         try {
             const { useCustomersStore } = await import('../hooks/store/useCustomersStore');
             await useCustomersStore.getState().refresh();
-        } catch (_) {}
+        } catch (error) {
+            console.warn('[Checkout] No se pudo refrescar clientes tras el cobro:', error?.message);
+        }
     }
 
     return {

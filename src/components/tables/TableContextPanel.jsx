@@ -33,6 +33,12 @@ import TableCardInlineModals from './TableCardInlineModals';
 import { TargetIcon } from './TargetIcon';
 import CashierPaymentModal from '../../views/CashierPaymentModal';
 
+const formatCOP = (value) => new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+}).format(Math.round(Number(value) || 0));
+
 function useStaffName(staffId) {
     const cachedUsers = useAuthStore(s => s.cachedUsers);
 
@@ -435,7 +441,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
         try {
             await generatePartialSessionTicketPDF({
                 table, session, elapsed, timeCost, totalConsumption, currentItems, grandTotal, tasaUSD, config,
-                hoursOffset, roundsOffset, products
+                hoursOffset, roundsOffset, elapsedOffset, products
             });
             showToast('Pre-cuenta enviada a la impresora', 'success');
         } catch (err) {
@@ -472,8 +478,8 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
     const roundsOffset = session ? (paidRoundsOffsets[session.id] || 0) : 0;
     const elapsedOffset = session ? ((paidElapsedOffsets || {})[session.id] || 0) : 0;
 
-    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table?.type) : 0;
-    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats, table?.type) : null;
+    const timeCost = isPlaying && !isTimeFree ? calculateSessionCost(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, session?.paid_at, hoursOffset, roundsOffset, session?.seats, table?.type, elapsedOffset) : 0;
+    const costBreakdown = isPlaying && !isTimeFree ? calculateSessionCostBreakdown(elapsed, session.game_mode, config, session?.hours_paid, session?.extended_times, hoursOffset, roundsOffset, session?.seats, table?.type, elapsedOffset) : null;
     const isMixedMode = costBreakdown ? (costBreakdown.hasPinas && costBreakdown.hasHours) : false;
     
     const seatHasPinas = (session?.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
@@ -514,7 +520,8 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                 hoursOffset,
                 roundsOffset,
                 paidHoursOffsets: session ? { [session.id]: hoursOffset } : {},
-                paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {}
+                paidRoundsOffsets: session ? { [session.id]: roundsOffset } : {},
+                paidElapsedOffsets: session ? { [session.id]: elapsedOffset } : {}
             };
             const result = buildTableSyntheticCart(tableCheckoutData, config, products);
             if (result && result.syntheticCart) {
@@ -538,7 +545,7 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
         }
 
         return totalBuilt;
-    }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, products]);
+    }, [timeCost, seatTimeCost, totalConsumption, table, session, elapsed, currentItems, config, hoursOffset, roundsOffset, elapsedOffset, products]);
 
     // Guard tras el último hook del componente: bloquea solo el render/JSX,
     // no la ejecución de hooks (evita "Rendered fewer hooks than expected").
@@ -816,14 +823,16 @@ export default function TableContextPanel({ tableId, onClose, onStartTransfer })
                             >
                                 Detalle
                             </button>
-                            <button
-                                disabled={isMutating}
-                                onClick={() => onStartTransfer?.()}
-                                className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl py-2 text-[10.5px] font-black transition-all flex items-center justify-center gap-1 disabled:opacity-50"
-                            >
-                                <ChevronRight size={13} className="rotate-90" />
-                                Mover
-                            </button>
+                            {!isCheckoutPending && (
+                                <button
+                                    disabled={isMutating}
+                                    onClick={() => onStartTransfer?.()}
+                                    className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl py-2 text-[10.5px] font-black transition-all flex items-center justify-center gap-1 disabled:opacity-50"
+                                >
+                                    <ChevronRight size={13} className="rotate-90" />
+                                    Mover
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { formatCop, formatPaymentAmount } from '../../utils/calculatorUtils';
-import { getPaymentLabel, getPaymentMethod, PAYMENT_ICONS, toTitleCase, getPaymentIcon } from '../../config/paymentMethods';
+import { FinancialEngine } from '../../core/FinancialEngine';
+import { REPORT_TIMEZONE } from '../../utils/reportRangeEngine';
+import { getPaymentMethod, PAYMENT_ICONS, toTitleCase, getPaymentIcon } from '../../config/paymentMethods';
 import { generateTicketPDF } from '../../utils/ticketGenerator';
 import { ChevronDown, ChevronUp, Send, Ban, Shuffle, Clock, Recycle, LockIcon, User, UserCheck, Printer } from 'lucide-react';
 
@@ -36,7 +38,8 @@ export default function TransactionRow({
     }, [s.tipo, s.payments, s.paymentMethod]);
 
     const isCanceled = s.status === 'ANULADA';
-    const dateLabel = d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+    const reportTotal = FinancialEngine.calculateSaleNetTotal(s);
+    const dateLabel = d.toLocaleDateString('es-CO', { timeZone: REPORT_TIMEZONE, day: '2-digit', month: 'short' });
 
     const handleShare = (e) => {
         e.stopPropagation();
@@ -49,15 +52,16 @@ export default function TransactionRow({
         }
         let text = `*COMPROBANTE | IMPERIAL POOL*\n`;
         text += `Orden: #${s.id.substring(0, 6).toUpperCase()}\n`;
-        text += `Fecha: ${d.toLocaleString('es-CO')}\n`;
+        text += `Fecha: ${d.toLocaleString('es-CO', { timeZone: REPORT_TIMEZONE })}\n`;
         text += `================================\n`;
         if (s.items && s.items.length > 0) {
             s.items.forEach(item => {
-                const qty = item.isWeight ? `${item.qty.toFixed(3)}Kg` : `${item.qty} Und`;
-                text += `- ${item.name} ${qty} x ${formatCop(item.priceUsd)} = *${formatCop(item.priceUsd * item.qty)}*\n`;
+                const itemQty = Number(item.qty) || 0;
+                const qty = item.isWeight ? `${itemQty.toFixed(3)}Kg` : `${itemQty} Und`;
+                text += `- ${item.name} ${qty} x ${formatCop(item.priceUsd)} = *${formatCop((item.priceUsd || 0) * itemQty)}*\n`;
             });
         }
-        text += `\n*TOTAL: ${formatCop(s.totalUsd || 0)}*\n`;
+        text += `\n*TOTAL: ${formatCop(reportTotal)}*\n`;
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
@@ -87,11 +91,11 @@ export default function TransactionRow({
                     <p className="text-[11px] text-slate-500 flex items-center gap-1 flex-wrap">
                         {(() => { const n = Number(s.saleNumber); return (Number.isInteger(n) && n > 0 && n < 90000) ? <><span className="text-[#D97706] font-black">{`#${String(n).padStart(7, '0')}`}</span><span>·</span></> : null; })()}
                         {s.tableName && <><span className="text-[9px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold uppercase">{s.tableName}</span><span>·</span></>}
-                        <span>{dateLabel}</span> · <span>{d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span> · <span>{methodLabel}</span>
+                        <span>{dateLabel}</span> · <span>{d.toLocaleTimeString('es-CO', { timeZone: REPORT_TIMEZONE, hour: '2-digit', minute: '2-digit' })}</span> · <span>{methodLabel}</span>
                     </p>
                 </div>
                 <div className="text-right shrink-0">
-                    <p className={`text-sm font-black ${isCanceled ? 'text-slate-400' : 'text-slate-800 dark:text-white'}`}>{formatCop(s.totalCop || s.totalUsd || 0)}</p>
+                    <p className={`text-sm font-black ${isCanceled ? 'text-slate-400' : 'text-slate-800 dark:text-white'}`}>{formatCop(reportTotal)}</p>
                     <div className="flex justify-end mt-0.5">
                         {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                     </div>
@@ -107,12 +111,15 @@ export default function TransactionRow({
                         <div className="mb-3 pt-2">
                             <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">Productos ({s.items.length})</p>
                             <div className="space-y-1">
-                                {s.items.map((item, i) => (
-                                    <div key={i} className={`flex justify-between items-center text-xs ${isCanceled ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
-                                        <span className="truncate pr-2">{item.isWeight ? `${item.qty.toFixed(3)}kg` : `${item.qty}u`} {item.name}</span>
-                                        <span className="font-medium shrink-0">{formatCop((item.priceUsd || item.unit_price_usd || 0) * (item.qty || 1))}</span>
-                                    </div>
-                                ))}
+                                {s.items.map((item, i) => {
+                                    const itemQty = Number(item.qty) || 0;
+                                    return (
+                                        <div key={i} className={`flex justify-between items-center text-xs ${isCanceled ? 'text-slate-400 line-through' : 'text-slate-600 dark:text-slate-300'}`}>
+                                            <span className="truncate pr-2">{item.isWeight ? `${itemQty.toFixed(3)}kg` : `${itemQty}u`} {item.name}</span>
+                                            <span className="font-medium shrink-0">{formatCop((item.priceUsd || item.unit_price_usd || 0) * itemQty)}</span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     ) : (
@@ -124,8 +131,8 @@ export default function TransactionRow({
                         <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1.5">Resumen de Cobro</p>
                         <div className="space-y-1 text-xs">
                             <div className="flex justify-between text-slate-600 dark:text-slate-300 font-bold">
-                                <span>Total</span>
-                                <span>{formatCop(s.totalCop || s.totalUsd || 0)}</span>
+                                <span>Total neto</span>
+                                <span>{formatCop(reportTotal)}</span>
                             </div>
                             {s.discountAmountUsd > 0 && (
                                 <div className="flex justify-between text-amber-500">

@@ -1,6 +1,7 @@
 import { useTablesStore } from '../hooks/store/useTablesStore';
 import { round2 } from './dinero';
 import { getServerNow } from './serverClock';
+import { getFrozenTimeChargeProductId } from './tableTransferEngine';
 
 export function getTaxRates() {
     try {
@@ -64,20 +65,50 @@ export function calculateElapsedTimePrecise(startTimeISO) {
 }
 
 /**
+ * Tiempo corrido pendiente después de descontar minutos ya pagados.
+ * `paidElapsedOffset` es absoluto desde `started_at`, por eso se resta una
+ * sola vez y únicamente afecta al componente de tiempo corrido (`libreCost`).
+ */
+export function getEffectiveElapsedMinutes(elapsedMinutes, paidElapsedOffset = 0) {
+    const elapsed = Number(elapsedMinutes) || 0;
+    const offset = Math.max(0, Number(paidElapsedOffset) || 0);
+    return Math.max(0, elapsed - offset);
+}
+
+function createEmptyCostBreakdown() {
+    return {
+        pinaCost: 0,
+        hourCost: 0,
+        libreCost: 0,
+        hasPinas: false,
+        hasHours: false,
+        isLibre: false,
+        taxAmount: 0,
+        total: 0,
+    };
+}
+
+/**
  * Retorna los minutos facturables de tiempo libre según las reglas:
- *   - Mínimo de 30 minutos si no hay horas pagadas previamente (hoursOffset === 0).
+ *   - Mínimo de 30 minutos si no existen pagos previos (`hoursOffset` y `elapsedOffset` son 0).
  *   - Redondeo hacia arriba en bloques de 15 minutos.
  */
-export function getRoundedLibreMinutes(elapsedMinutes, hoursOffset = 0) {
-    const rawMinutes = Math.max(0, elapsedMinutes - (hoursOffset * 60));
+export function getRoundedLibreMinutes(elapsedMinutes, hoursOffset = 0, elapsedOffset = 0) {
+    const rawMinutes = Math.max(
+        0,
+        (Number(elapsedMinutes) || 0)
+            - (Math.max(0, Number(hoursOffset) || 0) * 60)
+            - Math.max(0, Number(elapsedOffset) || 0)
+    );
     if (rawMinutes <= 0) return 0;
 
     // Redondear al siguiente bloque de 15 minutos (ej. 31 min -> 45 min)
-    let billedMinutes = Math.ceil(rawMinutes / 15) * 15;
+    const billedMinutes = Math.ceil(rawMinutes / 15) * 15;
 
-    // Cobrar tarifa mínima de 30 minutos si es una sesión limpia (sin pagos parciales previos)
-    if (hoursOffset === 0 && billedMinutes < 30) {
-        billedMinutes = 30;
+    // La tarifa mínima solo aplica a una sesión sin pagos previos. Cuando existe
+    // paidElapsedOffset, cobrar nuevamente 30 minutos inflaría el segundo ciclo.
+    if ((Number(hoursOffset) || 0) === 0 && (Number(elapsedOffset) || 0) === 0 && billedMinutes < 30) {
+        return 30;
     }
 
     return billedMinutes;
@@ -88,7 +119,7 @@ export function getRoundedLibreMinutes(elapsedMinutes, hoursOffset = 0) {
  * Soporta modo mixto: cualquier sesión puede tener piñas Y horas simultáneamente.
  * Todos los valores son en COP (Pesos Colombianos).
  */
-export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, hoursPaid = 0, extendedTimes = null, hoursOffset = 0, roundsOffset = 0, seats = null, tableType = 'POOL') {
+export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, hoursPaid = 0, extendedTimes = null, hoursOffset = 0, roundsOffset = 0, seats = null, tableType = 'POOL', elapsedOffset = 0) {
     let pinaCost = 0;
     let hourCost = 0;
     let taxAmount = 0;
@@ -116,11 +147,12 @@ export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, 
 
     // Modo libre: game_mode NORMAL sin horas prepagadas y sin seat-level hours
     const seatHasHours = (seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
+    const effectiveElapsedMinutes = getEffectiveElapsedMinutes(elapsedMinutes, elapsedOffset);
     const isLibre = tableType === 'POOL' && gameMode === 'NORMAL' && hoursPaid === 0 && !seatHasHours;
     let libreCost = 0;
-    if (isLibre && elapsedMinutes > 0) {
+    if (isLibre && effectiveElapsedMinutes > 0) {
         const pricePerHour = config.pricePerHour || 0;
-        const billedMinutes = getRoundedLibreMinutes(elapsedMinutes, hoursOffset);
+        const billedMinutes = getRoundedLibreMinutes(elapsedMinutes, hoursOffset, elapsedOffset);
         const billableHours = billedMinutes / 60;
         const taxed = computeItemTax(pricePerHour, config.tableTaxType || 'exento', config.tableTaxMode || 'inclusive');
         libreCost = round2(billableHours * taxed.total);
@@ -139,11 +171,11 @@ export function calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, 
     };
 }
 
-export function calculateSessionCost(elapsedMinutes, gameMode, config, hoursPaid = 0, extendedTimes = null, paidAt = null, hoursOffset = 0, roundsOffset = 0, seats = null, tableType = 'POOL') {
+export function calculateSessionCost(elapsedMinutes, gameMode, config, hoursPaid = 0, extendedTimes = null, paidAt = null, hoursOffset = 0, roundsOffset = 0, seats = null, tableType = 'POOL', elapsedOffset = 0) {
     // Si ya fue cobrada sin liberar, la deuda es $0
     if (paidAt) return 0;
 
-    const breakdown = calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, hoursPaid, extendedTimes, hoursOffset, roundsOffset, seats, tableType);
+    const breakdown = calculateSessionCostBreakdown(elapsedMinutes, gameMode, config, hoursPaid, extendedTimes, hoursOffset, roundsOffset, seats, tableType, elapsedOffset);
     return breakdown.total;
 }
 
@@ -218,7 +250,7 @@ export function calculateSeatTimeChargesCost(timeCharges, config) {
  * Soporta nuevo estilo (timeCharges) y legacy (gameMode/hoursPaid/pinas).
  * seat: { timeCharges?, gameMode?, hoursPaid?, pinas? }
  */
-export function calculateSeatCostBreakdown(seat, elapsedMinutes, config, tableType = 'POOL') {
+export function calculateSeatCostBreakdown(seat, elapsedMinutes, config, tableType = 'POOL', elapsedOffset = 0) {
     if (!seat) {
         return { pinaCost: 0, hourCost: 0, libreCost: 0, hasPinas: false, hasHours: false, isLibre: false, total: 0 };
     }
@@ -232,14 +264,14 @@ export function calculateSeatCostBreakdown(seat, elapsedMinutes, config, tableTy
     }
     if (seat.gameMode === 'PINA') {
         const pinas = seat.pinas || 1;
-        return calculateSessionCostBreakdown(elapsedMinutes, 'PINA', config, 0, pinas - 1, 0, 0, null, tableType);
+        return calculateSessionCostBreakdown(elapsedMinutes, 'PINA', config, 0, pinas - 1, 0, 0, null, tableType, elapsedOffset);
     }
     if (seat.gameMode === 'HOURS') {
         const hours = seat.hoursPaid || 0;
-        return calculateSessionCostBreakdown(elapsedMinutes, 'NORMAL', config, hours, 0, 0, 0, null, tableType);
+        return calculateSessionCostBreakdown(elapsedMinutes, 'NORMAL', config, hours, 0, 0, 0, null, tableType, elapsedOffset);
     }
     if (seat.gameMode === 'LIBRE') {
-        return calculateSessionCostBreakdown(elapsedMinutes, 'NORMAL', config, 0, 0, 0, 0, null, tableType);
+        return calculateSessionCostBreakdown(elapsedMinutes, 'NORMAL', config, 0, 0, 0, 0, null, tableType, elapsedOffset);
     }
     return { pinaCost: 0, hourCost: 0, libreCost: 0, hasPinas: false, hasHours: false, isLibre: false, total: 0 };
 }
@@ -257,6 +289,53 @@ export function calculateConsumptionCOP(items) {
     }, 0));
 }
 
+/**
+ * Los cargos congelados de transferencias anteriores son líneas de orden, pero
+ * no son consumo de productos. Se identifican por el prefijo legacy/durable;
+ * los ítems copiados con `transfer_operation_id` siguen siendo productos.
+ */
+export function isFrozenTransferChargeItem(item) {
+    const productId = String(item?.product_id ?? item?.id ?? '');
+    return productId.startsWith('frozen-time-') || item?.charge_type === 'POOL_TIME';
+}
+
+export function calculateTransferOrderBreakdown(items = []) {
+    let productConsumptionTotal = 0;
+    let previousTransferChargesTotal = 0;
+
+    (items || []).forEach(item => {
+        const lineTotal = round2((Number(item?.unit_price_usd) || 0) * (Number(item?.qty) || 0));
+        if (isFrozenTransferChargeItem(item)) previousTransferChargesTotal += lineTotal;
+        else productConsumptionTotal += lineTotal;
+    });
+
+    productConsumptionTotal = round2(productConsumptionTotal);
+    previousTransferChargesTotal = round2(previousTransferChargesTotal);
+
+    return {
+        productConsumptionTotal,
+        previousTransferChargesTotal,
+        totalConserved: round2(productConsumptionTotal + previousTransferChargesTotal),
+    };
+}
+
+/**
+ * Etiqueta contextual del pendiente Pool para evitar llamar "tiempo" a una
+ * jugada o esconder cargos manuales por asiento.
+ */
+export function getPoolTransferPendingLabel({ sessionBreakdown = {}, sourceSeatTimeTotal = 0 } = {}) {
+    const hasTime = (Number(sessionBreakdown.hourCost) || 0) > 0
+        || (Number(sessionBreakdown.libreCost) || 0) > 0;
+    const hasRounds = (Number(sessionBreakdown.pinaCost) || 0) > 0;
+    const hasSeatCharges = (Number(sourceSeatTimeTotal) || 0) > 0;
+    const kinds = [hasTime, hasRounds, hasSeatCharges].filter(Boolean).length;
+
+    if (kinds > 1) return 'Cargos Pool pendientes';
+    if (hasRounds) return 'Jugadas Pool pendientes';
+    if (hasSeatCharges) return 'Cargos por asiento pendientes';
+    return 'Tiempo Pool pendiente';
+}
+
 // Alias de compatibilidad para código que aún use el nombre anterior
 export const calculateConsumptionBs = calculateConsumptionCOP;
 
@@ -265,7 +344,7 @@ export const calculateConsumptionBs = calculateConsumptionCOP;
  * Si seats está vacío, retorna null (usar cálculo legacy de sesión).
  * Todos los valores son en COP (Pesos Colombianos).
  */
-export function calculateFullTableBreakdown(session, seats, elapsedMinutes, config, orderItems = [], sharedDivision = null, frozenDivisor = null, isTimeFree = false, hoursOffset = 0, roundsOffset = 0, tableType = 'POOL') {
+export function calculateFullTableBreakdown(session, seats, elapsedMinutes, config, orderItems = [], sharedDivision = null, frozenDivisor = null, isTimeFree = false, hoursOffset = 0, roundsOffset = 0, tableType = 'POOL', elapsedOffset = 0) {
     if (!seats || seats.length === 0) return null;
 
     const activeSeats = seats.filter(s => !s.paid);
@@ -285,7 +364,8 @@ export function calculateFullTableBreakdown(session, seats, elapsedMinutes, conf
             hoursOffset,
             roundsOffset,
             seats,
-            tableType
+            tableType,
+            elapsedOffset
         );
     const sharedTimeTotal = sessionTimeCost.total;
     const sharedTotal = round2(sharedConsumptionTotal + sharedTimeTotal);
@@ -322,7 +402,7 @@ export function calculateFullTableBreakdown(session, seats, elapsedMinutes, conf
     };
 
     const seatBreakdowns = allSeats.map(seat => {
-        const timeCost = calculateSeatCostBreakdown(seat, elapsedMinutes, config, tableType);
+        const timeCost = calculateSeatCostBreakdown(seat, elapsedMinutes, config, tableType, elapsedOffset);
         const seatItems = orderItems.filter(i => i.seat_id === seat.id);
         const consumption = seatItems.reduce((acc, i) => acc + (Number(i.unit_price_usd) * Number(i.qty)), 0);
         const sharedPortion = getSharedPortion(seat);
@@ -374,8 +454,10 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
     const seats = isPartial ? [] : (session?.seats || []);
     const paidHoursOffsets = tableCheckoutData.paidHoursOffsets || {};
     const paidRoundsOffsets = tableCheckoutData.paidRoundsOffsets || {};
+    const paidElapsedOffsets = tableCheckoutData.paidElapsedOffsets || {};
     const hoursOff = paidHoursOffsets[session?.id] || 0;
     const roundsOff = paidRoundsOffsets[session?.id] || 0;
+    const elapsedOffset = paidElapsedOffsets[session?.id] || 0;
 
     // Los offsets de abonos son a nivel sesión y primero los absorben las
     // horas/piñas de la sesión (calculateSessionCostBreakdown ya los resta).
@@ -412,7 +494,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
         if ((stc.hourCost || 0) > 0) {
             sessionHours = Math.max(0, (Number(session?.hours_paid) || 0) - hoursOff);
         } else if ((stc.libreCost || 0) > 0) {
-            sessionHours = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff) / 60;
+            sessionHours = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff, elapsedOffset) / 60;
         }
 
         let sessionRounds = 0;
@@ -438,7 +520,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
         // PER-SEAT
         const seat = seats.find(s => s.id === seatId);
         if (seat) {
-            const seatTimeCost = calculateSeatCostBreakdown(seat, tableCheckoutData.elapsed, config, tableCheckoutData.table?.type || 'POOL');
+            const seatTimeCost = calculateSeatCostBreakdown(seat, tableCheckoutData.elapsed, config, tableCheckoutData.table?.type || 'POOL', elapsedOffset);
             const seatLabel = `${tableName} (${seat.label || 'Persona'})`;
 
             if (seatTimeCost.pinaCost > 0) {
@@ -470,7 +552,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                 });
             }
             if (seatTimeCost.libreCost > 0) {
-                const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff);
+                const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff, elapsedOffset);
                 const billableHours = billedMinutes / 60;
                 syntheticCart.push({
                     id: crypto.randomUUID(),
@@ -492,7 +574,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
             });
 
             const isTimeFree = tableCheckoutData.table?.type === 'NORMAL';
-            const fullBreakdown = calculateFullTableBreakdown(session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, isTimeFree, hoursOff, roundsOff, tableCheckoutData.table?.type || 'POOL');
+            const fullBreakdown = calculateFullTableBreakdown(session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, isTimeFree, hoursOff, roundsOff, tableCheckoutData.table?.type || 'POOL', elapsedOffset);
             if (fullBreakdown) {
                 const seatBd = fullBreakdown.seats.find(s => s.seat.id === seatId);
                 if (seatBd && seatBd.sharedPortion > 0) {
@@ -549,7 +631,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
     } else if (!seatId && seats.length > 0) {
         // COBRAR TODO CON CUANTAS DIVIDIDAS
         const isTimeFreeAll = tableCheckoutData.table?.type === 'NORMAL';
-        const fullBreakdown = calculateFullTableBreakdown(session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, isTimeFreeAll, hoursOff, roundsOff, tableCheckoutData.table?.type || 'POOL');
+        const fullBreakdown = calculateFullTableBreakdown(session, seats, tableCheckoutData.elapsed, config, tableCheckoutData.currentItems || [], null, tableCheckoutData.frozenDivisor || null, isTimeFreeAll, hoursOff, roundsOff, tableCheckoutData.table?.type || 'POOL', elapsedOffset);
         if (fullBreakdown) {
             const unpaidSeatBds = fullBreakdown.seats.filter(sb => !sb.seat.paid);
             const divisorLabel = unpaidSeatBds.length;
@@ -601,7 +683,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
                     });
                 }
                 if (seatBd.timeCost.libreCost > 0) {
-                    const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff);
+                    const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff, elapsedOffset);
                     const billableHours = billedMinutes / 60;
                     syntheticCart.push({
                         id: crypto.randomUUID(),
@@ -666,7 +748,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
         }
     } else {
         // CLASSIC FULL TABLE
-        const breakdown = calculateSessionCostBreakdown(tableCheckoutData.elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOff, roundsOff, null, tableCheckoutData.table?.type || 'POOL');
+        const breakdown = calculateSessionCostBreakdown(tableCheckoutData.elapsed, session?.game_mode, config, session?.hours_paid, session?.extended_times, hoursOff, roundsOff, null, tableCheckoutData.table?.type || 'POOL', elapsedOffset);
         if (!isPartial && breakdown.pinaCost > 0) {
             const pinaCount = session.game_mode === 'PINA' ? 1 + (Number(session.extended_times) || 0) : Number(session.extended_times) || 0;
             const billableRounds = Math.max(0, pinaCount - roundsOff);
@@ -691,7 +773,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
             });
         }
         if (!isPartial && breakdown.libreCost > 0) {
-            const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff);
+            const billedMinutes = getRoundedLibreMinutes(tableCheckoutData.elapsed, hoursOff, elapsedOffset);
             const billableHours = billedMinutes / 60;
             syntheticCart.push({
                 id: crypto.randomUUID(),
@@ -706,7 +788,7 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
             let abonoMontoVal = 0;
             try {
                 abonoMontoVal = JSON.parse(session.notes.split('|||ABONO_MONTO:')[1].split('|||')[0].trim()).amount;
-            } catch (_) {}
+            } catch (_) { /* malformed legacy metadata is ignored */ }
             if (abonoMontoVal > 0) {
                 syntheticCart.push({
                     id: 'abono-monto-libre',
@@ -748,23 +830,29 @@ export function buildTableSyntheticCart(tableCheckoutData, config, products) {
  * Devuelve { productInfo, qty, total, label } listo para addItemToSession, o null
  * si no hay nada que cobrar (sesión sin tiempo, o mesa que ya es Normal).
  */
-export function buildFrozenTimeCharge(session, elapsedMinutes, config, tableType = 'POOL', hoursOffset = 0, roundsOffset = 0) {
+export function buildFrozenTimeCharge(session, elapsedMinutes, config, tableType = 'POOL', hoursOffset = 0, roundsOffset = 0, transferOperationId = null, elapsedOffset = 0) {
     // Mesa Normal no cobra tiempo: nada que congelar.
     if (!session || tableType === 'NORMAL') return null;
 
     // 1) Costo de tiempo a nivel sesión (piñas + horas + modo libre), con offsets.
-    const sessionTotal = calculateSessionCost(
-        elapsedMinutes,
-        session.game_mode,
-        config,
-        Number(session.hours_paid) || 0,
-        session.extended_times,
-        session.paid_at,
-        hoursOffset,
-        roundsOffset,
-        session.seats,
-        tableType
-    );
+    // El offset de minutos solo afecta el tiempo corrido; horas y piñas conservan
+    // sus offsets independientes.
+    const effectiveElapsedMinutes = getEffectiveElapsedMinutes(elapsedMinutes, elapsedOffset);
+    const sessionBreakdown = session.paid_at
+        ? createEmptyCostBreakdown()
+        : calculateSessionCostBreakdown(
+            elapsedMinutes,
+            session.game_mode,
+            config,
+            Number(session.hours_paid) || 0,
+            session.extended_times,
+            hoursOffset,
+            roundsOffset,
+            session.seats,
+            tableType,
+            elapsedOffset
+        );
+    const sessionTotal = round2(sessionBreakdown.total);
 
     // 2) Costo de cargos de tiempo por asiento (horas/piñas asignadas a clientes),
     //    solo de los asientos aún no pagados — igual que seatTimeCost en TableCard.
@@ -775,33 +863,144 @@ export function buildFrozenTimeCharge(session, elapsedMinutes, config, tableType
     const total = round2(sessionTotal + seatTotal);
     if (total <= 0) return null;
 
-    // Etiqueta legible para ticket/comanda.
+    // Etiqueta legible para ticket/comanda. Solo describe cargos pendientes.
+    const unpaidSeats = (session.seats || []).filter(s => !s.paid);
     const parts = [];
-    const seatHasHours = (session.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
-    const isLibre = tableType === 'POOL' && session.game_mode === 'NORMAL'
-        && (Number(session.hours_paid) || 0) === 0 && !seatHasHours;
-    if (isLibre) {
-        parts.push(formatElapsedTime(Math.round(elapsedMinutes)));
-    } else if ((Number(session.hours_paid) || 0) > 0) {
-        parts.push(formatHoursPaid(Number(session.hours_paid) || 0));
-    }
-    const hasPinas = session.game_mode === 'PINA' || (Number(session.extended_times) || 0) > 0
-        || (session.seats || []).some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
+    const isLibre = sessionBreakdown.libreCost > 0;
+    if (isLibre) parts.push(formatElapsedTime(Math.round(effectiveElapsedMinutes)));
+    if (sessionBreakdown.hourCost > 0) parts.push(formatHoursPaid(
+        Math.max(0, (Number(session.hours_paid) || 0) - (Number(hoursOffset) || 0))
+    ));
+    const hasPinas = sessionBreakdown.pinaCost > 0
+        || unpaidSeats.some(s => (s.timeCharges || []).some(tc => tc.type === 'pina'));
     if (hasPinas) parts.push('jugadas');
+    if (seatTotal > 0) parts.push('asientos');
     const detail = parts.length ? ` (${parts.join(' + ')})` : '';
-    const label = `Tiempo de juego${detail}`;
+    const label = `Cargo Pool trasladado${detail}`;
 
     return {
         total,
+        sessionTotal,
+        sessionBreakdown,
+        seatTotal,
+        effectiveElapsedMinutes,
+        elapsedOffsetMinutes: Math.max(0, Number(elapsedOffset) || 0),
+        pendingChargeLabel: getPoolTransferPendingLabel({
+            sessionBreakdown,
+            sourceSeatTimeTotal: seatTotal,
+        }),
         label,
         qty: 1,
         productInfo: {
             // product_id sintético: order_items.product_id es TEXT, no requiere catálogo.
-            id: `frozen-time-${session.id}`,
+            // Cada traslado confirmado necesita su propia identidad. Reutilizar
+            // solo session.id hace que el segundo ciclo Pool→Normal reemplace o
+            // ignore el cargo nuevo en vez de agregarlo.
+            id: getFrozenTimeChargeProductId(session.id, transferOperationId),
             name: label,
             // El monto ya incluye impuesto; se cobra tal cual sin re-gravar.
             priceUsd: total,
         },
+    };
+}
+
+/**
+ * Preview sin efectos secundarios para Pool→Normal. Usa exactamente la misma
+ * lógica de buildFrozenTimeCharge y separa el tiempo pendiente de los cargos
+ * por asiento para que el modal no invente un total distinto al checkout.
+ */
+export function buildPoolToNormalPreview({
+    session,
+    elapsedMinutes,
+    config = {},
+    orderItems = [],
+    hasOrder = false,
+    hoursOffset = 0,
+    roundsOffset = 0,
+    elapsedOffset = 0,
+}) {
+    const frozen = buildFrozenTimeCharge(
+        session,
+        elapsedMinutes,
+        config,
+        'POOL',
+        hoursOffset,
+        roundsOffset,
+        null,
+        elapsedOffset
+    );
+    const unpaidSeatIds = new Set(
+        (session?.seats || []).filter(seat => !seat.paid).map(seat => seat.id)
+    );
+    const allSeatTotal = (session?.seats || []).reduce(
+        (sum, seat) => sum + calculateSeatTimeChargesCost(seat.timeCharges, config).total,
+        0
+    );
+    const effectiveElapsedMinutes = getEffectiveElapsedMinutes(elapsedMinutes, elapsedOffset);
+    const sourceSessionBreakdown = session?.paid_at
+        ? createEmptyCostBreakdown()
+        : calculateSessionCostBreakdown(
+            elapsedMinutes,
+            session?.game_mode,
+            config,
+            Number(session?.hours_paid) || 0,
+            session?.extended_times,
+            hoursOffset,
+            roundsOffset,
+            session?.seats,
+            'POOL',
+            elapsedOffset
+        );
+    const sourceTimeTotal = round2(sourceSessionBreakdown.total);
+    const sourceSeatTimeTotal = (session?.seats || [])
+        .filter(seat => unpaidSeatIds.has(seat.id))
+        .reduce(
+            (sum, seat) => sum + calculateSeatTimeChargesCost(seat.timeCharges, config).total,
+            0
+        );
+    const grossSessionTotal = calculateSessionCost(
+        elapsedMinutes,
+        session?.game_mode,
+        config,
+        Number(session?.hours_paid) || 0,
+        session?.extended_times,
+        null,
+        0,
+        0,
+        session?.seats,
+        'POOL'
+    );
+    const consumptionBreakdown = calculateTransferOrderBreakdown(orderItems);
+    const currentConsumptionTotal = consumptionBreakdown.totalConserved;
+    const frozenTimeTotal = round2(frozen?.total || 0);
+    const previouslyPaidTotal = round2(Math.max(
+        0,
+        grossSessionTotal + allSeatTotal - frozenTimeTotal
+    ));
+
+    return {
+        sourceElapsedMinutes: round2(Number(elapsedMinutes) || 0),
+        effectiveElapsedMinutes: round2(effectiveElapsedMinutes),
+        elapsedOffsetMinutes: Math.max(0, Number(elapsedOffset) || 0),
+        sourceTimeTotal: round2(sourceTimeTotal),
+        sourceSessionBreakdown,
+        sourceSeatTimeTotal: round2(sourceSeatTimeTotal),
+        frozenTimeTotal,
+        previouslyPaidTotal,
+        productConsumptionTotal: consumptionBreakdown.productConsumptionTotal,
+        previousTransferChargesTotal: consumptionBreakdown.previousTransferChargesTotal,
+        currentConsumptionTotal,
+        pendingChargeLabel: getPoolTransferPendingLabel({
+            sessionBreakdown: sourceSessionBreakdown,
+            sourceSeatTimeTotal,
+        }),
+        targetWillChargeTime: false,
+        hasOrder: Boolean(hasOrder || orderItems.length > 0),
+        hasUnpaidSeatCharges: sourceSeatTimeTotal > 0,
+        hasPendingElapsedTime: sourceSessionBreakdown.libreCost > 0,
+        hasPendingHours: sourceSessionBreakdown.hourCost > 0,
+        hasPendingRounds: sourceSessionBreakdown.pinaCost > 0,
+        productInfo: frozen?.productInfo || null,
     };
 }
 
@@ -835,11 +1034,11 @@ export function parseSessionNotes(notesStr) {
     if (!notesStr) return { cleanNotes: '', abono: null, abonoMonto: null, historial: [] };
     let ab = null, abM = null, hist = [];
     if (notesStr.includes('|||ABONO:'))
-        try { ab = JSON.parse(notesStr.split('|||ABONO:')[1].split('|||')[0].trim()); } catch (_) {}
+        try { ab = JSON.parse(notesStr.split('|||ABONO:')[1].split('|||')[0].trim()); } catch (_) { /* malformed legacy metadata is ignored */ }
     if (notesStr.includes('|||ABONO_MONTO:'))
-        try { abM = JSON.parse(notesStr.split('|||ABONO_MONTO:')[1].split('|||')[0].trim()); } catch (_) {}
+        try { abM = JSON.parse(notesStr.split('|||ABONO_MONTO:')[1].split('|||')[0].trim()); } catch (_) { /* malformed legacy metadata is ignored */ }
     if (notesStr.includes('|||HISTORIAL_ABONOS:'))
-        try { hist = JSON.parse(notesStr.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim()); } catch (_) {}
+        try { hist = JSON.parse(notesStr.split('|||HISTORIAL_ABONOS:')[1].split('|||')[0].trim()); } catch (_) { /* malformed legacy metadata is ignored */ }
     const cleanNotes = notesStr.split('|||')[0].trim();
     return { cleanNotes, abono: ab, abonoMonto: abM, historial: Array.isArray(hist) ? hist : [] };
 }

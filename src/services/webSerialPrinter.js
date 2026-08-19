@@ -262,7 +262,7 @@ export async function openCashDrawerWebSerial() {
  * Se usa en lugar del PDF+iframe para evitar que la impresora térmica
  * abra el cajón al recibir un trabajo de impresión del sistema.
  */
-export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0, products = [] }) {
+export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, currentItems, grandTotal, tasaUSD, config, hoursOffset = 0, roundsOffset = 0, elapsedOffset = 0, products = [] }) {
     const port = await getConnectedPrinter();
     if (!port) return false;
 
@@ -276,7 +276,7 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
 
     try {
         const { syntheticCart } = buildTableSyntheticCart(
-            { table, session, elapsed, currentItems, grandTotal, paidHoursOffsets: { [session?.id]: hoursOffset }, paidRoundsOffsets: { [session?.id]: roundsOffset } },
+            { table, session, elapsed, currentItems, grandTotal, paidHoursOffsets: { [session?.id]: hoursOffset }, paidRoundsOffsets: { [session?.id]: roundsOffset }, paidElapsedOffsets: { [session?.id]: elapsedOffset } },
             config,
             products || []
         );
@@ -326,7 +326,7 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
     if (isMultiClient) {
         // ═══ MULTI-CLIENT BREAKDOWN ═══
         const seatHasHours = seats.some(s => (s.timeCharges || []).some(tc => tc.type === 'hora'));
-        const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset, table.type);
+        const breakdown = calculateFullTableBreakdown(session, seats, elapsed, config, currentItems, null, null, table.type === 'NORMAL', hoursOffset, roundsOffset, table.type, elapsedOffset);
 
         if (breakdown) {
             // Shared section
@@ -346,7 +346,7 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
                 const isLibreShared = table.type === 'POOL' && session.game_mode === 'NORMAL' && totalHours === 0 && !seatHasHours;
                 if (isLibreShared && elapsed > 0) {
                     const ph = config?.pricePerHour || 0;
-                    const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset);
+                    const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset, elapsedOffset);
                     const billableHours = billedMinutes / 60;
                     p.row(`${formatElapsedTime(billedMinutes)} x ${formatCOP(ph)}`, `${formatCOP(billableHours * ph)}`, W);
                 }
@@ -430,7 +430,7 @@ export async function printPreCuentaEscPos({ table, session, elapsed, timeCost, 
             const pricePerHour = config?.pricePerHour || 0;
             p.bold(true).text('Tiempo de Mesa').newline().bold(true);
             if (isLibre) {
-                const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset);
+                const billedMinutes = getRoundedLibreMinutes(elapsed, hoursOffset, elapsedOffset);
                 const billableHours = billedMinutes / 60;
                 const fullCost = round2(billableHours * pricePerHour);
                 const paidCost = round2(hoursOffset * pricePerHour);

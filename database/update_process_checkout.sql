@@ -1,7 +1,11 @@
+-- DEPRECATED: este RPC no tenía idempotencia transaccional y podía duplicar
+-- ventas después de un timeout. Ejecutar database/add_sales_sync_integrity.sql.
+DO $$ BEGIN
+    RAISE EXCEPTION 'DEPRECATED_CHECKOUT_RPC: ejecutar database/add_sales_sync_integrity.sql';
+END $$;
+
 -- ============================================================================
--- 🎱 POOL IMPERIAL — ACTUALIZAR RPC process_checkout
--- Ejecutar este script en el SQL Editor de tu proyecto Supabase:
--- https://abbrcppmwsmxhoaxkgsh.supabase.co
+-- 🎱 POOL IMPERIAL — contenido histórico no ejecutable
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION public.process_checkout(payload JSONB)

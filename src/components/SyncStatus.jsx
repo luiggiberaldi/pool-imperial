@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Wifi, WifiOff, RefreshCw, CloudDownload, CheckCircle2 } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, CloudDownload, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { supabaseCloud as supabase } from '../config/supabaseCloud';
 import { pullLatestFromCloud } from '../hooks/useCloudSync';
 import { offlineQueueService } from '../services/offlineQueueService';
@@ -26,6 +26,7 @@ export default function SyncStatus() {
     const [justSynced, setJustSynced] = useState(false);
 
     const [failedCount, setFailedCount] = useState(0);
+    const [conflictCount, setConflictCount] = useState(0);
     const [failedErrors, setFailedErrors] = useState([]);
     const confirm = useConfirm();
 
@@ -34,10 +35,12 @@ export default function SyncStatus() {
             const queue = await localforage.getItem(scopedKey('offline_sales_queue')) || [];
             const pending = queue.filter(q => q.sync_status === 'pending');
             const failed  = queue.filter(q => q.sync_status === 'failed');
+            const conflicts = queue.filter(q => q.sync_status === 'conflict');
             setPendingCount(pending.length);
             setFailedCount(failed.length);
+            setConflictCount(conflicts.length);
 
-            const errs = failed.map(f => {
+            const errs = [...failed, ...conflicts].map(f => {
                 const saleNum = f.payload?.saleNumber ? `#${f.payload.saleNumber}` : 'factura';
                 const client = f.payload?.customerName || 'Consumidor Final';
                 const total = f.payload?.total ? `($${f.payload.total.toFixed(2)})` : '';
@@ -194,10 +197,12 @@ export default function SyncStatus() {
     // Estado visual
     const hasPendingSales = pendingCount > 0;
     const hasFailedSales  = failedCount > 0;
+    const hasConflicts = conflictCount > 0;
     let statusType = 'online';
     if (!isOnline) statusType = 'offline';
     else if (isSyncing || isRequeuing) statusType = 'syncing';
     else if (justSynced) statusType = 'done';
+    else if (hasConflicts) statusType = 'conflict';
     else if (hasPendingSales) statusType = 'pending';
     else if (hasFailedSales) statusType = 'failed';
 
@@ -207,6 +212,7 @@ export default function SyncStatus() {
         syncing: 'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100 focus:ring-sky-500',
         pending: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 focus:ring-amber-500',
         failed:  'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 focus:ring-rose-500',
+        conflict:'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 focus:ring-orange-500',
         offline: 'bg-rose-50 border-rose-200 text-rose-600 focus:ring-rose-500 animate-pulse',
     };
 
@@ -218,6 +224,7 @@ export default function SyncStatus() {
         syncing: 'Sincronizando inventario con la nube...',
         pending: `${pendingCount} venta(s) pendiente(s) por subir. Clic para sincronizar.`,
         failed:  `${failedCount} venta(s) fallaron al sincronizar. Clic para ver error y reintentar.`,
+        conflict: `${conflictCount} venta(s) requieren reconciliación manual; no se reenviarán automáticamente.`,
         offline: 'Sin conexión al servidor. Comprueba tu internet.',
     };
 
@@ -260,6 +267,13 @@ export default function SyncStatus() {
                     <RefreshCw size={13} strokeWidth={2.5} />
                     <span className="hidden sm:inline">Reintentar ({failedCount})</span>
                     <span className="sm:hidden">{failedCount}</span>
+                </>
+            )}
+            {statusType === 'conflict' && (
+                <>
+                    <AlertTriangle size={13} strokeWidth={2.5} />
+                    <span className="hidden sm:inline">Revisar ({conflictCount})</span>
+                    <span className="sm:hidden">{conflictCount}</span>
                 </>
             )}
             {statusType === 'offline' && (

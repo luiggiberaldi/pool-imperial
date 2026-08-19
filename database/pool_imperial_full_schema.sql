@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS public.sales (
     mesero_id UUID,
     mesero_nombre TEXT,
     table_name TEXT,
+    cash_session_id UUID REFERENCES public.cash_sessions(id) ON DELETE SET NULL,
     cart_subtotal_usd NUMERIC DEFAULT 0, -- Almacena COP
     discount_type TEXT,
     discount_value NUMERIC DEFAULT 0,
@@ -430,7 +431,8 @@ BEGIN
         vendedor_rol,
         mesero_id,
         mesero_nombre,
-        table_name
+        table_name,
+        cash_session_id
     ) VALUES (
         v_sale_number,
         CASE WHEN v_fiado_amount > 0 THEN 'VENTA_FIADA' ELSE 'VENTA' END,
@@ -459,7 +461,8 @@ BEGIN
         payload->>'vendedorRol',
         (payload->>'meseroId')::UUID,
         payload->>'meseroNombre',
-        payload->>'tableName'
+        payload->>'tableName',
+        (payload->>'cashSessionId')::UUID
     ) RETURNING id INTO v_sale_id;
 
     -- Insertar ítems vendidos (usando el nombre enviado desde el cliente y protegiendo contra nulos o problemas de casing en price_usd)

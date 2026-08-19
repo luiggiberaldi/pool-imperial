@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { capitalizeName } from './calculatorUtils';
 import { FinancialEngine } from '../core/FinancialEngine';
+import { timestampToMs, REPORT_TIMEZONE } from './reportRangeEngine';
 
 const formatCOP = (val) => new Intl.NumberFormat('es-CO', {
     style: 'currency', currency: 'COP', minimumFractionDigits: 0
@@ -38,6 +39,7 @@ export function generateSalesReportPDF(sales = [], meta = {}) {
     // Totales (las anuladas no suman)
     const completed = sales.filter(s => s.status !== 'ANULADA');
     const voided = sales.filter(s => s.status === 'ANULADA');
+    const pending = sales.filter(s => s.status === 'PENDIENTE_SYNC' || s.status === 'PENDIENTE_VERIFICACION');
     const totalRevenue = completed.reduce((a, s) => a + FinancialEngine.calculateSaleNetTotal(s), 0);
 
     let y = M;
@@ -61,7 +63,7 @@ export function generateSalesReportPDF(sales = [], meta = {}) {
     if (userName) filtros.push(`Usuario: ${capitalizeName(userName)}`);
     filtros.push(`Estado: ${filterLabel}`);
     if (search && search.trim()) filtros.push(`Búsqueda: "${search.trim()}"`);
-    const generado = new Date().toLocaleString('es-CO');
+    const generado = new Date().toLocaleString('es-CO', { timeZone: REPORT_TIMEZONE });
     doc.text(filtros.join('   ·   '), M, y);
     y += 5;
     doc.text(`Generado: ${generado}`, M, y);
@@ -76,7 +78,8 @@ export function generateSalesReportPDF(sales = [], meta = {}) {
     doc.setFontSize(10);
     doc.setTextColor(...INK);
     doc.text(`Ventas: ${completed.length}`, M, y);
-    doc.text(`Anuladas: ${voided.length}`, M + 45, y);
+    doc.text(`Anuladas: ${voided.length}`, M + 40, y);
+    doc.text(`Pendientes: ${pending.length}`, M + 82, y);
     doc.text(`Total ingresos: ${formatCOP(totalRevenue)}`, RIGHT, y, { align: 'right' });
     y += 7;
 
@@ -135,8 +138,9 @@ export function generateSalesReportPDF(sales = [], meta = {}) {
         }
 
         const isVoid = s.status === 'ANULADA';
+        const isPending = s.status === 'PENDIENTE_SYNC' || s.status === 'PENDIENTE_VERIFICACION';
         const d = new Date(s.timestamp);
-        const fecha = `${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
+        const fecha = `${d.toLocaleDateString('es-CO', { timeZone: REPORT_TIMEZONE })} ${d.toLocaleTimeString('es-CO', { timeZone: REPORT_TIMEZONE, hour: '2-digit', minute: '2-digit' })}`;
         const num = s.saleNumber !== undefined ? '#' + String(s.saleNumber).padStart(5, '0') : (s.id || '').substring(0, 6).toUpperCase();
         const usuario = capitalizeName(s.meseroNombre || s.vendedorNombre || '—');
         const cliente = s.customerName || 'Consumidor Final';
@@ -148,14 +152,14 @@ export function generateSalesReportPDF(sales = [], meta = {}) {
             doc.rect(M, y - 4, PW - M * 2, 6.5, 'F');
         }
 
-        doc.setTextColor(...(isVoid ? RED : INK));
+        doc.setTextColor(...(isVoid ? RED : isPending ? [180, 110, 0] : INK));
         doc.text(num, COLS.num, y);
         doc.text(fecha, COLS.fecha, y);
         doc.text(trunc(usuario, 22), COLS.usuario, y);
         doc.text(trunc(cliente, 22), COLS.cliente, y);
         doc.text(formatCOP(total), COLS.total, y, { align: 'right' });
-        doc.setTextColor(...(isVoid ? RED : MUTED));
-        doc.text(isVoid ? 'ANULADA' : 'OK', COLS.estado, y, { align: 'right' });
+        doc.setTextColor(...(isVoid ? RED : isPending ? [180, 110, 0] : MUTED));
+        doc.text(isVoid ? 'ANULADA' : isPending ? 'PENDIENTE' : 'OK', COLS.estado, y, { align: 'right' });
         y += 6.5;
     });
 
@@ -227,7 +231,7 @@ export function generateArticlesReportPDF(articles = [], meta = {}) {
     const filtros = [];
     if (rangeLabel) filtros.push(`Periodo: ${rangeLabel}`);
     if (search && search.trim()) filtros.push(`Búsqueda: "${search.trim()}"`);
-    const generado = new Date().toLocaleString('es-CO');
+    const generado = new Date().toLocaleString('es-CO', { timeZone: REPORT_TIMEZONE });
     doc.text(filtros.join('   ·   '), M, y);
     y += 5;
     doc.text(`Generado: ${generado}`, M, y);
@@ -245,7 +249,7 @@ export function generateArticlesReportPDF(articles = [], meta = {}) {
     doc.setFontSize(10);
     doc.setTextColor(...INK);
     doc.text(`Artículos vendidos: ${articles.length}`, M, y);
-    doc.text(`Total unidades: ${totalQty.toFixed(0)}`, M + 60, y);
+    doc.text(`Total unidades/kg: ${Number(totalQty.toFixed(2))}`, M + 60, y);
     doc.text(`Total ingresos: ${formatCOP(totalRevenue)}`, RIGHT, y, { align: 'right' });
     y += 7;
 
@@ -323,6 +327,187 @@ export function generateArticlesReportPDF(articles = [], meta = {}) {
 }
 
 /**
+ * Genera un PDF de métricas que respeta el rango visible, sin presentarlo como
+ * un cierre de caja ni mezclar operaciones fuera de ese rango.
+ */
+export function generateMetricsReportPDF(data = {}, meta = {}) {
+    const {
+        rangeLabel = '',
+        businessName = localStorage.getItem('business_name') || 'Pool Imperial',
+    } = meta;
+    const totalCOP = Number(data.totalCOP ?? data.totalUsd) || 0;
+    const netRevenue = Number(data.netRevenue ?? totalCOP - (Number(data.totalTax) || 0)) || 0;
+    const totalTax = Number(data.totalTax) || 0;
+    const profit = Number(data.profit) || 0;
+    const totalItems = Number(data.totalItems) || 0;
+    const sales = Array.isArray(data.salesForStats) ? data.salesForStats : [];
+    const paymentBreakdown = data.paymentBreakdown || {};
+    const topProducts = Array.isArray(data.topProducts) ? data.topProducts : [];
+    const taxBreakdown = data.taxBreakdown || {};
+    const salesByDay = Array.isArray(data.salesByDay) ? data.salesByDay : [];
+
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const PW = doc.internal.pageSize.getWidth();
+    const PH = doc.internal.pageSize.getHeight();
+    const M = 14;
+    const RIGHT = PW - M;
+    const INK = [33, 37, 41];
+    const MUTED = [120, 128, 138];
+    const RULE = [210, 215, 222];
+    const HEADBG = [238, 240, 245];
+    const formatUSD = value => new Intl.NumberFormat('en-US', {
+        style: 'currency', currency: 'USD', minimumFractionDigits: 2
+    }).format(Number(value) || 0);
+
+    let y = M;
+    const ensureSpace = (height) => {
+        if (y + height > PH - M) {
+            doc.addPage();
+            y = M;
+        }
+    };
+    const sectionTitle = (title) => {
+        ensureSpace(16);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...INK);
+        doc.text(title, M, y);
+        y += 5;
+        doc.setDrawColor(...RULE);
+        doc.line(M, y, RIGHT, y);
+        y += 6;
+    };
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(...INK);
+    doc.text('Reporte de Métricas', M, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...MUTED);
+    doc.text(businessName, RIGHT, y, { align: 'right' });
+    y += 7;
+    doc.text(rangeLabel ? `Periodo: ${rangeLabel}` : 'Periodo seleccionado', M, y);
+    y += 5;
+    doc.text(`Generado: ${new Date().toLocaleString('es-CO')}`, M, y);
+    y += 10;
+
+    sectionTitle('Resumen');
+    const summary = [
+        ['Ventas', String(sales.length)],
+        ['Ingresos brutos', formatCOP(totalCOP)],
+        ['Ingresos netos sin impuestos', formatCOP(netRevenue)],
+        ['Impuestos', formatCOP(totalTax)],
+        ['Ganancia estimada', formatCOP(profit)],
+        ['Artículos', String(totalItems)],
+    ];
+    doc.setFontSize(9);
+    summary.forEach(([label, value], index) => {
+        const column = index % 2;
+        if (column === 0 && index > 0) y += 6;
+        const x = column === 0 ? M : M + 92;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...MUTED);
+        doc.text(label, x, y);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...INK);
+        doc.text(value, x + 48, y, { align: 'right' });
+    });
+    y += 9;
+
+    sectionTitle('Ingresos por método de pago');
+    const paymentEntries = Object.entries(paymentBreakdown).filter(([, value]) => Number(value?.total) !== 0);
+    if (paymentEntries.length === 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(...MUTED);
+        doc.text('Sin movimientos de pago en el rango.', M, y);
+        y += 7;
+    } else {
+        paymentEntries.forEach(([method, value]) => {
+            ensureSpace(7);
+            const isUsd = value?.currency === 'USD';
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(...INK);
+            doc.text(value?.label || method, M, y);
+            doc.setFont('helvetica', 'bold');
+            doc.text(isUsd ? formatUSD(value.total) : formatCOP(value.total), RIGHT, y, { align: 'right' });
+            y += 6;
+        });
+    }
+
+    if (Object.entries(taxBreakdown).some(([, value]) => Number(value) > 0)) {
+        sectionTitle('Desglose de impuestos');
+        Object.entries(taxBreakdown).forEach(([key, value]) => {
+            if (Number(value) <= 0) return;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(...INK);
+            doc.text(key, M, y);
+            doc.setFont('helvetica', 'bold');
+            doc.text(formatCOP(value), RIGHT, y, { align: 'right' });
+            y += 6;
+        });
+    }
+
+    sectionTitle('Productos más vendidos');
+    if (topProducts.length === 0) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(9);
+        doc.setTextColor(...MUTED);
+        doc.text('Sin productos en el rango.', M, y);
+        y += 7;
+    } else {
+        doc.setFillColor(...HEADBG);
+        doc.rect(M, y - 4, RIGHT - M, 7, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(...MUTED);
+        doc.text('PRODUCTO', M + 2, y);
+        doc.text('CANTIDAD', RIGHT - 45, y, { align: 'right' });
+        doc.text('INGRESO', RIGHT, y, { align: 'right' });
+        y += 7;
+        topProducts.forEach(product => {
+            ensureSpace(7);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8.5);
+            doc.setTextColor(...INK);
+            const name = String(product.name || 'Producto');
+            doc.text(name.length > 52 ? `${name.slice(0, 51)}…` : name, M + 2, y);
+            doc.text(String(product.qty), RIGHT - 45, y, { align: 'right' });
+            doc.setFont('helvetica', 'bold');
+            doc.text(formatCOP(product.revenue), RIGHT, y, { align: 'right' });
+            y += 6;
+        });
+    }
+
+    if (salesByDay.length > 0) {
+        sectionTitle('Ventas por día');
+        salesByDay.forEach(day => {
+            ensureSpace(7);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(...INK);
+            doc.text(`${day.date} · ${day.count} venta(s)`, M, y);
+            doc.setFont('helvetica', 'bold');
+            doc.text(formatCOP(day.total), RIGHT, y, { align: 'right' });
+            y += 6;
+        });
+    }
+
+    const filename = `reporte_metricas_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const blob = doc.output('blob');
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    const isMobile = 'ontouchstart' in window && window.innerWidth < 768;
+    if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ title: 'Reporte de Métricas', files: [file] }).catch(() => doc.save(filename));
+    } else {
+        doc.save(filename);
+    }
+}
+
+/**
  * Genera un PDF (A4) del reporte de cierres de caja históricos.
  *
  * @param {Array} closings Lista de cierres de caja agrupados
@@ -363,7 +548,7 @@ export function generateCierresListReportPDF(closings = [], meta = {}) {
     doc.setTextColor(...MUTED);
     const filtros = [];
     if (rangeLabel) filtros.push(`Periodo: ${rangeLabel}`);
-    const generado = new Date().toLocaleString('es-CO');
+    const generado = new Date().toLocaleString('es-CO', { timeZone: REPORT_TIMEZONE });
     doc.text(filtros.join('   ·   '), M, y);
     y += 5;
     doc.text(`Generado: ${generado}`, M, y);
@@ -429,10 +614,14 @@ export function generateCierresListReportPDF(closings = [], meta = {}) {
             doc.rect(M, y - 4, PW - M * 2, 6.5, 'F');
         }
 
-        const dateLabel = new Date(c.cierreId).toLocaleString('es-CO', { 
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit' 
-        });
+        const closureDateMs = timestampToMs(c.closedAt || c.closed_at || c.cierreId);
+        const dateLabel = closureDateMs === null
+            ? 'Fecha no disponible'
+            : new Date(closureDateMs).toLocaleString('es-CO', {
+                timeZone: REPORT_TIMEZONE,
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
         const cajero = capitalizeName(c.apertura?.cajeroNombre || 'Sistema');
         const salesCount = String(c.salesForStats?.length || 0);
         const itemsCount = String(c.totalItems || 0);
