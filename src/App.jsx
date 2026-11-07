@@ -387,7 +387,7 @@ export default function App() {
             </div>
           )}
           {(effectiveTab === 'mesas' || document.querySelector('[data-view="mesas"]')) && (
-            <div data-view="mesas" className={`flex-1 flex flex-col ${effectiveTab === 'mesas' ? '' : 'hidden'}`}>
+            <div data-view="mesas" className={`flex-1 min-h-0 flex flex-col ${effectiveTab === 'mesas' ? '' : 'hidden'}`}>
               <ErrorBoundary>
                 <AnyStaffRoute>
                   <TablesView triggerHaptic={triggerHaptic} isActive={effectiveTab === 'mesas'} />

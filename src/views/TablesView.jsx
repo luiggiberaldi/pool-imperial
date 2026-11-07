@@ -214,6 +214,12 @@ function TransferDropdown({ label, value, placeholder, options, onChange, disabl
     );
 }
 
+// Interruptor del editor de plano. En false el botón "Editar Plano" no aparece y el plano es solo de consulta.
+// Cámbialo a true para volver a activar el editor.
+const FLOOR_PLAN_EDITOR_ENABLED = false;
+// Con el editor oculto no debe quedar ningún borrador sin guardar que se muestre en el plano.
+if (!FLOOR_PLAN_EDITOR_ENABLED) { try { sessionStorage.removeItem('floor_plan_draft'); } catch (_) {} }
+
 export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) {
     const { tables, activeSessions, loading, syncTablesAndSessions, transferSession } = useTablesStore();
     const { orders, orderItems } = useOrdersStore();
@@ -435,7 +441,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
     }
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden w-full relative">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden w-full relative">
 
             {/* ── STICKY HEADER + FILTERS ── */}
             <div className="sticky top-0 z-20 bg-[#F8FAFC]/90 dark:bg-[#0f172a]/90 backdrop-blur-xl px-4 sm:px-6 pt-4 pb-3 border-b border-slate-200/50 dark:border-white/5 flex-shrink-0">
@@ -463,7 +469,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                             setViewMode(mode);
                         }} />
 
-                        {viewMode === 'floor' && isAdmin && (
+                        {FLOOR_PLAN_EDITOR_ENABLED && viewMode === 'floor' && isAdmin && (
                             <button
                                 onClick={() => {
                                     if (isEditingPlan) {
@@ -529,7 +535,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
             </div>
 
             {/* ── CONTENT ── */}
-            <div className="flex-1 overflow-hidden flex flex-row relative h-full">
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-row relative">
                 <style dangerouslySetInnerHTML={{__html: `
                     @keyframes slideUp {
                         from {
@@ -542,9 +548,9 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                 `}} />
                 {viewMode === 'floor' ? (
                     /* ── FLOOR PLAN VIEW WITH CONTEXT PANEL ── */
-                    <div className="flex-1 flex flex-row overflow-hidden w-full relative">
+                    <div className="flex-1 min-h-0 flex flex-row overflow-hidden w-full relative">
                         {/* El plano a la izquierda */}
-                        <div className="flex-1 overflow-auto h-full min-w-0 relative">
+                        <div className="flex-1 overflow-auto h-full min-h-0 min-w-0 relative">
                             {transferSourceTableId && (
                                 <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-amber-500 text-white font-black px-4 sm:px-6 py-3 rounded-2xl shadow-lg shadow-amber-500/20 flex items-center gap-4 border border-amber-400/30 animate-in slide-in-from-top-4 duration-300 w-[90%] sm:w-auto max-w-lg justify-between">
                                     <div className="flex items-center gap-2">
@@ -570,9 +576,9 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                             <FloorPlanView 
                                 onTableSelect={handleFloorTableSelect} 
                                 selectedTableId={selectedTableId}
-                                isEditing={isEditingPlan}
+                                isEditing={FLOOR_PLAN_EDITOR_ENABLED && isEditingPlan}
                                 onExitEditing={() => setIsEditingPlan(false)}
-                                onEnterEditing={() => { setSelectedTableId(null); setIsEditingPlan(true); }}
+                                onEnterEditing={() => { if (!FLOOR_PLAN_EDITOR_ENABLED) return; setSelectedTableId(null); setIsEditingPlan(true); }}
                             />
                         </div>
 
