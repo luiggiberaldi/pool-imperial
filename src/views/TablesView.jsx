@@ -454,13 +454,25 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                     </div>
                     <div className="flex items-center gap-2">
                         {/* View Mode Toggle */}
-                        <ViewToggle mode={viewMode} onChange={(mode) => { setViewMode(mode); if (mode === 'grid') setIsEditingPlan(false); }} />
+                        <ViewToggle mode={viewMode} onChange={(mode) => {
+                            if (mode === 'grid' && isEditingPlan) {
+                                // El plano pide confirmación si hay cambios sin guardar; al salir cambia la vista
+                                window.dispatchEvent(new CustomEvent('floorplan:request-exit', { detail: { onExited: () => setViewMode('grid') } }));
+                                return;
+                            }
+                            setViewMode(mode);
+                        }} />
 
-                        {/* {viewMode === 'floor' && isAdmin && (
+                        {viewMode === 'floor' && isAdmin && (
                             <button
                                 onClick={() => {
+                                    if (isEditingPlan) {
+                                        // El plano confirma si hay cambios sin guardar y llama a onExitEditing
+                                        window.dispatchEvent(new Event('floorplan:request-exit'));
+                                        return;
+                                    }
                                     setSelectedTableId(null);
-                                    setIsEditingPlan(!isEditingPlan);
+                                    setIsEditingPlan(true);
                                 }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all active:scale-95 shadow-sm border ${
                                     isEditingPlan
@@ -470,7 +482,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                             >
                                 <span>🔧 {isEditingPlan ? 'Salir Editor' : 'Editar Plano'}</span>
                             </button>
-                        )} */}
+                        )}
 
                         {/* Botón pausa general — solo admin, solo si hay sesiones activas */}
                         {isAdmin && pausableSessions.length > 0 && (
@@ -560,6 +572,7 @@ export default function TablesView({ triggerHaptic: _triggerHaptic, isActive }) 
                                 selectedTableId={selectedTableId}
                                 isEditing={isEditingPlan}
                                 onExitEditing={() => setIsEditingPlan(false)}
+                                onEnterEditing={() => { setSelectedTableId(null); setIsEditingPlan(true); }}
                             />
                         </div>
 
