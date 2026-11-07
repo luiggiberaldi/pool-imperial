@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { storageService } from '../utils/storageService';
 import { supabaseCloud as supabase } from '../config/supabaseCloud';
 
-const APP_VERSION = '1.0.0';
+import { APP_VERSION } from '../config/appVersion';
 const PRODUCT_ID = 'bodega';
 
 const DEMO_DURATION_MS = 168 * 60 * 60 * 1000; // 168 horas (7 días)

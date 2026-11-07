@@ -1,8 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync } from 'node:fs'
+
+// La versión de la app vive en package.json y se inyecta como __APP_VERSION__ (una sola fuente de verdad)
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   envPrefix: ['VITE_', 'NEXT_PUBLIC_', 'BCV_'],
   plugins: [
     react(),

@@ -24,6 +24,7 @@ import SettingsTabSistema from '../components/Settings/tabs/SettingsTabSistema';
 import SettingsTabMesas from '../components/Settings/tabs/SettingsTabMesas';
 import SettingsTabBitacora from '../components/Settings/tabs/SettingsTabBitacora';
 import { setImportGuard } from '../hooks/useCloudSync';
+import { APP_VERSION } from '../config/appVersion';
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const TABS = [
     { id: 'mesas',     label: 'Mesas',     icon: Layers,       color: 'sky',    adminOnly: true },
@@ -433,7 +434,7 @@ export default function SettingsView({ onClose: _onClose, theme, toggleTheme, tr
                     {/* Version footer */}
                     <div className="text-center pt-2 pb-1">
                         <p className="text-[10px] text-slate-300 dark:text-slate-700 font-bold tracking-widest uppercase">
-                            Pool Imperial · v1.0
+                            Pool Imperial · v{APP_VERSION}
                         </p>
                     </div>
                 </div>

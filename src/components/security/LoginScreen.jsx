@@ -5,6 +5,7 @@ import UserCard from './UserCard';
 import LoginPinModal from './LoginPinModal';
 import { LogOut, DownloadCloud, ShieldCheck, X, Eye, EyeOff } from 'lucide-react';
 import { supabaseCloud } from '../../config/supabaseCloud';
+import { APP_VERSION } from '../../config/appVersion';
 import { useConfirm } from '../../hooks/useConfirm.jsx';
 
 // ── Modal super admin ─────────────────────────────────────────────────────────
@@ -231,6 +232,9 @@ export default function LoginScreen() {
                             Refrescar
                         </button>
                     </div>
+                    <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase select-none" data-testid="app-version">
+                        Pool Imperial · v{APP_VERSION}
+                    </p>
                 </div>
 
             </div>
