@@ -290,8 +290,13 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
             .on('postgres_changes', ownerFilter('pool_config'), (payload) => {
                 console.log("[REALTIME] pool_config change received:", payload);
                 if (payload.eventType === 'UPDATE' && payload.new) {
+                    // Otro dispositivo guardó el plano del local
+                    if (Array.isArray(payload.new.floor_plan) && typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('floorplan:remote-update', { detail: { items: payload.new.floor_plan } }));
+                    }
                     set(state => ({
                         config: {
+                            ...state.config,
                             pricePerHour: Number(payload.new.price_per_hour) || state.config.pricePerHour,
                             pricePerHourBs: payload.new.price_per_hour_bs !== undefined ? Number(payload.new.price_per_hour_bs) : state.config.pricePerHourBs,
                             pricePina: Number(payload.new.price_pina) || state.config.pricePina,
@@ -312,6 +317,8 @@ export const createRealtimeActions = (set, get, tablesCache, scopedKey) => {
                     // que volver a traer las sesiones para no quedar desfasado ni mostrar
                     // mesas que ya se cerraron/cobraron en otro equipo.
                     get().syncTablesAndSessions();
+                    // Lo mismo para el plano del local (los cambios perdidos durante un corte no se reenvían)
+                    if (typeof window !== 'undefined') window.dispatchEvent(new Event('floorplan:refetch'));
 
                     const now = Date.now();
                     if (now - lastRequestTime > 30000) { // 30 seconds rate-limit

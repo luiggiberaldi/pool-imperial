@@ -355,6 +355,43 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
         } catch (e) { console.error('Update table cloud fail:', e); }
     },
 
+    // --- PLANO DEL LOCAL (floor_plan en pool_config; requiere database/add_floor_plan_to_config.sql) ---
+    // Devuelve { ok, items }. ok=false si la nube no está disponible o falta la columna
+    // (en ese caso el plano sigue funcionando con la copia local).
+    fetchFloorPlan: async () => {
+        try {
+            const userId = await getAuthUserId();
+            let q = supabaseCloud.from('pool_config').select('floor_plan').eq('id', 1);
+            if (userId) q = q.eq('user_id', userId);
+            const { data, error } = await q.maybeSingle();
+            if (error) return { ok: false, items: null };
+            return { ok: true, items: Array.isArray(data?.floor_plan) ? data.floor_plan : null };
+        } catch (e) {
+            console.warn('fetchFloorPlan fail:', e);
+            return { ok: false, items: null };
+        }
+    },
+
+    saveFloorPlan: async (items) => {
+        try {
+            const userId = await getAuthUserId();
+            let q = supabaseCloud.from('pool_config')
+                .update({ floor_plan: items, updated_at: new Date().toISOString() })
+                .eq('id', 1);
+            if (userId) q = q.eq('user_id', userId);
+            const { data, error } = await q.select('id');
+            if (error || !data || data.length === 0) {
+                if (error) console.warn('saveFloorPlan error:', error.message);
+                return { ok: false };
+            }
+            logEvent('MESAS', 'PLANO_ACTUALIZADO', `Plano del local actualizado (${items.length} elementos)`, getUser(), { count: items.length });
+            return { ok: true };
+        } catch (e) {
+            console.warn('saveFloorPlan fail:', e);
+            return { ok: false };
+        }
+    },
+
     deleteTable: async (id) => {
         const tableName = get().tables.find(t => t.id === id)?.name ?? id;
         set(state => ({ tables: state.tables.filter(t => t.id !== id) }));
