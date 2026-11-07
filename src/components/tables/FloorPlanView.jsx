@@ -365,7 +365,6 @@ const PoolTableEl = React.memo(function PoolTableEl({ item, table, session, isSe
                     ...imageStyle,
                     filter: filterStyle
                 }}
-                onLoad={() => console.log(`[FloorPlanView] Loaded PoolTable image for: ${item.label}`)}
                 onError={() => console.error(`[FloorPlanView] Error loading PoolTable image (${imgSrc}) for: ${item.label}`)}
             />
 
@@ -523,7 +522,6 @@ const DiningTableEl = React.memo(function DiningTableEl({ item, table, session, 
                 alt={item.label}
                 className="pointer-events-none select-none w-full h-full object-fill"
                 style={{ transform: scale !== 1 ? `scale(${scale})` : undefined }}
-                onLoad={() => console.log(`[FloorPlanView] Loaded DiningTable image for: ${item.label}`)}
                 onError={() => console.error(`[FloorPlanView] Error loading DiningTable image (${imgSrc}) for: ${item.label}`)}
             />
 
@@ -640,7 +638,6 @@ const RoundStoolEl = React.memo(function RoundStoolEl({ item, table, session, is
                     alt={item.label}
                     className="pointer-events-none select-none w-full h-full object-contain"
                     style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
-                    onLoad={() => console.log(`[FloorPlanView] Loaded RoundStool image for: ${item.label}`)}
                     onError={() => console.error(`[FloorPlanView] Error loading RoundStool image (${imgSrc}) for: ${item.label}`)}
                 />
                 <div 
@@ -745,7 +742,6 @@ const BarStoolEl = React.memo(function BarStoolEl({ item, table, session, isSele
                     alt={item.label}
                     className="pointer-events-none select-none w-full h-full object-contain"
                     style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
-                    onLoad={() => console.log(`[FloorPlanView] Loaded BarStool image for: ${item.label}`)}
                     onError={() => console.error(`[FloorPlanView] Error loading BarStool image (${imgSrc}) for: ${item.label}`)}
                 />
                 <div 
@@ -822,7 +818,6 @@ const BarCounterEl = React.memo(function BarCounterEl({ item, isCanvasRotated, o
                 alt={item.label} 
                 className="pointer-events-none select-none"
                 style={imageStyle}
-                onLoad={() => console.log(`[FloorPlanView] Loaded BarCounter image for: ${item.label || 'Bar'}`)}
                 onError={() => console.error(`[FloorPlanView] Error loading BarCounter image (${barraSvg}) for: ${item.label || 'Bar'}`)}
             />
             {/* Etiqueta */}
@@ -929,7 +924,6 @@ const LogoEl = React.memo(function LogoEl({ item, isCanvasRotated, onItemClick, 
                 alt="Pool Imperial" 
                 className="h-full object-contain select-none pointer-events-none transition-transform duration-300"
                 style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
-                onLoad={() => console.log(`[FloorPlanView] Loaded Logo image`)}
                 onError={() => console.error(`[FloorPlanView] Error loading Logo image (${logoPng})`)}
             />
         </div>
@@ -2010,6 +2004,25 @@ function createTableResolver(tables) {
     return resolveTableFast;
 }
 
+// Estilos de edición constantes: mantienen estable la identidad de las props y así React.memo evita
+// repintar los elementos que no se mueven. 'transition: none' evita que el elemento "persiga" al cursor.
+const EDIT_ITEM_STYLE = { cursor: 'move', transition: 'none' };
+const EDIT_ITEM_STYLE_SELECTED = { ...EDIT_ITEM_STYLE, outline: '3.5px solid #f59e0b', outlineOffset: '2.5px', zIndex: 40 };
+
+// Igualdad superficial de listas de elementos (planos): mucho más barata que serializar a JSON
+const itemsEqual = (a, b) => {
+    if (a === b) return true;
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        const x = a[i], y = b[i];
+        if (x === y) continue;
+        const kx = Object.keys(x);
+        if (kx.length !== Object.keys(y).length) return false;
+        for (const k of kx) if (x[k] !== y[k]) return false;
+    }
+    return true;
+};
+
 const PLAN_LOCAL_KEY = 'custom_floor_plan_items';
 const PLAN_DRAFT_KEY = 'floor_plan_draft';
 // Marca que hay un plano guardado en este dispositivo que aún no llegó a la nube (sin conexión, etc.)
@@ -2055,6 +2068,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     });
 
     // Zoom & Pan states for Mobile & Touch optimization
+    const wheelCommitRef = useRef(0);
     const [zoomLevel, setZoomLevel] = useState(1);
     const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
 
@@ -2263,8 +2277,12 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
             
             applyZoom(nextZoom, e.clientX, e.clientY);
             container.style.cursor = zoomLevelRef.current > 1.01 ? 'grab' : 'default';
-            setZoomLevel(zoomLevelRef.current);
-            setPanOffset(panOffsetRef.current);
+            // El zoom ya se aplicó directo al DOM; el estado de React se sincroniza al terminar de girar la rueda
+            clearTimeout(wheelCommitRef.current);
+            wheelCommitRef.current = setTimeout(() => {
+                setZoomLevel(zoomLevelRef.current);
+                setPanOffset(panOffsetRef.current);
+            }, 150);
         };
 
         // Touch Listeners
@@ -2430,7 +2448,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
 
     // ¿Hay cambios sin guardar?
     const isDirty = useMemo(
-        () => isEditing && stableStringify(dynamicItems) !== stableStringify(savedItemsRef.current),
+        () => isEditing && !itemsEqual(dynamicItems, savedItemsRef.current),
         [isEditing, dynamicItems]
     );
     const isDirtyRef = useRef(false);
@@ -2559,13 +2577,25 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
     }, []);
 
     // Persistir borrador mientras se edita (sobrevive a cambiar de pestaña o recargar)
+    // (con debounce: durante un arrastre no se serializa en cada movimiento)
+    const latestItemsRef = useRef(dynamicItems);
+    latestItemsRef.current = dynamicItems;
     useEffect(() => {
         if (!isEditing) return;
-        try {
-            if (isDirty) sessionStorage.setItem(PLAN_DRAFT_KEY, JSON.stringify(dynamicItems));
-            else sessionStorage.removeItem(PLAN_DRAFT_KEY);
-        } catch (_) {}
+        const t = setTimeout(() => {
+            try {
+                if (isDirty) sessionStorage.setItem(PLAN_DRAFT_KEY, JSON.stringify(dynamicItems));
+                else sessionStorage.removeItem(PLAN_DRAFT_KEY);
+            } catch (_) {}
+        }, 400);
+        return () => clearTimeout(t);
     }, [isEditing, isDirty, dynamicItems]);
+    // Al salir de la vista con cambios pendientes, el último estado no se pierde
+    useEffect(() => () => {
+        if (isDirtyRef.current) {
+            try { sessionStorage.setItem(PLAN_DRAFT_KEY, JSON.stringify(latestItemsRef.current)); } catch (_) {}
+        }
+    }, []);
 
     // Aviso del navegador al cerrar/recargar con cambios sin guardar
     useEffect(() => {
@@ -2973,6 +3003,20 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         const roomRight = Math.min(...group.map(it => 100 - it.w - it.x));
         const roomBottom = Math.min(...group.map(it => 100 - it.h - it.y));
 
+        // Un solo cambio de estado por frame, sin importar cuántos eventos de ratón lleguen
+        let pending = null;
+        let raf = 0;
+        const flushDrag = () => {
+            raf = 0;
+            if (!pending) return;
+            const { dx, dy } = pending;
+            pending = null;
+            setDynamicItems(prev => prev.map(it => {
+                const st = starts.get(it.id);
+                return st ? { ...it, x: parseFloat((st.x + dx).toFixed(2)), y: parseFloat((st.y + dy).toFixed(2)) } : it;
+            }));
+        };
+
         const handleDragMove = (moveEvent) => {
             const currentX = moveEvent.touches ? moveEvent.touches[0].clientX : moveEvent.clientX;
             const currentY = moveEvent.touches ? moveEvent.touches[0].clientY : moveEvent.clientY;
@@ -2991,13 +3035,13 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
             const dx = Math.max(-minLeft, Math.min(roomRight, deltaX));
             const dy = Math.max(-minTop, Math.min(roomBottom, deltaY));
 
-            setDynamicItems(prev => prev.map(it => {
-                const st = starts.get(it.id);
-                return st ? { ...it, x: parseFloat((st.x + dx).toFixed(2)), y: parseFloat((st.y + dy).toFixed(2)) } : it;
-            }));
+            pending = { dx, dy };
+            if (!raf) raf = requestAnimationFrame(flushDrag);
         };
 
         const handleDragEnd = () => {
+            if (raf) cancelAnimationFrame(raf);
+            flushDrag(); // aplica la última posición pendiente
             window.removeEventListener('mousemove', handleDragMove);
             window.removeEventListener('mouseup', handleDragEnd);
             window.removeEventListener('touchmove', handleDragMove);
@@ -3090,44 +3134,45 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
         if (table) onTableSelect?.(table, session);
     }, [onTableSelect]);
 
+    // Handlers de edición con identidad estable: siempre llaman a la versión más reciente vía ref
+    const editApiRef = useRef({});
+    editApiRef.current = { handleDragStart, selectedSet, setSelectedEditItemId };
+    const editHandlers = useMemo(() => ({
+        onClick: (e) => {
+            // Ctrl/Cmd: modo lote, el clic no toca elementos (lo gestiona el lienzo)
+            if (e.ctrlKey || e.metaKey) return;
+            e.stopPropagation();
+            const id = e.currentTarget.dataset.itemId;
+            const api = editApiRef.current;
+            if (e.shiftKey || api.selectedSet.has(id)) return;
+            api.setSelectedEditItemId(id);
+        },
+        onMouseDown: (e) => {
+            // Ctrl/Cmd + arrastrar: ignora el elemento y deja que el lienzo dibuje la zona de selección
+            if (e.ctrlKey || e.metaKey) return;
+            e.stopPropagation();
+            editApiRef.current.handleDragStart(e, e.currentTarget.dataset.itemId);
+        },
+        onTouchStart: (e) => {
+            e.stopPropagation();
+            editApiRef.current.handleDragStart(e, e.currentTarget.dataset.itemId);
+        },
+    }), []);
+
     /** Renderiza el elemento correcto según tipo, inyectando listeners de edición si aplica. */
     const renderItem = useCallback(({ item, table, session }) => {
         const key   = item.id;
         const isSelected = table && selectedTableId === table.id;
         const isEditSelected = isEditing && (selectedEditItemId === item.id || selectedSet.has(item.id));
 
-        // Asignación de Click & Drag según estado de edición
-        const clickHandlers = isEditing ? {
-            onClick: (e) => {
-                // Ctrl/Cmd: modo lote, el clic no toca elementos (lo gestiona el lienzo)
-                if (e.ctrlKey || e.metaKey) return;
-                e.stopPropagation();
-                if (e.shiftKey || selectedSet.has(item.id)) return;
-                setSelectedEditItemId(item.id);
-            },
-            onMouseDown: (e) => {
-                // Ctrl/Cmd + arrastrar: ignora el elemento y deja que el lienzo dibuje la zona de selección
-                if (e.ctrlKey || e.metaKey) return;
-                e.stopPropagation();
-                handleDragStart(e, item.id);
-            },
-            onTouchStart: (e) => { e.stopPropagation(); handleDragStart(e, item.id); },
-            style: { cursor: 'move' }
+        // Edición: handlers estables (leen el id del DOM) y estilos constantes → solo se repinta lo que cambia
+        const editHighlight = isEditing ? {
+            'data-item-id': item.id,
+            ...editHandlers,
+            style: isEditSelected ? EDIT_ITEM_STYLE_SELECTED : EDIT_ITEM_STYLE,
         } : {
             onItemClick: handleClick
         };
-
-        const editHighlight = isEditing ? {
-            ...clickHandlers,
-            style: {
-                ...clickHandlers.style,
-                ...(isEditSelected ? {
-                    outline: '3.5px solid #f59e0b',
-                    outlineOffset: '2.5px',
-                    zIndex: 40,
-                } : {})
-            }
-        } : clickHandlers;
 
         const isCanvasRotated = dimensions.isRotated;
         switch (item.type) {
@@ -3149,7 +3194,7 @@ export default function FloorPlanView({ onTableSelect, selectedTableId, isEditin
             default:
                 return null;
         }
-    }, [isEditing, selectedEditItemId, selectedSet, selectedTableId, handleClick, dimensions.isRotated, handleDragStart]);
+    }, [isEditing, selectedEditItemId, selectedSet, selectedTableId, handleClick, dimensions.isRotated, editHandlers]);
 
     return (
         <div ref={rootRef} className="flex flex-col lg:flex-row h-full bg-[#f4f3f0] overflow-hidden w-full select-none">
