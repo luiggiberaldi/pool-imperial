@@ -26,6 +26,7 @@ import SupportNoticeModal from './components/SupportNoticeModal';
 import { useOfflineQueue } from './hooks/useOfflineQueue';
 import { useAutoBackup } from './hooks/useAutoBackup';
 import CommandPalette from './components/CommandPalette';
+import SideNav from './components/SideNav';
 
 import LoginScreen from './components/security/LoginScreen';
 import CloudAuthModal from './components/security/CloudAuthModal';
@@ -148,6 +149,33 @@ export default function App() {
     }
   };
 
+  // Escritorio (≥1024 px): barra lateral plegable en lugar de la barra inferior
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = (e) => setIsDesktop(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true');
+  const toggleSidebar = () => setSidebarCollapsed(prev => {
+    const next = !prev;
+    try { localStorage.setItem('sidebar_collapsed', String(next)); } catch (_) {}
+    return next;
+  });
+  // Ctrl/Cmd + B pliega o expande la barra lateral
+  useEffect(() => {
+    if (!isDesktop) return;
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isDesktop]);
+
   // Keyboard detection
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const baseHeight = useRef(0);
@@ -183,6 +211,15 @@ export default function App() {
   );
 
   const confirm = useConfirm();
+
+  // Precarga la vista de Mesas (y el plano) cuando el navegador está libre, para que abrirla sea instantáneo
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1500));
+    const cancel = window.cancelIdleCallback || clearTimeout;
+    const id = idle(() => { import('./views/TablesView'); }, { timeout: 4000 });
+    return () => cancel(id);
+  }, [isAuthenticated]);
 
   // ── Permisos de cajero (reactivo a cambios del cloud sync) ──
   const [cajeroVeMesas, setCajeroVeMesas] = useState(
@@ -264,7 +301,7 @@ export default function App() {
   }
 
   return (
-    <div className="font-sans antialiased bg-[#F8FAFC] h-[100dvh] flex flex-col overflow-clip">
+    <div className={`font-sans antialiased bg-[#F8FAFC] h-[100dvh] flex overflow-clip ${isDesktop ? 'flex-row' : 'flex-col'}`}>
 
       {/* Terms and Conditions Overlay (First Use) */}
       <TermsOverlay onAccept={() => setTermsAccepted(true)} />
@@ -302,10 +339,22 @@ export default function App() {
       )}
 
 
+      {/* Barra lateral (solo escritorio): en el flujo del layout, no tapa el contenido */}
+      {isDesktop && (
+        <SideNav
+          tabs={TABS}
+          activeTab={effectiveTab}
+          onSelect={(id) => { triggerHaptic(); setActiveTab(id); }}
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+          onInstall={installPrompt ? () => { triggerHaptic(); handleInstall(); } : undefined}
+        />
+      )}
+
       <CartProvider>
       <ProductProvider rates={rates}>
         <GlobalTableAlertsTrigger />
-        <main className={`flex-1 min-h-0 w-full max-w-md sm:max-w-xl md:max-w-3xl lg:max-w-5xl xl:max-w-7xl 2xl:max-w-none px-2 sm:px-4 lg:px-6 mx-auto relative ${isKeyboardOpen ? 'pb-4' : 'pb-24'} flex flex-col overflow-y-auto`}>
+        <main className={`flex-1 min-h-0 min-w-0 w-full max-w-md sm:max-w-xl md:max-w-3xl lg:max-w-5xl xl:max-w-7xl 2xl:max-w-none px-2 sm:px-4 lg:px-6 mx-auto relative ${(isKeyboardOpen || isDesktop) ? 'pb-4' : 'pb-24'} flex flex-col overflow-y-auto`}>
 
           {/* Admin panel trigger moved to DashboardView logo */}
 
@@ -393,7 +442,7 @@ export default function App() {
       />
 
       {/* Bottom Nav — hidden in POS mode for full-screen selling */}
-      {!isKeyboardOpen && (
+      {!isKeyboardOpen && !isDesktop && (
         <div className="fixed bottom-0 left-0 right-0 px-4 sm:px-6 pb-[env(safe-area-inset-bottom)] pt-0 mb-4 max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl mx-auto z-30 pointer-events-none animate-in slide-in-from-bottom-4 duration-300">
           <div className="bg-[#1E293B]/95 backdrop-blur-xl rounded-2xl p-1 flex justify-between items-center shadow-2xl shadow-slate-900/30 border border-white/10 ring-1 ring-black/5 pointer-events-auto">
             {TABS.map(tab => (
