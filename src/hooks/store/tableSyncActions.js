@@ -17,6 +17,28 @@ const sortTables = (tables) => {
     });
 };
 
+/**
+ * Comparte referencias: si una fila nueva es igual a la anterior (mismo id y contenido) se conserva
+ * el objeto anterior. Si nada cambió devuelve el mismo array. Así los componentes memoizados
+ * (plano, tarjetas, temporizadores) no se repintan cuando el sync no trae cambios reales.
+ */
+const shareRefs = (prev, next) => {
+    if (!Array.isArray(prev) || !prev.length) return next;
+    const byId = new Map(prev.map(x => [x.id, x]));
+    let identical = prev.length === next.length;
+    const out = next.map((n, i) => {
+        const o = byId.get(n.id);
+        if (o && (o === n || JSON.stringify(o) === JSON.stringify(n))) {
+            if (prev[i] !== o) identical = false;
+            return o;
+        }
+        identical = false;
+        return n;
+    });
+    return identical ? prev : out;
+};
+const sameJson = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
 export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
     init: async () => {
         set({ loading: true });
@@ -230,17 +252,20 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
 
             let tablesQuery = supabaseCloud.from('tables').select('*').eq('active', true).order('name', { ascending: true });
             if (userId) tablesQuery = tablesQuery.eq('user_id', userId);
-            const { data: tablesData, error: tablesError } = await tablesQuery;
-            if (tablesError) throw tablesError;
 
             let sessionsQuery = supabaseCloud.from('table_sessions').select('*').in('status', ['ACTIVE', 'CHECKOUT']);
             if (userId) sessionsQuery = sessionsQuery.eq('user_id', userId);
-            const { data: sessionsData, error: sessionsError } = await sessionsQuery;
-            if (sessionsError) throw sessionsError;
 
             let configQuery = supabaseCloud.from('pool_config').select('*').eq('id', 1);
             if (userId) configQuery = configQuery.eq('user_id', userId);
-            const { data: configData, error: configError } = await configQuery.maybeSingle();
+
+            // Las tres consultas son independientes: en paralelo tardan una sola ida y vuelta, no tres
+            const [tablesRes, sessionsRes, configRes] = await Promise.all([tablesQuery, sessionsQuery, configQuery.maybeSingle()]);
+            const { data: tablesData, error: tablesError } = tablesRes;
+            if (tablesError) throw tablesError;
+            const { data: sessionsData, error: sessionsError } = sessionsRes;
+            if (sessionsError) throw sessionsError;
+            const { data: configData, error: configError } = configRes;
 
             if (!configError && configData) {
                 // Prefer cloud values, even if 0 (use ?? instead of || to respect 0)
@@ -297,10 +322,16 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                 }
             });
 
-            const finalTables = sortTables(tablesData);
-            set({ tables: finalTables, activeSessions: mergedSessions });
-            await tablesCache.setItem(scopedKey('tables'), finalTables);
-            await tablesCache.setItem(scopedKey('active_sessions'), mergedSessions);
+            const prevState = get();
+            const finalTables = shareRefs(prevState.tables, sortTables(tablesData));
+            const finalSessions = shareRefs(prevState.activeSessions, mergedSessions);
+            const tablesChanged = finalTables !== prevState.tables;
+            const sessionsChanged = finalSessions !== prevState.activeSessions;
+            if (tablesChanged || sessionsChanged) {
+                set({ tables: finalTables, activeSessions: finalSessions });
+                if (tablesChanged) await tablesCache.setItem(scopedKey('tables'), finalTables);
+                if (sessionsChanged) await tablesCache.setItem(scopedKey('active_sessions'), finalSessions);
+            }
 
             // Hidratar el mapa volátil de pausas desde el paused_at durable de cada sesión.
             // Esto hace que la pausa llegue por el sync confiable de sesiones (no por un
@@ -322,12 +353,22 @@ export const createSyncActions = (set, get, tablesCache, scopedKey) => ({
                 if (localPaused[id]) derivedPaused[id] = localPaused[id];
                 else delete derivedPaused[id];
             });
-            set({ pausedSessions: derivedPaused });
-            await tablesCache.setItem(scopedKey('paused_sessions'), derivedPaused);
+            if (!sameJson(localPaused, derivedPaused)) {
+                set({ pausedSessions: derivedPaused });
+                await tablesCache.setItem(scopedKey('paused_sessions'), derivedPaused);
+            }
 
             const offsetCache = await tablesCache.getItem(scopedKey('paid_hours_offsets')) || {};
             const roundsOffsetCache = await tablesCache.getItem(scopedKey('paid_rounds_offsets')) || {};
-            set({ paidHoursOffsets: offsetCache, paidRoundsOffsets: roundsOffsetCache });
+            const curState = get();
+            const offsetsChanged = !sameJson(curState.paidHoursOffsets, offsetCache);
+            const roundsChanged = !sameJson(curState.paidRoundsOffsets, roundsOffsetCache);
+            if (offsetsChanged || roundsChanged) {
+                set({
+                    ...(offsetsChanged ? { paidHoursOffsets: offsetCache } : {}),
+                    ...(roundsChanged ? { paidRoundsOffsets: roundsOffsetCache } : {}),
+                });
+            }
         } catch (error) {
             console.warn('Sync cloud fallido (Modo Offline activo):', error.message);
         }
